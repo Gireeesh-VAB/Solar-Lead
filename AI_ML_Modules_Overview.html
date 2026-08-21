@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI/ML Modules — Rooftop Solar Assessment</title>
+<style>
+  :root {
+    --navy: #0b2545;
+    --navy-2: #13315c;
+    --blue: #1a4d8f;
+    --blue-light: #eef4fc;
+    --teal: #1a7f5a;
+    --teal-light: #e7f6ef;
+    --purple: #7a4dbf;
+    --purple-light: #f5f0fc;
+    --gold: #ffb703;
+    --ink: #1f2937;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --bg: #f7f9fc;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+  }
+
+  /* Header */
+  header {
+    background: linear-gradient(160deg, var(--navy) 0%, var(--navy-2) 55%, var(--blue) 100%);
+    color: white;
+    padding: 48px 8vw 40px 8vw;
+  }
+  header .eyebrow {
+    display: inline-block;
+    background: var(--gold);
+    color: var(--navy);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 20px;
+    margin-bottom: 18px;
+  }
+  header h1 { font-size: 32px; margin: 0 0 8px 0; letter-spacing: -0.3px; }
+  header p.sub { font-size: 15px; color: #cfe0f5; margin: 0 0 22px 0; max-width: 680px; }
+  header .flow { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12.5px; color: #9fb8d9; }
+  header .flow span.arrow { color: #5b7fb0; }
+
+  main { max-width: 980px; margin: 0 auto; padding: 40px 8vw 70px 8vw; }
+
+  .intro-note {
+    background: white;
+    border-left: 4px solid var(--gold);
+    border-radius: 4px;
+    padding: 16px 20px;
+    font-size: 14.5px;
+    color: #334155;
+    margin-bottom: 40px;
+    box-shadow: 0 1px 3px rgba(11,37,69,0.06);
+  }
+  .intro-note b { color: var(--navy); }
+
+  /* Module cards */
+  .module {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    margin-bottom: 28px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(11,37,69,0.05);
+  }
+  .module-head {
+    padding: 22px 26px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--line);
+  }
+  .module-head-left { display: flex; gap: 14px; align-items: flex-start; }
+  .module-num {
+    min-width: 34px; height: 34px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 14px; color: white;
+    flex-shrink: 0;
+  }
+  .m1 .module-num { background: var(--blue); }
+  .m2 .module-num { background: var(--teal); }
+  .m3 .module-num { background: var(--purple); }
+  .module-head h2 { margin: 0 0 4px 0; font-size: 19px; color: var(--navy); }
+  .module-head .what { margin: 0; font-size: 13.8px; color: var(--muted); max-width: 560px; }
+
+  .priority-badge {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase;
+    padding: 5px 12px; border-radius: 20px; white-space: nowrap; margin-top: 2px;
+  }
+  .m1 .priority-badge { background: var(--blue-light); color: var(--blue); }
+  .m2 .priority-badge { background: var(--teal-light); color: var(--teal); }
+  .m3 .priority-badge { background: var(--purple-light); color: var(--purple); }
+
+  .module-body {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0;
+  }
+  .field {
+    padding: 16px 26px;
+    border-bottom: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+  }
+  .field:nth-child(even) { border-right: none; }
+  .field label {
+    display: block;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+  .field p, .field div.val { margin: 0; font-size: 13.6px; color: #334155; }
+  .field.full { grid-column: 1 / -1; border-right: none; }
+  .field.last-row { border-bottom: none; }
+
+  .phase-tag {
+    display: inline-block;
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 6px;
+    color: white;
+  }
+  .phase-tag.p1 { background: var(--teal); }
+  .phase-tag.p3 { background: var(--purple); }
+
+  code.stackitem {
+    background: #f1f5f9;
+    border: 1px solid var(--line);
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: "SF Mono", Menlo, monospace;
+    color: var(--navy-2);
+    display: inline-block;
+    margin: 2px 4px 2px 0;
+  }
+
+  /* Summary table */
+  .summary-title { font-size: 20px; color: var(--navy); margin: 50px 0 4px 0; }
+  .summary-sub { font-size: 13.5px; color: var(--muted); margin: 0 0 18px 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(11,37,69,0.05);
+  }
+  th {
+    background: var(--navy);
+    color: white;
+    text-align: left;
+    padding: 12px 18px;
+    font-size: 12px;
+    letter-spacing: 0.3px;
+  }
+  td {
+    padding: 13px 18px;
+    border-bottom: 1px solid var(--line);
+    font-size: 13.5px;
+    vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
+  .dot.low { background: #94a3b8; }
+  .dot.none { background: #cbd5e1; }
+  .yn-no { color: #94a3b8; }
+  .yn-yes { color: var(--purple); font-weight: 700; }
+
+  .callout-bottom {
+    margin-top: 36px;
+    background: white;
+    border-left: 4px solid var(--blue);
+    border-radius: 4px;
+    padding: 16px 20px;
+    font-size: 14px;
+    color: #334155;
+  }
+  .callout-bottom b { color: var(--navy); }
+
+  footer {
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    padding: 30px 8vw 40px 8vw;
+  }
+
+  @media (max-width: 720px) {
+    .module-body { grid-template-columns: 1fr; }
+    .field { border-right: none !important; }
+    header { padding: 36px 6vw 30px 6vw; }
+    main { padding: 32px 6vw 50px 6vw; }
+    header h1 { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="eyebrow">Team Reference — AI / ML Track</span>
+  <h1>AI/ML Modules — Rooftop Solar Assessment</h1>
+  <p class="sub">Three independently ownable modules. Each has a clear Phase 1 scope (what ships in the MVP) and a Phase 3 scope (what gets added once the product is proven).</p>
+  <div class="flow">
+    <span>Roof Detection</span><span class="arrow">→</span>
+    <span>Obstacle Detection</span><span class="arrow">→</span>
+    <span>Shading Analysis</span>
+  </div>
+</header>
+
+<main>
+
+  <div class="intro-note">
+    <b>Read this first:</b> none of these three modules require a trained ML model to ship Phase&nbsp;1.
+    Phase 1 is about clean API integration and good manual-input UX — real model training is deliberately
+    deferred to Phase 3, once the product is proven and worth the investment.
+  </div>
+
+  <!-- MODULE 1 -->
+  <div class="module m1">
+    <div class="module-head">
+      <div class="module-head-left">
+        <div class="module-num">1</div>
+        <div>
+          <h2>Roof Detection &amp; Segmentation</h2>
+          <p class="what">Given a satellite/aerial image of a building, output the roof boundary as a polygon, roof shape, sections, and orientation.</p>
+        </div>
+      </div>
+      <span class="priority-badge">Ship Phase 1 via API wrap</span>
+    </div>
+    <div class="module-body">
+      <div class="field">
+        <label>Inputs</label>
+        <p>Aerial image tile + building footprint (from Google Solar API or building dataset)</p>
+      </div>
+      <div class="field">
+        <label>Outputs</label>
+        <p>Roof polygon (GeoJSON), roof section count, orientation, confidence score</p>
+      </div>
+      <div class="field">
+        <label><span class="phase-tag p1">Phase 1</span>Approach</label>
+        <p>Don't build this from scratch — wrap Google Solar API's roof segment output. This module's real job initially is <i>normalizing</i> that data into your internal format, not training a model.</p>
+      </div>
+      <div class="field">
+        <label><span class="phase-tag p3">Phase 3</span>Approach (if going custom)</label>
+        <p>Fine-tune a segmentation model (e.g. Segment Anything or a U-Net variant) on labeled rooftop imagery datasets.</p>
+      </div>
+      <div class="field full">
+        <label>Stack</label>
+        <div class="val">
+          <code class="stackitem">Python</code>
+          <code class="stackitem">PyTorch / TensorFlow (Phase 3 only)</code>
+          <code class="stackitem">OpenCV</code>
+        </div>
+      </div>
+      <div class="field full last-row">
+        <label>Owner profile</label>
+        <p>Someone comfortable with image segmentation concepts, or just strong Python + API integration for Phase 1.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODULE 2 -->
+  <div class="module m2">
+    <div class="module-head">
+      <div class="module-head-left">
+        <div class="module-num">2</div>
+        <div>
+          <h2>Obstacle Detection &amp; Classification</h2>
+          <p class="what">Given the roof image/area, detect and classify objects on it — water tanks, HVAC units, chimneys, existing solar panels, vents, antennas — each with a bounding polygon and a confidence score.</p>
+        </div>
+      </div>
+      <span class="priority-badge">Highest ML complexity</span>
+    </div>
+    <div class="module-body">
+      <div class="field">
+        <label>Inputs</label>
+        <p>Cropped roof image (from Module 1's boundary)</p>
+      </div>
+      <div class="field">
+        <label>Outputs</label>
+        <p>List of obstacle objects: <code class="stackitem">{ type, polygon, confidence }</code></p>
+      </div>
+      <div class="field">
+        <label><span class="phase-tag p1">Phase 1</span>Approach</label>
+        <p>No model at all — this module is just the manual-entry API (customer draws + labels). It's an "AI module" in name only for Phase 1, which is intentional: it satisfies the "never trust blindly" requirement without CV risk.</p>
+      </div>
+      <div class="field">
+        <label><span class="phase-tag p3">Phase 3</span>Approach</label>
+        <p>Object detection model (YOLOv8 or similar) trained/fine-tuned on labeled rooftop object datasets, or a commercial rooftop-AI vendor API as a shortcut.</p>
+      </div>
+      <div class="field full">
+        <label>Stack</label>
+        <div class="val">
+          <code class="stackitem">Python</code>
+          <code class="stackitem">YOLO / Detectron2 (Phase 3 only)</code>
+          <code class="stackitem">Label Studio (dataset labeling)</code>
+        </div>
+      </div>
+      <div class="field full last-row">
+        <label>Owner profile</label>
+        <p>This is the module where real ML experience matters most, if you go custom. If nobody on the team has trained a detection model before, this is the one phase worth budgeting for a specialist or a vendor API instead.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODULE 3 -->
+  <div class="module m3">
+    <div class="module-head">
+      <div class="module-head-left">
+        <div class="module-num">3</div>
+        <div>
+          <h2>Shading &amp; Roof Condition Analysis</h2>
+          <p class="what">Identifies things that don't block installation but affect performance — trees, neighboring building shadows — and, where 3D/elevation data is available, estimates roof pitch.</p>
+        </div>
+      </div>
+      <span class="priority-badge">Lowest priority — do last</span>
+    </div>
+    <div class="module-body">
+      <div class="field">
+        <label>Inputs</label>
+        <p>Wider-area satellite image (not just the roof crop), elevation data if available (Digital Surface Model)</p>
+      </div>
+      <div class="field">
+        <label>Outputs</label>
+        <p>Shading risk score per roof section, pitch/azimuth estimate — or an explicit "could not be determined" flag, never invented</p>
+      </div>
+      <div class="field">
+        <label><span class="phase-tag p1">Phase 1</span>Approach</label>
+        <p>Skip entirely, or just surface whatever Google Solar API already gives you (it includes some shading/sunshine hours data for covered regions).</p>
+      </div>
+      <div class="field">
+        <label>Later phases</label>
+        <p>Tree/vegetation segmentation + simple shadow-casting geometry based on sun position and neighboring building heights.</p>
+      </div>
+      <div class="field full">
+        <label>Stack</label>
+        <div class="val">
+          <code class="stackitem">Python</code>
+          <code class="stackitem">GeoPandas / Shapely</code>
+          <code class="stackitem">Solar API Data Layers (elevation)</code>
+        </div>
+      </div>
+      <div class="field full last-row">
+        <label>Owner profile</label>
+        <p>Lower priority — genuinely leave this for last, since it affects energy estimates, not installability, so it doesn't block a working MVP.</p>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="summary-title">Effort at a glance</h2>
+  <p class="summary-sub">What each module actually costs in Phase 1 vs. whether it needs a trained model at all.</p>
+  <table>
+    <tr>
+      <th style="width:34%">Module</th>
+      <th style="width:22%">Phase 1 effort</th>
+      <th>Real ML skill needed?</th>
+    </tr>
+    <tr>
+      <td><b>1 — Roof Detection</b></td>
+      <td><span class="dot low"></span>Low (API wrapper)</td>
+      <td><span class="yn-no">No</span> for Phase 1</td>
+    </tr>
+    <tr>
+      <td><b>2 — Obstacle Detection</b></td>
+      <td><span class="dot low"></span>Low (manual UI, not AI)</td>
+      <td><span class="yn-no">No</span> for Phase 1 — <span class="yn-yes">Yes</span> for Phase 3</td>
+    </tr>
+    <tr>
+      <td><b>3 — Shading Analysis</b></td>
+      <td><span class="dot none"></span>Skip / minimal</td>
+      <td><span class="yn-no">No</span> for Phase 1</td>
+    </tr>
+  </table>
+
+  <div class="callout-bottom">
+    <b>For the team:</b> don't burn Phase 1 time training models before we know the product works. If/when we
+    reach Phase 3, Module 2 (obstacle detection) is where a real ML person earns their keep — that's the one
+    worth hiring or contracting out specifically, rather than asking a generalist backend dev to pick up
+    detection-model training on the side.
+  </div>
+
+</main>
+
+<footer>
+  AI-Powered Rooftop Solar Site Assessment — Internal team reference · Phase 1 focus: integration, not model training
+</footer>
+
+</body>
+</html>
