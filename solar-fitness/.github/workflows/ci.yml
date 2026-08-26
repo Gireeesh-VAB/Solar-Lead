@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: solarfit
+          POSTGRES_PASSWORD: solarfit
+          POSTGRES_DB: solarfit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U solarfit -d solarfit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+psycopg://solarfit:solarfit@localhost:5432/solarfit
+      REDIS_URL: redis://localhost:6379/0
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Sync dependencies
+        working-directory: apps/api
+        run: uv sync --all-extras --dev
+
+      - name: Lint
+        working-directory: apps/api
+        run: uv run ruff check .
+
+      - name: Run migrations
+        working-directory: apps/api
+        run: uv run alembic upgrade head
+
+      - name: Run tests
+        working-directory: apps/api
+        run: uv run pytest
