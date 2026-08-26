@@ -1,0 +1,135 @@
+<title>Frontend/Backend Sync</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --paper:#f5f4ee; --surface:#eae8de; --surface-2:#e0ddcf; --line:#c7c1af;
+  --ink:#1e2b30; --ink-soft:#54626a; --ink-faint:#8a8f86;
+  --blue:#2c5c6b; --amber:#a9691f; --amber-soft:#c98a3f;
+  --good:#3f6b3f; --good-bg:#e3ecdf; --warn:#8a5a17; --warn-bg:#f1e3c8;
+  --bad:#8c3b32; --bad-bg:#f2ddd8;
+  --serif:'IBM Plex Serif',Georgia,serif; --sans:'IBM Plex Sans',-apple-system,'Segoe UI',Arial,sans-serif;
+  --mono:'IBM Plex Mono','SF Mono',Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#141b1d; --surface:#1b2427; --surface-2:#212c2f; --line:#334046;
+    --ink:#e9e6dc; --ink-soft:#aab2ac; --ink-faint:#767f79;
+    --blue:#7fadbb; --amber:#d99a4e; --amber-soft:#c98a3f;
+    --good:#8fbd8a; --good-bg:#233024; --warn:#d3a75a; --warn-bg:#332818;
+    --bad:#d99087; --bad-bg:#33201e;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#141b1d; --surface:#1b2427; --surface-2:#212c2f; --line:#334046;
+  --ink:#e9e6dc; --ink-soft:#aab2ac; --ink-faint:#767f79;
+  --blue:#7fadbb; --amber:#d99a4e; --amber-soft:#c98a3f;
+  --good:#8fbd8a; --good-bg:#233024; --warn:#d3a75a; --warn-bg:#332818;
+  --bad:#d99087; --bad-bg:#33201e;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:16.5px;line-height:1.62;-webkit-font-smoothing:antialiased;}
+::selection{background:var(--amber-soft);color:#1a1a1a;}
+a{color:var(--blue);}
+.wrap{max-width:760px;margin:0 auto;padding:3.4rem 1.6rem 5rem;}
+
+.eyebrow{font-family:var(--mono);font-size:.76rem;letter-spacing:.1em;text-transform:uppercase;color:var(--blue);display:flex;gap:.7rem;align-items:center;margin-bottom:1rem;}
+.eyebrow::before{content:"◈";color:var(--amber);}
+h1{font-family:var(--sans);font-weight:600;font-size:clamp(1.6rem,3.6vw,2.15rem);line-height:1.15;margin:0 0 .8rem;letter-spacing:-.01em;}
+.dek{font-size:1.02rem;color:var(--ink-soft);margin:0 0 1.6rem;max-width:64ch;}
+.meta{display:flex;flex-wrap:wrap;gap:1.3rem;font-family:var(--mono);font-size:.75rem;color:var(--ink-faint);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:.9rem 0;margin-bottom:2.2rem;}
+.meta b{color:var(--ink-soft);font-weight:500;}
+
+h2{font-family:var(--sans);font-size:1.12rem;font-weight:600;margin:2.4rem 0 .6rem;padding-bottom:.5rem;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:.6rem;}
+h2 .num{font-family:var(--mono);color:var(--amber);font-size:.95rem;font-weight:500;}
+h3{font-family:var(--sans);font-weight:600;font-size:.95rem;margin:1.4rem 0 .5rem;}
+p{max-width:68ch;margin:0 0 .9rem;}
+ul,ol{max-width:68ch;padding-left:1.25rem;}
+li{margin-bottom:.4rem;}
+strong{color:var(--ink);font-weight:600;}
+code{font-family:var(--mono);font-size:.87em;background:var(--surface);padding:.1em .35em;border-radius:3px;}
+
+.q-block{border-left:3px solid var(--bad);background:var(--bad-bg);padding:1rem 1.2rem;border-radius:0 5px 5px 0;margin:1.1rem 0;}
+.q-block .tag{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;color:var(--bad);display:block;margin-bottom:.4rem;}
+.q-block p{margin:0;font-size:.93rem;color:var(--ink);}
+
+.tbl-wrap{overflow-x:auto;margin:1rem 0 1.6rem;border:1px solid var(--line);border-radius:5px;}
+table{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:.83rem;min-width:520px;}
+th{text-align:left;background:var(--surface);color:var(--ink-soft);font-weight:600;font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;padding:.55rem .75rem;border-bottom:1px solid var(--line);}
+td{padding:.55rem .75rem;border-bottom:1px solid var(--line);vertical-align:top;}
+tr:last-child td{border-bottom:none;}
+
+.agenda{list-style:none;margin:1.1rem 0;padding:0;counter-reset:step;}
+.agenda li{counter-increment:step;display:flex;gap:.9rem;padding:.6rem 0;border-bottom:1px solid var(--line);}
+.agenda li:last-child{border-bottom:none;}
+.agenda li::before{content:counter(step) " min" / "";content:counter(step);font-family:var(--mono);color:var(--paper);background:var(--blue);width:1.5rem;height:1.5rem;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.72rem;flex-shrink:0;font-weight:600;}
+.agenda b{font-family:var(--sans);font-size:.92rem;color:var(--ink);}
+.agenda span{display:block;color:var(--ink-soft);font-size:.85rem;margin-top:.1rem;}
+
+.file-ref{font-family:var(--mono);font-size:.85rem;background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:.7rem 1rem;margin:1rem 0;}
+
+footer{border-top:1px solid var(--line);margin-top:3rem;padding-top:1.2rem;font-family:var(--sans);font-size:.78rem;color:var(--ink-faint);}
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">Working Doc · For the Backend Team</div>
+  <h1>Frontend ↔ Backend Alignment Sync</h1>
+  <p class="dek">The Next.js frontend was built directly against the Development Document v1.1 FRD, running on a mock API layer. Before we wire it to the real FastAPI service, two structural questions need answers, and a handful of type-shape gaps need reconciling.</p>
+  <div class="meta">
+    <span><b>Product</b> Solar Site Fitness &amp; Capacity Engine</span>
+    <span><b>Frontend status</b> Three portals scaffolded, building clean, running on mock data</span>
+    <span><b>Backend status</b> In progress</span>
+  </div>
+
+  <h2><span class="num">01</span>Why this sync</h2>
+  <p>The frontend's types (<code>web/lib/types.ts</code>) were written to mirror the FRD's response shapes as closely as possible — verdicts, capacity/confidence/binding-constraint, the cache and vision-refinement fields, etc. Most of it should map cleanly. But two things came up while reconciling the frontend against the FRD that are architectural, not cosmetic, and are worth settling before more code gets written on either side.</p>
+
+  <h2><span class="num">02</span>The two questions that matter most</h2>
+
+  <div class="q-block">
+    <span class="tag">Question 1 — Auth model</span>
+    <p>The FRD's <code>API-06</code> specifies auth by <strong>API key scoped to a tenant</strong> — a B2B model, where a tenant is a state agency, RESCO, DISCOM or corporate account. The Customer-facing frontend we built is a <strong>consumer email/password signup flow</strong> for an individual homeowner checking their own rooftop. Those are two different auth models. Is the consumer flow meant to sit on top of the tenant/API-key model (one household = one tenant, provisioned automatically on signup?), or is it out of scope for what this FRD covers and needs its own spec from your side?</p>
+  </div>
+
+  <div class="q-block">
+    <span class="tag">Question 2 — Is there a Vendor / field-service API?</span>
+    <p>The FRD states plainly: <em>"Registry, dashboards and survey workflow are packaging: specified in v1.0, optional per deployment, and omitted here."</em> The Vendor portal we built (job assignment, accept/decline, SLA tracking, payouts, disputes) has <strong>no counterpart anywhere in the v1.1 document</strong> — it was our own extrapolation to fill a gap, flagged as the single biggest assumption when we scoped it. Does this exist in the separate v1.0 spec/registry doc? If not, it needs scoping from scratch before the vendor portal can be wired to anything real.</p>
+  </div>
+
+  <h2><span class="num">03</span>Type-shape gaps to reconcile</h2>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Area</th><th>Frontend currently has</th><th>FRD requires</th></tr></thead>
+      <tbody>
+        <tr><td>Result versioning</td><td>One flat <code>modelVersion</code> string</td><td>Separate <code>engine_version</code> + <code>constraint_pack_version</code> (API‑04) + <code>parameter_pack_version</code> (CFG‑02), each independently traceable for reproducibility (CFG‑03)</td></tr>
+        <tr><td>Geometry</td><td><code>boundary?: GeoPoint[]</code> — a flat point list</td><td>Full GeoJSON polygon + a separate exclusion multipolygon (SITE‑01)</td></tr>
+        <tr><td>USN field scoping</td><td><code>usn</code>/<code>usnStatus</code> present (optional) on the general <code>Site</code> type for all site types</td><td>Field group must be entirely <em>absent</em> from the schema for non-rooftop-residential/CI types (USN‑05) — not just empty</td></tr>
+        <tr><td>Capacity unit basis</td><td><code>capacityKwp: number</code>, unit implied by field name only</td><td>Unit basis (DC) stated explicitly on every capacity figure in the response (CAP‑06)</td></tr>
+        <tr><td>Cache provenance</td><td><code>cacheHit</code>, <code>reusedFromAnalysisId</code>, <code>originalDate</code></td><td>Matches CACHE‑05 closely — low risk, just confirm field names on your side</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2><span class="num">04</span>Already aligned — low-risk to wire up</h2>
+  <ul>
+    <li>Verdict enum: <code>SUITABLE / SUITABLE_SUBJECT_TO_SURVEY / CONDITIONAL / INSUFFICIENT_DATA / NOT_SUITABLE</code> — exact match to FIT‑02.</li>
+    <li>Site types: <code>ROOFTOP_GOVT / ROOFTOP_RESIDENTIAL / ROOFTOP_CI / FLOATING</code> — matches SITE‑03's minimum set.</li>
+    <li>Assessment shape (capacity, confidence, binding constraint, reasons, ceiling ledger) — matches FIT‑04/05/06 and CAP‑02/05.</li>
+    <li>Optional additive fields (<code>visionRefinement</code>, <code>panoramaUrl</code>, <code>mlSuitabilityScore</code>) — match API‑01's "additive, never required" language.</li>
+    <li>Admin-portal concepts — jurisdiction packs, ML model approval queue, calibration proposals with propose-then-approve status — map cleanly to CFG, ML‑04, CAL‑03.</li>
+  </ul>
+
+  <h2><span class="num">05</span>Proposed agenda</h2>
+  <ol class="agenda">
+    <li><b>Walk the two structural questions above</b><span>Auth model and Vendor-API scope — get a direction on both before anything else.</span></li>
+    <li><b>Diff <code>lib/types.ts</code> against your Pydantic models live</b><span>Screen-share, go field by field on the Assessment/Site shape.</span></li>
+    <li><b>Agree the versioning fields</b><span>Settle the engine/constraint-pack/parameter-pack version split.</span></li>
+    <li><b>Confirm the OpenAPI → TS type-generation handoff</b><span>Per the original stack decision (<code>openapi-typescript</code>) — when does a real schema become available to point at?</span></li>
+    <li><b>Agree a swap-over plan</b><span>The whole mock layer sits behind one file, <code>lib/api/client.ts</code> — walk through what "real fetch instead of mock" looks like, and whether it happens all at once or endpoint by endpoint.</span></li>
+  </ol>
+
+  <h2><span class="num">06</span>What to bring</h2>
+  <div class="file-ref">web/lib/types.ts — current frontend domain types<br>web/lib/api/client.ts — the mock layer + single swap point<br>Development Document v1.1 — Part II (FRD), §9.1–9.15 and §12 (Core Interfaces)</div>
+
+  <footer>Prepared for a frontend/backend alignment sync — Solar Site Fitness &amp; Capacity Engine.</footer>
+</div>

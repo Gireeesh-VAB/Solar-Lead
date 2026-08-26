@@ -1,0 +1,792 @@
+<title>Three-Portal Blueprint</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --paper:#f5f4ee; --surface:#eae8de; --surface-2:#e0ddcf; --line:#c7c1af;
+  --ink:#1e2b30; --ink-soft:#54626a; --ink-faint:#8a8f86;
+  --blue:#2c5c6b; --blue-soft:#5c8695; --amber:#a9691f; --amber-soft:#c98a3f;
+  --teal:#3f7d6b; --teal-soft:#5c9985;
+  --slate:#545a72; --slate-soft:#767ba0;
+  --good:#3f6b3f; --good-bg:#e3ecdf; --warn:#8a5a17; --warn-bg:#f1e3c8;
+  --bad:#8c3b32; --bad-bg:#f2ddd8; --neutral-verdict:#5b5f5a; --neutral-bg:#e6e4da;
+  --shadow: 0 1px 2px rgba(30,43,48,.06), 0 6px 20px rgba(30,43,48,.06);
+  --serif:'IBM Plex Serif',Georgia,serif; --sans:'IBM Plex Sans',-apple-system,'Segoe UI',Arial,sans-serif;
+  --mono:'IBM Plex Mono','SF Mono',Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#141b1d; --surface:#1b2427; --surface-2:#212c2f; --line:#334046;
+    --ink:#e9e6dc; --ink-soft:#aab2ac; --ink-faint:#767f79;
+    --blue:#7fadbb; --blue-soft:#5c8695; --amber:#d99a4e; --amber-soft:#c98a3f;
+    --teal:#7fc1ac; --teal-soft:#5c9985; --slate:#9ba1c4; --slate-soft:#767ba0;
+    --good:#8fbd8a; --good-bg:#233024; --warn:#d3a75a; --warn-bg:#332818;
+    --bad:#d99087; --bad-bg:#33201e; --neutral-verdict:#a9ada6; --neutral-bg:#242923;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 24px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#141b1d; --surface:#1b2427; --surface-2:#212c2f; --line:#334046;
+  --ink:#e9e6dc; --ink-soft:#aab2ac; --ink-faint:#767f79;
+  --blue:#7fadbb; --blue-soft:#5c8695; --amber:#d99a4e; --amber-soft:#c98a3f;
+  --teal:#7fc1ac; --teal-soft:#5c9985; --slate:#9ba1c4; --slate-soft:#767ba0;
+  --good:#8fbd8a; --good-bg:#233024; --warn:#d3a75a; --warn-bg:#332818;
+  --bad:#d99087; --bad-bg:#33201e; --neutral-verdict:#a9ada6; --neutral-bg:#242923;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 24px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:16.5px;line-height:1.6;-webkit-font-smoothing:antialiased;}
+::selection{background:var(--amber-soft);color:#1a1a1a;}
+a{color:var(--blue);}
+a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
+
+.shell{display:grid;grid-template-columns:250px minmax(0,1fr);max-width:1280px;margin:0 auto;}
+@media (max-width:980px){.shell{grid-template-columns:1fr;} .rail{display:none;}}
+.rail{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:2.6rem 1.1rem 2rem 1.6rem;border-right:1px solid var(--line);font-family:var(--sans);}
+.rail-mark{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;color:var(--ink-faint);text-transform:uppercase;margin-bottom:1.4rem;}
+.rail nav ol{list-style:none;margin:0;padding:0;}
+.rail nav a{display:block;padding:.3rem .5rem;margin:1px 0;border-radius:3px;font-size:.79rem;color:var(--ink-soft);text-decoration:none;border-left:2px solid transparent;}
+.rail nav a .n{font-family:var(--mono);color:var(--ink-faint);margin-right:.5em;font-size:.78em;}
+.rail nav a:hover{color:var(--ink);background:var(--surface);}
+.rail nav a.active{color:var(--ink);border-left-color:var(--amber);background:var(--surface);font-weight:600;}
+.rail .grp{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-faint);margin:1.1rem 0 .3rem .5rem;}
+
+.cover{padding:4rem 3rem 3.2rem;border-bottom:1px solid var(--line);}
+.cover .eyebrow{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--blue);margin-bottom:1.1rem;display:flex;gap:.9rem;align-items:center;}
+.cover .eyebrow::before{content:"◈";color:var(--amber);}
+.cover h1{font-family:var(--sans);font-weight:600;font-size:clamp(1.9rem,4.2vw,2.8rem);line-height:1.1;margin:0 0 1rem;text-wrap:balance;letter-spacing:-.01em;}
+.cover .dek{font-size:1.1rem;color:var(--ink-soft);max-width:46rem;margin:0 0 1.6rem;text-wrap:pretty;}
+.cover .portals{display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:1.6rem;}
+.ptag{font-family:var(--sans);font-size:.78rem;font-weight:600;padding:.35rem .8rem;border-radius:4px;display:flex;align-items:center;gap:.4rem;}
+.ptag.customer{background:var(--amber-soft);color:#fff;}
+.ptag.vendor{background:var(--teal);color:#fff;}
+.ptag.admin{background:var(--slate);color:#fff;}
+.cover .meta{display:flex;flex-wrap:wrap;gap:1.6rem;font-family:var(--mono);font-size:.78rem;color:var(--ink-faint);border-top:1px solid var(--line);padding-top:1.2rem;}
+.cover .meta b{color:var(--ink-soft);font-weight:500;}
+
+main{padding:0 3rem 6rem;}
+.section{padding-top:3.4rem;scroll-margin-top:1.5rem;}
+.section:first-of-type{padding-top:2.8rem;}
+.section-head{display:flex;align-items:baseline;gap:.9rem;margin-bottom:.4rem;border-bottom:1px solid var(--line);padding-bottom:.7rem;}
+.section-head .num{font-family:var(--mono);color:var(--amber);font-size:1rem;font-weight:500;}
+.section-head h2{font-family:var(--sans);font-size:1.42rem;font-weight:600;margin:0;letter-spacing:-.01em;}
+.section-sub{font-family:var(--sans);color:var(--ink-faint);font-size:.85rem;margin:.55rem 0 1.5rem;text-transform:uppercase;letter-spacing:.05em;}
+h3{font-family:var(--sans);font-weight:600;font-size:1.04rem;margin:1.9rem 0 .65rem;color:var(--ink);}
+h4{font-family:var(--sans);font-weight:600;font-size:.76rem;margin:1.3rem 0 .5rem;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;}
+p{max-width:72ch;margin:0 0 1rem;}
+p.lead{font-size:1.02rem;color:var(--ink-soft);max-width:68ch;}
+ul,ol{max-width:72ch;padding-left:1.25rem;}
+li{margin-bottom:.32rem;}
+strong{color:var(--ink);font-weight:600;}
+code{font-family:var(--mono);font-size:.86em;background:var(--surface);padding:.1em .35em;border-radius:3px;}
+
+.tbl-wrap{overflow-x:auto;margin:1.05rem 0 1.7rem;border:1px solid var(--line);border-radius:4px;}
+table{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:.83rem;min-width:560px;}
+th{text-align:left;background:var(--surface);color:var(--ink-soft);font-weight:600;font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;padding:.55rem .75rem;border-bottom:1px solid var(--line);white-space:nowrap;}
+td{padding:.55rem .75rem;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink);}
+tr:last-child td{border-bottom:none;}
+tbody tr:hover{background:var(--surface);}
+td.ctr{text-align:center;}
+
+.chip{display:inline-flex;align-items:center;gap:.35em;font-family:var(--mono);font-size:.68rem;padding:.15em .5em;border-radius:3px;white-space:nowrap;text-transform:uppercase;letter-spacing:.03em;}
+.chip.p1{color:var(--bad);background:var(--bad-bg);}
+.chip.p2{color:var(--warn);background:var(--warn-bg);}
+.chip.p3{color:var(--blue);background:var(--surface-2);}
+.chip.yes{color:var(--good);background:var(--good-bg);}
+.chip.no{color:var(--ink-faint);background:var(--neutral-bg);}
+.chip.restricted{color:var(--warn);background:var(--warn-bg);}
+
+/* portal-scoped panel wrapper: colored top rule + label, used throughout */
+.portal-panel{border:1px solid var(--line);border-radius:6px;overflow:hidden;margin:1.5rem 0;}
+.portal-panel .ph{padding:.7rem 1.1rem;font-family:var(--sans);font-weight:600;font-size:.86rem;color:#fff;display:flex;align-items:center;gap:.5rem;}
+.portal-panel.customer .ph{background:var(--amber-soft);}
+.portal-panel.vendor .ph{background:var(--teal);}
+.portal-panel.admin .ph{background:var(--slate);}
+.portal-panel .pb{padding:1.1rem 1.3rem;background:var(--surface);}
+.portal-panel .pb p{margin:0 0 .8rem;font-size:.9rem;}
+.portal-panel .pb p:last-child{margin-bottom:0;}
+.portal-panel dl.kv{display:grid;grid-template-columns:auto 1fr;gap:.3rem 1rem;font-size:.87rem;margin:0;}
+.portal-panel dt{font-family:var(--sans);font-weight:600;color:var(--ink-faint);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;padding-top:.1rem;}
+.portal-panel dd{margin:0 0 .55rem;}
+
+.grid{display:grid;gap:1rem;margin:1.2rem 0 1.7rem;}
+.grid.cols-2{grid-template-columns:repeat(2,1fr);}
+.grid.cols-3{grid-template-columns:repeat(3,1fr);}
+@media (max-width:900px){.grid.cols-3{grid-template-columns:1fr 1fr;}}
+@media (max-width:680px){.grid.cols-2,.grid.cols-3{grid-template-columns:1fr;}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:1.05rem 1.25rem;}
+.card h5{font-family:var(--sans);font-size:.92rem;font-weight:600;margin:0 0 .5rem;color:var(--ink);}
+.card p{font-size:.87rem;color:var(--ink-soft);margin:0;}
+.card.customer{border-top:3px solid var(--amber-soft);}
+.card.vendor{border-top:3px solid var(--teal);}
+.card.admin{border-top:3px solid var(--slate);}
+
+.callout{border-left:3px solid var(--amber);background:var(--surface);padding:1rem 1.3rem;margin:1.4rem 0;border-radius:0 5px 5px 0;}
+.callout p{margin:0;font-size:.93rem;}
+.callout .label{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);display:block;margin-bottom:.4rem;}
+
+.tree{font-family:var(--mono);font-size:.8rem;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:1.2rem 1.3rem;overflow-x:auto;white-space:pre;line-height:1.6;margin:1.2rem 0;}
+.tree.customer{border-left:3px solid var(--amber-soft);}
+.tree.vendor{border-left:3px solid var(--teal);}
+.tree.admin{border-left:3px solid var(--slate);}
+.tree .d1{color:var(--ink);font-weight:600;}
+.tree .d2{color:var(--ink-soft);}
+
+.order-list{list-style:none;margin:1.3rem 0;padding:0;counter-reset:step;}
+.order-list li{counter-increment:step;display:flex;gap:1rem;padding:.7rem 0;border-bottom:1px solid var(--line);align-items:baseline;}
+.order-list li:last-child{border-bottom:none;}
+.order-list li::before{content:counter(step);font-family:var(--mono);color:var(--paper);background:var(--blue);width:1.55rem;height:1.55rem;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.72rem;flex-shrink:0;font-weight:600;}
+.order-list b{font-family:var(--sans);color:var(--ink);font-size:.94rem;}
+.order-list span{display:block;color:var(--ink-soft);font-size:.85rem;margin-top:.15rem;}
+
+.countgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin:1.4rem 0;}
+@media (max-width:700px){.countgrid{grid-template-columns:1fr 1fr;}}
+.countgrid > div{background:var(--paper);padding:1.2rem 1rem;text-align:center;}
+.countgrid .num{font-family:var(--mono);font-size:1.9rem;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;}
+.countgrid .lbl{font-family:var(--sans);font-size:.74rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-top:.2rem;}
+.countgrid .total{background:var(--surface-2);}
+.countgrid .total .num{color:var(--amber);}
+
+footer{border-top:1px solid var(--line);padding:2.2rem 3rem 3rem;font-family:var(--sans);font-size:.8rem;color:var(--ink-faint);display:flex;justify-content:space-between;flex-wrap:wrap;gap:1rem;}
+@media (max-width:640px){.cover{padding:2.8rem 1.2rem 2.2rem;} main{padding:0 1.2rem 4rem;} footer{padding:2rem 1.2rem;}}
+</style>
+
+<div class="shell">
+  <aside class="rail">
+    <div class="rail-mark">Three-Portal Blueprint</div>
+    <nav>
+      <ol id="toc">
+        <li><a href="#s1"><span class="n">01</span>Three User Types</a></li>
+        <li><a href="#s2"><span class="n">02</span>Portal Strategy</a></li>
+        <li><a href="#s3"><span class="n">03</span>Customer · Mobile-First</a></li>
+        <li><a href="#s4"><span class="n">04</span>Vendor Workspace</a></li>
+        <li><a href="#s5"><span class="n">05</span>Admin Control Center</a></li>
+        <li><a href="#s6"><span class="n">06</span>Information Architecture</a></li>
+        <li><a href="#s7"><span class="n">07</span>Screen Inventory</a></li>
+        <li><a href="#s8"><span class="n">08</span>Permission Matrix</a></li>
+        <li><a href="#s9"><span class="n">09</span>Shared Design System</a></li>
+        <li><a href="#s10"><span class="n">10</span>Visual Hierarchy</a></li>
+        <li><a href="#s11"><span class="n">11</span>Responsive Strategy</a></li>
+        <li><a href="#s12"><span class="n">12</span>Dashboards</a></li>
+        <li><a href="#s13"><span class="n">13</span>UX States</a></li>
+        <li><a href="#s14"><span class="n">14</span>UX Quality</a></li>
+        <li><a href="#s15"><span class="n">15</span>Ecosystem</a></li>
+        <li><a href="#s16"><span class="n">16</span>Design Order</a></li>
+        <li><a href="#s17"><span class="n">17</span>Final Blueprint</a></li>
+      </ol>
+    </nav>
+  </aside>
+
+  <div>
+    <div class="cover">
+      <div class="eyebrow">UI/UX Architecture · Three Portals, One Ecosystem</div>
+      <h1>Customer, Vendor &amp; Super Admin — Portal Blueprint</h1>
+      <p class="dek">Three purpose-built experiences on one platform: the organisations that buy site assessments, the field teams that fulfil them, and the internal team that runs the whole system.</p>
+      <div class="portals">
+        <span class="ptag customer">● Customer Portal</span>
+        <span class="ptag vendor">● Vendor Portal</span>
+        <span class="ptag admin">● Super Admin Portal</span>
+      </div>
+      <div class="meta">
+        <span><b>Builds on</b> the Solar Site Fitness &amp; Capacity Engine, Dev. Doc v1.1</span>
+        <span><b>Status</b> Architecture — no screens designed yet</span>
+        <span><b>Scope</b> UX strategy, IA, screens, permissions, shared system</span>
+      </div>
+    </div>
+
+    <main>
+
+      <!-- 01 -->
+      <section class="section" id="s1">
+        <div class="section-head"><span class="num">01</span><h2>The Three User Types</h2></div>
+        <div class="section-sub">Mapped from the source document's actual roles — not invented from scratch</div>
+
+        <div class="callout">
+          <span class="label">Framing assumption — the one to validate first</span>
+          <p>The source document is written around five <em>buyer</em> segments (state agencies, RESCOs, DISCOMs, corporates) plus one <em>internal field/geometry operator</em> role — it doesn't use the words "customer," "vendor" or "super admin" natively. This blueprint maps that structure onto the three-portal architecture as follows: <strong>Customer</strong> = the tenant organisations who buy and consume site assessments (all five buyer segments, unified into one portal experience). <strong>Vendor</strong> = the field geometry/survey service providers who fulfil the manual capture and boundary work the platform assigns, paid per site, with quality tracked against the calibration system. <strong>Super Admin</strong> = the platform operator's own internal team, governing every tenant, every vendor, every constraint pack and every ML model. This is the single largest interpretive decision in the whole blueprint — confirm it matches the actual business model before screens are built.</p>
+        </div>
+
+        <div class="grid cols-3">
+          <div class="card customer">
+            <h5>Customer</h5>
+            <p><strong>Who:</strong> procurement/technical leads at state agencies, RESCO bid teams, DISCOM programme cells, corporate sustainability heads — organisations, represented by named users with seats.<br><br>
+            <strong>Wants:</strong> a defensible, ranked list of viable sites and capacity, fast, exportable, trackable over time.<br><br>
+            <strong>Common tasks:</strong> add/import sites, review a verdict, drill into evidence, export a report, track assessment status, manage team seats.<br><br>
+            <strong>Cares about:</strong> verdict, capacity, confidence, binding constraint, portfolio saturation, cost against budget.<br><br>
+            <strong>Immediately after login:</strong> what changed since last visit — new results ready, anything flagged low-confidence, portfolio summary.<br><br>
+            <strong>Simplify:</strong> hide constraint-pack internals, ML scoring detail, and calibration mechanics entirely — plain-language reasons only.</p>
+          </div>
+          <div class="card vendor">
+            <h5>Vendor</h5>
+            <p><strong>Who:</strong> individual field surveyors or small survey/geometry-capture firms; potentially EPC/installer partners once a site clears feasibility.<br><br>
+            <strong>Responsibilities:</strong> accept assigned site jobs, visit site, draw/measure boundary, capture USN evidence, submit within SLA.<br><br>
+            <strong>Workflow:</strong> job queue → accept → travel → capture → submit → reconcile against remote estimate → get paid.<br><br>
+            <strong>Manages:</strong> assigned jobs, submission history, payout/earnings, accuracy score.<br><br>
+            <strong>Frequent actions:</strong> check queue, submit field boundary, submit USN, mark complete.<br><br>
+            <strong>Metrics that matter:</strong> jobs this week, turnaround time, accuracy/variance score, earnings.<br><br>
+            <strong>Optimise for:</strong> speed in the field, minimal typing, camera-first capture, tolerant of poor connectivity.</p>
+          </div>
+          <div class="card admin">
+            <h5>Super Admin</h5>
+            <p><strong>Controls:</strong> tenant accounts (create/tier/suspend), vendor accounts (onboard/verify/deactivate), jurisdiction &amp; constraint packs, ML model approval, parameter packs, billing, API keys/quotas, feature flags.<br><br>
+            <strong>Operational data needed:</strong> cross-tenant usage, assessment volume, error/failure rates, cache-hit rate (proof of cost efficiency), vendor SLA compliance, revenue.<br><br>
+            <strong>Management:</strong> approve/hold a new ML model version, approve calibration factor changes, resolve billing/USN disputes, impersonate a tenant for support.<br><br>
+            <strong>Monitoring:</strong> platform health, third-party API quota (Maps/Solar API/GPT‑4 Vision/Weather), full audit log of every admin action.<br><br>
+            <strong>High-level metrics:</strong> total tenants, total sites assessed, active vendors, MRR, uptime, open exceptions.</p>
+          </div>
+        </div>
+
+        <h3>What genuinely differs between the three</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Dimension</th><th>Customer</th><th>Vendor</th><th>Super Admin</th></tr></thead>
+            <tbody>
+              <tr><td>Relationship to the platform</td><td>Pays for it</td><td>Is paid by it (per job)</td><td>Runs it</td></tr>
+              <tr><td>Primary device</td><td>Desktop, mobile-capable</td><td>Mobile/tablet, field-first</td><td>Desktop, exclusively</td></tr>
+              <tr><td>Session frequency</td><td>Periodic (per portfolio cycle)</td><td>Daily, task-driven</td><td>Continuous, monitoring-driven</td></tr>
+              <tr><td>Data scope</td><td>Own tenant only</td><td>Own assigned jobs only</td><td>Everything, every tenant</td></tr>
+              <tr><td>Failure tolerance</td><td>Low — a wrong number costs credibility</td><td>Low — a missed SLA costs pay</td><td>Near-zero — a bad config change is platform-wide</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 02 -->
+      <section class="section" id="s2">
+        <div class="section-head"><span class="num">02</span><h2>Portal Strategy</h2></div>
+        <div class="section-sub">Three different products that happen to share infrastructure</div>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Dimension</th><th>Customer</th><th>Vendor</th><th>Super Admin</th></tr></thead>
+            <tbody>
+              <tr><td>Primary goal</td><td>Trust the answer, act on it</td><td>Complete jobs fast and accurately</td><td>Keep the platform correct, healthy, compliant</td></tr>
+              <tr><td>Main job-to-be-done</td><td>Spend a limited survey/decision budget on the right sites</td><td>Turn a job queue into completed, accurate submissions</td><td>Keep every tenant's output correct and every system within bounds</td></tr>
+              <tr><td>UX priority</td><td>Clarity, trust, low effort</td><td>Speed, minimal friction, offline tolerance</td><td>Control, visibility, precision</td></tr>
+              <tr><td>Information density</td><td>Low — one decision at a time</td><td>Medium — a queue plus one active job</td><td>High — dense tables, multi-metric dashboards</td></tr>
+              <tr><td>Navigation strategy</td><td>Bottom nav (mobile) / slim sidebar (desktop), &lt;5 top-level items</td><td>Task-queue-centric single-purpose nav</td><td>Full sidebar, deep hierarchy, command/search-driven</td></tr>
+              <tr><td>Primary action</td><td>Review a verdict / add a site</td><td>Accept &amp; submit a job</td><td>Approve, configure, resolve an exception</td></tr>
+              <tr><td>Secondary actions</td><td>Export, invite team, adjust filters</td><td>View earnings, update availability</td><td>Export, audit, impersonate, bulk-manage</td></tr>
+              <tr><td>Dashboard strategy</td><td>"What changed / what needs me" digest</td><td>"What's next" queue + this week's numbers</td><td>Platform health + exceptions, not vanity metrics</td></tr>
+              <tr><td>Search strategy</td><td>Find a site by name/address</td><td>Find a job by site/ID</td><td>Global — tenant, vendor, site, transaction, log entry</td></tr>
+              <tr><td>Notification strategy</td><td>Result ready, low-confidence flag, subscription/billing</td><td>New job assigned, SLA warning, payout processed</td><td>Exceptions, approvals pending, quota thresholds, security events</td></tr>
+              <tr><td>Settings strategy</td><td>Profile, team/seats, billing, notification prefs</td><td>Profile, service area, payout details, availability</td><td>Full platform configuration surface</td></tr>
+              <tr><td>Mobile requirement</td><td>Full parity — mobile-first</td><td>Full parity for field tasks — mobile-first for capture</td><td>Read-only monitoring only, no configuration</td></tr>
+              <tr><td>Desktop requirement</td><td>Full experience, portfolio-scale work</td><td>Supported, not primary</td><td>Primary and only real working surface</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>All three inherit the same visual language and the same verdict/status vocabulary (a SUITABLE site is SUITABLE everywhere), but nothing about layout, density or navigation is copy-pasted between them. A vendor never sees a customer's dashboard with fewer buttons — it's a different product shaped by a different job.</p>
+      </section>
+
+      <!-- 03 CUSTOMER MOBILE -->
+      <section class="section" id="s3">
+        <div class="section-head"><span class="num">03</span><h2>Customer Portal — Mobile-First</h2></div>
+        <div class="section-sub">Mobile is the primary design target, not a fallback</div>
+
+        <h3>Mobile navigation pattern</h3>
+        <div class="portal-panel customer">
+          <div class="ph">● Recommendation</div>
+          <div class="pb">
+            <p><strong>Bottom navigation, 4 items:</strong> Home, Sites, Notifications, Profile. This fits the customer's actual workflow — a handful of top-level destinations visited repeatedly, not a deep catalogue needing a hamburger drawer. A hamburger menu would hide "Sites" (the single most-used destination) behind an extra tap, which is wrong for a product where checking on a portfolio is the core habit loop.</p>
+            <p>Inside <strong>Sites</strong>, use a top tab bar (All / Suitable / Needs Review / Insufficient Data) rather than a filter drawer for the primary triage — it's the customer's single most common decision and deserves a persistent, one-tap surface, not a modal.</p>
+          </div>
+        </div>
+
+        <h3>Customer mobile experience, workflow by workflow</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Workflow</th><th>Mobile behaviour</th></tr></thead>
+            <tbody>
+              <tr><td>Dashboard / Home</td><td>Single-column digest: 3–4 cards max — "New results," "Needs your attention," "Portfolio snapshot," "Recent activity." No dense multi-metric grid.</td></tr>
+              <tr><td>Lists (sites, jobs, exports)</td><td>Card list, not a table — each card carries the verdict chip, name, capacity, confidence in that priority order. Infinite scroll, not pagination.</td></tr>
+              <tr><td>Detail pages</td><td>Single scrollable column: verdict header (sticky on scroll) → capacity/confidence → binding constraint → map preview → reasons → evidence, in that order — never tabs hiding the verdict.</td></tr>
+              <tr><td>Forms (add a site)</td><td>One field group per screen (progressive, wizard-style) rather than one long form — address/pin first, type second, optional detail third. Large touch targets, native keyboard types per field.</td></tr>
+              <tr><td>Search</td><td>Full-screen search on tap (not an inline bar competing for space), recent searches shown before typing.</td></tr>
+              <tr><td>Filters</td><td>Bottom sheet, not a drawer or new page — filters apply live, sheet dismisses on apply, active filter count shown as a badge on the trigger.</td></tr>
+              <tr><td>Notifications</td><td>Dedicated bottom-nav tab, grouped by type (Results / Billing / Team), swipe-to-dismiss.</td></tr>
+              <tr><td>Profile/settings</td><td>Simple list-of-links pattern, each row navigates to its own screen — never a dense settings grid.</td></tr>
+              <tr><td>Export/report request</td><td>Bottom sheet: pick format, pick scope, one confirm button; result delivered as a notification, not a blocking wait screen.</td></tr>
+              <tr><td>Confirmation/success</td><td>Inline toast for reversible actions; a full-screen success state (with a clear next action) only for consequential ones like a completed export or a submitted bulk import.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Responsive behaviour, major screens</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Screen</th><th>Desktop</th><th>Tablet</th><th>Mobile</th></tr></thead>
+            <tbody>
+              <tr><td>Home/Dashboard</td><td>Multi-column card grid + sidebar</td><td>2-column card grid, sidebar collapses to icon rail</td><td>Single column, cards stack, sidebar becomes bottom nav</td></tr>
+              <tr><td>Site list</td><td>Dense data table, inline filters</td><td>Simplified table (fewer columns) or card grid</td><td>Card list, filters move to a bottom sheet</td></tr>
+              <tr><td>Site detail</td><td>Two-column: map/evidence left, panel right</td><td>Stacked, map on top, collapsible panel below</td><td>Single column, map becomes a static preview that expands to full-screen on tap</td></tr>
+              <tr><td>Add-site form</td><td>Single page, all fields visible</td><td>Single page, tighter spacing</td><td>Multi-step wizard, one concern per screen</td></tr>
+              <tr><td>Export/report</td><td>Inline panel or modal</td><td>Modal</td><td>Bottom sheet</td></tr>
+              <tr><td>Notifications</td><td>Dropdown from header bell</td><td>Slide-over panel</td><td>Dedicated full-screen tab</td></tr>
+              <tr><td>Team/seats (settings)</td><td>Table with inline actions</td><td>Table, horizontally scrollable</td><td>Stacked cards, actions in an overflow menu</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>The rule throughout: nothing is "the desktop layout, scaled down." Tables become cards, drawers become bottom sheets, hover actions become a persistent tap target, and the map's role shifts from a co-equal panel to a summarised preview that expands on demand.</p>
+      </section>
+
+      <!-- 04 VENDOR -->
+      <section class="section" id="s4">
+        <div class="section-head"><span class="num">04</span><h2>Vendor Portal — Operational Workspace</h2></div>
+        <div class="section-sub">Designed around efficiency and task completion, not exploration</div>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Area</th><th>List</th><th>Detail</th><th>Create/Edit</th><th>Key states</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Dashboard</strong></td><td colspan="3">Today's queue count, SLA-at-risk jobs, this week's earnings, accuracy score trend, quick "start next job" action.</td><td>Empty (no jobs assigned yet), first-day onboarding</td></tr>
+              <tr><td><strong>Job Queue</strong> (orders/work items)</td><td>Assigned jobs, filterable by status/distance/deadline</td><td>Site info, deadline, payout, boundary/USN requirements checklist</td><td>Accept / decline (with reason)</td><td>Empty, SLA-warning badge, overdue</td></tr>
+              <tr><td><strong>Active Capture</strong></td><td>—</td><td>Boundary draw + USN capture flow for the open job</td><td>Draw, edit vertices, capture photo, confirm OCR</td><td>Draft saved, submission error (retry), offline-queued</td></tr>
+              <tr><td><strong>Submission History</strong></td><td>Past submissions, status (accepted / variance-flagged / disputed)</td><td>Submitted data vs. reconciled remote estimate</td><td>—</td><td>Pending review, accepted, flagged for variance</td></tr>
+              <tr><td><strong>Earnings</strong></td><td>Payout history, per-job breakdown</td><td>Payout detail, dispute status</td><td>Raise a dispute</td><td>Pending, paid, disputed</td></tr>
+              <tr><td><strong>Performance / Accuracy</strong></td><td>Accuracy score trend, jobs by variance band</td><td>Per-job variance detail</td><td>—</td><td>Good standing, warning, under review</td></tr>
+              <tr><td><strong>Service Area &amp; Availability</strong></td><td>Coverage map/region list</td><td>Region detail</td><td>Edit coverage radius, toggle availability</td><td>—</td></tr>
+              <tr><td><strong>Profile / Business Settings</strong></td><td>—</td><td>Verification status, documents, payout method</td><td>Edit profile, upload documents</td><td>Verification pending / verified / rejected</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grid cols-2">
+          <div class="card vendor"><h5>Bulk actions</h5><p>Minimal by design — vendors work job-by-job in the field. The one bulk action worth building: accept/decline multiple queued jobs from the desktop queue view before heading out for the day.</p></div>
+          <div class="card vendor"><h5>Search &amp; filters</h5><p>Search by site name/ID/address; filter the queue by distance, deadline and site type. No saved-filter complexity needed — the queue is small enough to scan.</p></div>
+        </div>
+      </section>
+
+      <!-- 05 ADMIN -->
+      <section class="section" id="s5">
+        <div class="section-head"><span class="num">05</span><h2>Super Admin Portal — Control Center</h2></div>
+        <div class="section-sub">Control → Visibility → Efficiency → Accuracy → Safety</div>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Area</th><th>What it governs</th><th>Data-heavy UI choice</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Dashboard</strong></td><td>Platform health, exceptions, key metrics</td><td>Metric tiles + sparkline charts, exception list above the fold — never buried under vanity charts</td></tr>
+              <tr><td><strong>Tenant (Customer) Management</strong></td><td>Onboard, tier, suspend, impersonate for support</td><td>Table + saved filters (by segment/tier/status) + detail drawer for quick look, full page for edit</td></tr>
+              <tr><td><strong>Vendor Management</strong></td><td>Onboard, verify, deactivate, monitor SLA/accuracy</td><td>Table sortable by accuracy/SLA compliance, bulk verify/suspend, detail drawer</td></tr>
+              <tr><td><strong>Transactions / Assessments</strong></td><td>Every assessment run platform-wide</td><td>Dense table, server-side filter+search+pagination, export action, detail page (not drawer — too much evidence to show in a slide-over)</td></tr>
+              <tr><td><strong>Jurisdiction &amp; Constraint Packs</strong></td><td>Version, override, publish per jurisdiction</td><td>Version list + diff view, publish requires explicit confirm</td></tr>
+              <tr><td><strong>ML Model Approval</strong></td><td>Review and activate a newly trained model</td><td>Comparison view (candidate vs. active, score distribution), approve/hold — never silent auto-activation</td></tr>
+              <tr><td><strong>Calibration Oversight</strong></td><td>Approve proposed utilisation-factor changes</td><td>Variance charts by class/region, approve/hold per proposal</td></tr>
+              <tr><td><strong>Reports &amp; Analytics</strong></td><td>Cross-tenant usage, revenue, cache-hit savings</td><td>Charts + exportable tables, date-range and segment filters, saved report views</td></tr>
+              <tr><td><strong>Audit Logs</strong></td><td>Every admin action, who/when/what</td><td>Append-only table, filterable by actor/action/date, immutable — no edit or delete affordance, ever</td></tr>
+              <tr><td><strong>Configuration</strong></td><td>Feature flags, quotas, API keys platform-wide</td><td>Grouped settings panels, change history visible inline</td></tr>
+              <tr><td><strong>Permissions</strong></td><td>Admin roles within the platform team itself</td><td>Role/permission matrix editor</td></tr>
+              <tr><td><strong>System Settings</strong></td><td>Third-party API quota/status (Maps, Solar API, GPT‑4 Vision, Weather)</td><td>Status tiles with live quota bars, alert thresholds configurable</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>When to use which data pattern</h3>
+        <div class="grid cols-2">
+          <div class="card admin"><h5>Table vs. drawer vs. page</h5><p>Table for any list exceeding ~10 comparable rows. Drawer for a quick look that needs zero navigation cost (tenant summary, vendor summary). Full page when the detail itself is a workspace (an assessment's full evidence, a jurisdiction pack's diff).</p></div>
+          <div class="card admin"><h5>Bulk actions</h5><p>Reserved for genuinely repetitive admin work — bulk-verify a batch of vendor onboarding submissions, bulk-suspend flagged accounts — always behind an explicit confirm listing exactly what will change.</p></div>
+          <div class="card admin"><h5>Charts vs. tables</h5><p>Charts for trend/proportion at a glance (usage over time, tier distribution); tables the moment a user needs to act on an individual row. Never a chart as the only way to reach a record.</p></div>
+          <div class="card admin"><h5>Export</h5><p>Present on every data-heavy screen as a persistent, unambiguous action — admin work routinely leaves the product for spreadsheets, board decks and compliance reviews.</p></div>
+        </div>
+      </section>
+
+      <!-- 06 IA -->
+      <section class="section" id="s6">
+        <div class="section-head"><span class="num">06</span><h2>Information Architecture — Per Portal</h2></div>
+        <div class="section-sub">Three separate trees, deliberately not one tree with role flags</div>
+
+        <div class="tree customer"><span class="d1">CUSTOMER PORTAL</span>
+<span class="d2">├── Home                         (digest: new results, needs attention, snapshot)
+├── Sites
+│   ├── All Sites / Suitable / Needs Review / Insufficient Data
+│   ├── Site Detail (verdict, evidence, panorama, history)
+│   ├── Add Site (address/pin) · Bulk Import
+│   └── Portfolio Map
+├── Reports &amp; Exports
+├── Team                         (seats, roles)
+├── Billing &amp; Subscription
+├── Notifications
+└── Profile</span></div>
+
+        <div class="tree vendor"><span class="d1">VENDOR PORTAL</span>
+<span class="d2">├── Dashboard                    (queue count, SLA risk, earnings, accuracy)
+├── Job Queue                    (assigned, accepted, in progress)
+├── Active Capture               (boundary draw, USN capture — entered from a job)
+├── Submission History
+├── Earnings &amp; Payouts
+├── Performance &amp; Accuracy
+├── Service Area &amp; Availability
+├── Notifications
+└── Profile &amp; Business Settings   (verification, documents, payout method)</span></div>
+
+        <div class="tree admin"><span class="d1">SUPER ADMIN PORTAL</span>
+<span class="d2">├── Dashboard                    (platform health, exceptions, key metrics)
+├── Tenants (Customers)
+│   ├── Directory · Detail · Onboard · Suspend
+│   └── Impersonate (support mode, fully audited)
+├── Vendors
+│   ├── Directory · Verification Queue · Detail · Performance
+├── Assessments / Transactions   (every run, platform-wide)
+├── Platform Management
+│   ├── Jurisdiction &amp; Constraint Packs
+│   ├── ML Model Approval Queue
+│   └── Calibration Oversight
+├── Reports &amp; Analytics          (usage, revenue, cache savings)
+├── Configuration
+│   ├── Feature Flags · Quotas · API Keys
+│   └── Third-Party API Status (Maps / Solar API / Vision / Weather)
+├── Permissions                  (internal admin roles)
+├── Audit Logs
+└── System Settings</span></div>
+      </section>
+
+      <!-- 07 SCREEN INVENTORY -->
+      <section class="section" id="s7">
+        <div class="section-head"><span class="num">07</span><h2>Complete Screen Inventory</h2></div>
+        <div class="section-sub">Every screen, per portal</div>
+
+        <h3>Customer Portal</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Screen</th><th>Purpose</th><th>Primary action</th><th>Secondary actions</th><th>Mobile priority</th><th>Complexity</th></tr></thead>
+            <tbody>
+              <tr><td>Home / Dashboard</td><td>What changed, what needs attention</td><td>Open a flagged result</td><td>Dismiss, view all</td><td><span class="chip p1">P1</span></td><td>Med</td></tr>
+              <tr><td>Site List</td><td>Browse/triage the portfolio</td><td>Open a site</td><td>Filter, bulk-tag, export</td><td><span class="chip p1">P1</span></td><td>Med</td></tr>
+              <tr><td>Site Detail</td><td>Verdict, capacity, confidence, evidence</td><td>Act on verdict</td><td>Share, export, request re-assessment</td><td><span class="chip p1">P1</span></td><td>High</td></tr>
+              <tr><td>Add Site (address/pin)</td><td>Start one new assessment</td><td>Submit</td><td>Switch to import</td><td><span class="chip p1">P1</span></td><td>Low</td></tr>
+              <tr><td>Bulk Import</td><td>Add many sites at once</td><td>Submit batch</td><td>Fix row errors</td><td><span class="chip p2">P2</span></td><td>High</td></tr>
+              <tr><td>Import Job Status</td><td>Track a batch in progress</td><td>Open results</td><td>Retry failed rows</td><td><span class="chip p2">P2</span></td><td>Med</td></tr>
+              <tr><td>Portfolio Map</td><td>Geographic view of the portfolio</td><td>Select site</td><td>Filter by verdict/type</td><td><span class="chip p2">P2</span></td><td>High</td></tr>
+              <tr><td>Reports &amp; Exports</td><td>Generate CSV/GeoJSON/PDF</td><td>Generate</td><td>Schedule recurring export</td><td><span class="chip p2">P2</span></td><td>Low</td></tr>
+              <tr><td>Notifications</td><td>Results, billing, team alerts</td><td>Open source item</td><td>Mark read, adjust prefs</td><td><span class="chip p1">P1</span></td><td>Low</td></tr>
+              <tr><td>Team / Seats</td><td>Manage teammates &amp; roles</td><td>Invite</td><td>Change role, remove</td><td><span class="chip p3">P3</span></td><td>Low</td></tr>
+              <tr><td>Billing &amp; Subscription</td><td>Plan, usage, invoices</td><td>Upgrade/change plan</td><td>Download invoice</td><td><span class="chip p3">P3</span></td><td>Med</td></tr>
+              <tr><td>Profile</td><td>Personal account settings</td><td>Update</td><td>Change password</td><td><span class="chip p2">P2</span></td><td>Low</td></tr>
+              <tr><td>Onboarding (first site)</td><td>Guide to first completed assessment</td><td>Complete first assessment</td><td>Skip</td><td><span class="chip p2">P2</span></td><td>Med</td></tr>
+              <tr><td>Empty / Loading / Error / Success states</td><td>Every list &amp; detail surface above</td><td>—</td><td>—</td><td><span class="chip p1">P1</span></td><td>Low–Med</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Vendor Portal</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Screen</th><th>Purpose</th><th>Primary action</th><th>Secondary actions</th><th>Responsive priority</th><th>Complexity</th></tr></thead>
+            <tbody>
+              <tr><td>Dashboard</td><td>Today's queue, SLA risk, earnings snapshot</td><td>Start next job</td><td>View full queue</td><td><span class="chip p1">P1</span></td><td>Med</td></tr>
+              <tr><td>Job Queue</td><td>Assigned/available jobs</td><td>Accept a job</td><td>Decline (with reason), filter by distance</td><td><span class="chip p1">P1</span></td><td>Med</td></tr>
+              <tr><td>Job Detail</td><td>Site info, requirements, deadline, payout</td><td>Start capture</td><td>Decline, view on map</td><td><span class="chip p1">P1</span></td><td>Med</td></tr>
+              <tr><td>Boundary Capture</td><td>Draw/measure the site boundary</td><td>Submit boundary</td><td>Save draft, add exclusion</td><td><span class="chip p1">P1</span></td><td>High</td></tr>
+              <tr><td>USN Capture</td><td>Manual entry or bill/payment-proof OCR</td><td>Confirm &amp; submit</td><td>Retake photo, switch input method</td><td><span class="chip p1">P1</span></td><td>Med</td></tr>
+              <tr><td>Submission History</td><td>Past jobs and their outcome</td><td>Open a submission</td><td>Filter by status</td><td><span class="chip p2">P2</span></td><td>Low</td></tr>
+              <tr><td>Submission Detail</td><td>Submitted vs. reconciled data</td><td>—</td><td>Raise a dispute</td><td><span class="chip p2">P2</span></td><td>Med</td></tr>
+              <tr><td>Earnings</td><td>Payout history &amp; breakdown</td><td>—</td><td>Export statement, raise dispute</td><td><span class="chip p2">P2</span></td><td>Low</td></tr>
+              <tr><td>Performance / Accuracy</td><td>Track accuracy score over time</td><td>—</td><td>View flagged jobs</td><td><span class="chip p3">P3</span></td><td>Low</td></tr>
+              <tr><td>Service Area &amp; Availability</td><td>Coverage region, on/off duty</td><td>Toggle availability</td><td>Edit coverage radius</td><td><span class="chip p2">P2</span></td><td>Low</td></tr>
+              <tr><td>Verification / Onboarding</td><td>Identity &amp; document verification</td><td>Submit documents</td><td>Check status</td><td><span class="chip p1">P1</span></td><td>Med</td></tr>
+              <tr><td>Profile / Business Settings</td><td>Personal &amp; payout details</td><td>Update</td><td>Change payout method</td><td><span class="chip p3">P3</span></td><td>Low</td></tr>
+              <tr><td>Notifications</td><td>New job, SLA warning, payout</td><td>Open source item</td><td>Mark read</td><td><span class="chip p1">P1</span></td><td>Low</td></tr>
+              <tr><td>Empty / Loading / Error / Confirmation states</td><td>Every screen above</td><td>—</td><td>—</td><td><span class="chip p1">P1</span></td><td>Low–Med</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Super Admin Portal</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Screen</th><th>Purpose</th><th>Primary action</th><th>Secondary actions</th><th>Responsive priority</th><th>Complexity</th></tr></thead>
+            <tbody>
+              <tr><td>Dashboard</td><td>Platform health, exceptions, key metrics</td><td>Open an exception</td><td>Filter by severity</td><td><span class="chip p3">P3 (desktop-only)</span></td><td>High</td></tr>
+              <tr><td>Tenant Directory</td><td>All customer organisations</td><td>Open a tenant</td><td>Filter by tier/status, bulk-message</td><td><span class="chip p3">P3</span></td><td>Med</td></tr>
+              <tr><td>Tenant Detail</td><td>Usage, billing, users, history</td><td>Edit tier / suspend</td><td>Impersonate, export activity</td><td><span class="chip p3">P3</span></td><td>High</td></tr>
+              <tr><td>Vendor Directory</td><td>All field service providers</td><td>Open a vendor</td><td>Bulk verify/suspend, filter by SLA/accuracy</td><td><span class="chip p3">P3</span></td><td>Med</td></tr>
+              <tr><td>Vendor Verification Queue</td><td>Review pending onboarding submissions</td><td>Approve / reject</td><td>Request more documents</td><td><span class="chip p2">P2</span></td><td>Med</td></tr>
+              <tr><td>Vendor Detail</td><td>Performance, submissions, payouts</td><td>Suspend / reinstate</td><td>Export history</td><td><span class="chip p3">P3</span></td><td>High</td></tr>
+              <tr><td>Assessments / Transactions</td><td>Every assessment run, platform-wide</td><td>Open an assessment</td><td>Filter, export, flag for review</td><td><span class="chip p3">P3</span></td><td>High</td></tr>
+              <tr><td>Jurisdiction Pack Manager</td><td>View/version constraint packs per jurisdiction</td><td>Publish a new version</td><td>Diff against previous, roll back</td><td><span class="chip p3">P3</span></td><td>High</td></tr>
+              <tr><td>ML Model Approval Queue</td><td>Review a newly trained model</td><td>Approve / hold</td><td>Compare score distributions</td><td><span class="chip p3">P3</span></td><td>High</td></tr>
+              <tr><td>Calibration Oversight</td><td>Review proposed factor recalibration</td><td>Approve / hold</td><td>View variance detail</td><td><span class="chip p3">P3</span></td><td>Med</td></tr>
+              <tr><td>Reports &amp; Analytics</td><td>Usage, revenue, cache-savings, SLA</td><td>Generate/export report</td><td>Save filter view</td><td><span class="chip p3">P3</span></td><td>High</td></tr>
+              <tr><td>Audit Log</td><td>Immutable record of admin actions</td><td>Filter/search</td><td>Export</td><td><span class="chip p3">P3</span></td><td>Med</td></tr>
+              <tr><td>Configuration (flags, quotas, keys)</td><td>Platform-wide settings</td><td>Update a setting</td><td>View change history</td><td><span class="chip p3">P3</span></td><td>Med</td></tr>
+              <tr><td>Third-Party API Status</td><td>Monitor Maps/Solar API/Vision/Weather quota &amp; health</td><td>—</td><td>Configure alert threshold</td><td><span class="chip p2">P2 (mobile-friendly)</span></td><td>Med</td></tr>
+              <tr><td>Internal Permissions / Roles</td><td>Manage admin-team access levels</td><td>Assign role</td><td>Revoke access</td><td><span class="chip p3">P3</span></td><td>Med</td></tr>
+              <tr><td>Empty / Loading / Error / Permission-restricted states</td><td>Every screen above</td><td>—</td><td>—</td><td><span class="chip p3">P3</span></td><td>Low–Med</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 08 PERMISSIONS -->
+      <section class="section" id="s8">
+        <div class="section-head"><span class="num">08</span><h2>Role-Based Permission Matrix</h2></div>
+        <div class="section-sub">What each role can see and do — and where the UI hides vs. disables</div>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Feature</th><th class="ctr">Customer</th><th class="ctr">Vendor</th><th class="ctr">Super Admin</th></tr></thead>
+            <tbody>
+              <tr><td>View own site assessments</td><td class="ctr"><span class="chip yes">Full</span></td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip yes">Full</span></td></tr>
+              <tr><td>Create / import sites</td><td class="ctr"><span class="chip yes">Full</span></td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip restricted">Support only</span></td></tr>
+              <tr><td>Edit own site metadata</td><td class="ctr"><span class="chip yes">Full</span></td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip restricted">Support only</span></td></tr>
+              <tr><td>Delete a site</td><td class="ctr"><span class="chip restricted">Archive only</span></td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip yes">Full</span></td></tr>
+              <tr><td>View assigned job queue</td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip yes">Own only</span></td><td class="ctr"><span class="chip yes">All</span></td></tr>
+              <tr><td>Accept/decline a job</td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip yes">Full</span></td><td class="ctr"><span class="chip no">—</span></td></tr>
+              <tr><td>Submit field boundary / USN</td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip yes">Full</span></td><td class="ctr"><span class="chip no">—</span></td></tr>
+              <tr><td>Promote a boundary suggestion</td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip yes">Approve</span></td></tr>
+              <tr><td>Approve ML model version</td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip yes">Approve</span></td></tr>
+              <tr><td>Approve calibration recalibration</td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip yes">Approve</span></td></tr>
+              <tr><td>Manage tenant accounts</td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip yes">Manage</span></td></tr>
+              <tr><td>Manage vendor accounts</td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip restricted">Own profile</span></td><td class="ctr"><span class="chip yes">Manage</span></td></tr>
+              <tr><td>View own earnings/billing</td><td class="ctr"><span class="chip yes">Own</span></td><td class="ctr"><span class="chip yes">Own</span></td><td class="ctr"><span class="chip yes">All</span></td></tr>
+              <tr><td>View cross-tenant analytics</td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip yes">Full</span></td></tr>
+              <tr><td>Configure jurisdiction/constraint packs</td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip yes">Manage</span></td></tr>
+              <tr><td>Export data</td><td class="ctr"><span class="chip yes">Own data</span></td><td class="ctr"><span class="chip yes">Own history</span></td><td class="ctr"><span class="chip yes">Any scope</span></td></tr>
+              <tr><td>View audit log</td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip yes">Full</span></td></tr>
+              <tr><td>Impersonate a tenant (support)</td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip no">—</span></td><td class="ctr"><span class="chip yes">Audited</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grid cols-2">
+          <div class="card"><h5>Hide, not disable</h5><p>Anything a role has no legitimate reason to know exists — a customer never sees a "Manage Vendors" nav item, disabled or otherwise. Cross-tenant admin functionality is invisible outside the Super Admin portal entirely, not gated behind a locked button in the same UI.</p></div>
+          <div class="card"><h5>Disable + explain, don't hide</h5><p>Reserved for in-context, expected actions the current user almost took but can't complete right now — a vendor's "Submit" button disabled with "Verification pending" until onboarding clears; a customer's "Force refresh" disabled with "Contact support" if that action is admin-gated per tenant policy.</p></div>
+        </div>
+      </section>
+
+      <!-- 09 SHARED DESIGN SYSTEM -->
+      <section class="section" id="s9">
+        <div class="section-head"><span class="num">09</span><h2>Shared Design System</h2></div>
+        <div class="section-sub">One ecosystem, three calibrations</div>
+
+        <p class="lead">Neutrals, semantic verdict colors, typography and the base component shapes are identical everywhere — that's what makes this one product. Each portal then carries its own <strong>accent</strong> and its own <strong>density calibration</strong> of the same components, never a different visual language.</p>
+
+        <div class="grid cols-3">
+          <div class="card customer"><h5>Customer accent — Amber</h5><p>Warm, the platform's primary brand color. Larger touch targets, more generous spacing, rounded-but-still-precise radii (5–8px), lower density.</p></div>
+          <div class="card vendor"><h5>Vendor accent — Teal</h5><p>Signals "active/efficient/go." Medium density, tuned for fast scanning and one-handed mobile use — compact cards, prominent single primary action per screen.</p></div>
+          <div class="card admin"><h5>Admin accent — Slate</h5><p>Cool, desaturated, authoritative. Tightest density, smallest consistent radii (3–4px), monospace numerals everywhere a figure appears.</p></div>
+        </div>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Foundation</th><th>Shared across all three</th></tr></thead>
+            <tbody>
+              <tr><td>Typography</td><td>IBM Plex Sans (UI/headings), IBM Plex Mono (every number, ID, coordinate, currency figure — tabular numerals). No serif in-product.</td></tr>
+              <tr><td>Base neutrals</td><td>Paper/surface/ink scale identical across portals — the "ground" never changes, only the accent painted on top of it.</td></tr>
+              <tr><td>Semantic status</td><td>Verdict palette (good/warn/bad/neutral) is platform-wide and portal-agnostic — a SUITABLE verdict is the same green whether a customer, vendor or admin is looking at it.</td></tr>
+              <tr><td>Spacing</td><td>Shared 4px base scale; each portal picks a different point on it as default (Customer generous, Vendor medium, Admin tight) — never a different scale.</td></tr>
+              <tr><td>Grid &amp; breakpoints</td><td>Same breakpoint set (640/900/1200/1440) everywhere; how aggressively each portal collapses at each one differs (Admin resists mobile collapse the longest).</td></tr>
+              <tr><td>Radius</td><td>Shared small-radius philosophy (3–8px range); Customer sits at the soft end, Admin at the sharp end.</td></tr>
+              <tr><td>Shadows/elevation</td><td>Reserved for floating layers only, identical rule in all three portals.</td></tr>
+              <tr><td>Iconography</td><td>One line-icon set, single stroke weight, shared across all three — never a friendlier icon style for Customer and a technical one for Admin.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Components needing portal-specific variants</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Component</th><th>Customer variant</th><th>Vendor variant</th><th>Super Admin variant</th></tr></thead>
+            <tbody>
+              <tr><td>Button</td><td>Larger, amber, generous padding</td><td>Teal, single dominant CTA per screen</td><td>Slate, compact, often paired with a keyboard shortcut hint</td></tr>
+              <tr><td>Data Table</td><td>Rarely used — cards preferred</td><td>Light use — job queue only</td><td>Primary UI pattern — dense, sortable, multi-select, saved filters</td></tr>
+              <tr><td>Card</td><td>Primary list pattern, spacious</td><td>Compact, task-focused (one job = one card)</td><td>Used for dashboard tiles only, not for records</td></tr>
+              <tr><td>Status Badge</td><td>Verdict-focused</td><td>Job-status-focused (queued/in progress/submitted/flagged)</td><td>Both, plus tenant/vendor/system-status vocabulary</td></tr>
+              <tr><td>Navigation</td><td>Bottom nav (mobile) + slim sidebar (desktop)</td><td>Bottom nav (mobile) + queue-centric single view (desktop)</td><td>Full multi-level sidebar, desktop-only</td></tr>
+              <tr><td>Form Field</td><td>Simplified, one concern per screen on mobile</td><td>Camera-first, minimal typing</td><td>Dense multi-field forms, inline validation</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 10 VISUAL HIERARCHY -->
+      <section class="section" id="s10">
+        <div class="section-head"><span class="num">10</span><h2>Visual Hierarchy by Portal</h2></div>
+        <div class="section-sub">Personality, adjusted to what this specific product actually needs from each role</div>
+
+        <div class="grid cols-3">
+          <div class="card customer"><h5>Customer feels:</h5><p>Simple, trustworthy, clear, modern, effortless — but not casual. This is a professional buying a defensible technical answer, not a consumer app; "friendly" here means <em>low-friction and plain-spoken</em>, not playful.</p></div>
+          <div class="card vendor"><h5>Vendor feels:</h5><p>Professional, efficient, operational, clear — closer to a field-service or logistics app than an office dashboard. Every screen answers "what do I do right now."</p></div>
+          <div class="card admin"><h5>Super Admin feels:</h5><p>Powerful, structured, precise, reliable, information-dense — closer to a network operations console than a SaaS admin panel. Nothing here is trying to look approachable; it's trying to look correct.</p></div>
+        </div>
+      </section>
+
+      <!-- 11 RESPONSIVE -->
+      <section class="section" id="s11">
+        <div class="section-head"><span class="num">11</span><h2>Responsive Strategy, Per Portal</h2></div>
+        <div class="section-sub">Not one strategy applied three times</div>
+
+        <div class="portal-panel customer">
+          <div class="ph">● Customer — Mobile-first</div>
+          <div class="pb"><p>Every screen designed at 375px width first, then expanded. Breakpoints: mobile &lt;640, tablet 640–1199, desktop ≥1200. Mobile is a primary, fully-featured experience — not a reduced view. Desktop adds density (tables instead of cards, side-by-side map+panel) but adds no functionality mobile lacks.</p></div>
+        </div>
+        <div class="portal-panel vendor">
+          <div class="ph">● Vendor — Responsive, mobile-critical for field tasks</div>
+          <div class="pb"><p>Job queue, job detail, boundary capture and USN capture <strong>must</strong> work excellently on phone/tablet — these happen on-site, often outdoors, sometimes on poor connectivity. Earnings, performance history and settings are fine as desktop-first, responsive-but-not-optimised screens — a vendor reviewing payouts is more likely at a desk than in the field.</p></div>
+        </div>
+        <div class="portal-panel admin">
+          <div class="ph">● Super Admin — Desktop primary, tablet supported, mobile monitoring-only</div>
+          <div class="pb"><p>Desktop is the only real working surface — dense tables, multi-panel comparisons and bulk actions do not survive a small screen without destroying usability, and this is exactly the audience for whom bad usability has the highest cost. Tablet gets a workable, somewhat-simplified version of the same screens. Mobile is deliberately limited to <strong>monitoring only</strong>: the dashboard, exception alerts, and third-party API status — enough to know something needs attention, never enough to configure the platform from a phone.</p></div>
+        </div>
+      </section>
+
+      <!-- 12 DASHBOARDS -->
+      <section class="section" id="s12">
+        <div class="section-head"><span class="num">12</span><h2>Portal-Specific Dashboards</h2></div>
+        <div class="section-sub">Three different answers to "what do I need right now"</div>
+
+        <div class="grid cols-3">
+          <div class="card customer">
+            <h5>Customer Dashboard</h5>
+            <p>New results ready · sites flagged low-confidence or needing review · portfolio snapshot (counts by verdict) · recent activity · next best action (e.g. "12 sites imported, 0 reviewed yet — start here").</p>
+          </div>
+          <div class="card vendor">
+            <h5>Vendor Dashboard</h5>
+            <p>Today's job queue count · SLA-at-risk jobs · this week's earnings · accuracy score trend · one-tap "start next job."</p>
+          </div>
+          <div class="card admin">
+            <h5>Super Admin Dashboard</h5>
+            <p>Platform health (uptime, API quota status) · open exceptions (failed jobs, disputed submissions, models pending approval) · tenant/vendor activity trend · assessment volume · revenue snapshot · nothing here is a vanity metric — every tile links to the thing it's warning about.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 13 STATES -->
+      <section class="section" id="s13">
+        <div class="section-head"><span class="num">13</span><h2>UX States, Per Portal</h2></div>
+        <div class="section-sub">Not identical empty/error experiences</div>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>State</th><th>Customer</th><th>Vendor</th><th>Super Admin</th></tr></thead>
+            <tbody>
+              <tr><td>Empty (first use)</td><td>"Add your first site" with a clear CTA and a short explainer of what happens next</td><td>"No jobs assigned yet — check back soon" (vendor doesn't control supply)</td><td>"No tenants yet" is realistically never seen — admin empty states are scoped per-filter instead</td></tr>
+              <tr><td>Loading</td><td>Skeleton matching the four-fact card layout</td><td>Skeleton matching the job-card layout, optimistic where safe (offline queueing)</td><td>Skeleton table rows, never a full-page spinner on a dashboard</td></tr>
+              <tr><td>Error</td><td>Plain language, "try again" with retry, never a stack trace</td><td>Retry with offline-queue fallback — a field submission must never just fail and vanish</td><td>Specific and technical enough to act on (error code visible, correlation ID for support)</td></tr>
+              <tr><td>Permission restricted</td><td>Rare — mostly seat-role gated (e.g. billing hidden from a non-admin teammate)</td><td>Verification-gated ("Complete verification to accept jobs")</td><td>Role-gated within the admin team itself, explained by name of required role</td></tr>
+              <tr><td>First-time user</td><td>Short onboarding to first completed assessment</td><td>Verification + first-job walkthrough</td><td>No onboarding needed — admins are trained, not self-served</td></tr>
+              <tr><td>Confirmation</td><td>Required for billing/plan changes, bulk delete</td><td>Required for job decline, dispute submission</td><td>Required for anything irreversible or cross-tenant (suspend, publish a pack, approve a model)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 14 QUALITY -->
+      <section class="section" id="s14">
+        <div class="section-head"><span class="num">14</span><h2>UX Quality Standards &amp; Risks to Design Around</h2></div>
+        <div class="section-sub">Problems identified before UI design begins</div>
+
+        <div class="grid cols-3">
+          <div class="card customer"><h5>Customer risk</h5><p>A team-seat customer with low technical literacy may not understand "confidence" or "binding constraint" without a first-touch explainer — plan a one-time contextual tooltip on first view, not a manual.</p></div>
+          <div class="card vendor"><h5>Vendor risk</h5><p>Field connectivity is unreliable — any capture flow that loses work on a dropped connection destroys trust immediately. Offline-first draft saving is not optional polish, it's a correctness requirement.</p></div>
+          <div class="card admin"><h5>Admin risk</h5><p>Power without friction is dangerous here — a suspend/publish/approve action taken by mistake affects other people's businesses. Every irreversible admin action needs a real confirmation step, and the audit log must be unimpeachable (append-only, no admin — including the platform's own developers — can edit it from the UI).</p></div>
+        </div>
+
+        <ul>
+          <li><strong>Consistency risk:</strong> reusing the verdict/status vocabulary exactly (not "Approved" in one portal and "Verified" in another for the same underlying state) so a customer and a support admin looking at the same record aren't confused by different words.</li>
+          <li><strong>Cognitive load risk (Admin):</strong> the temptation to put everything on one dense dashboard — mitigated by the "every tile links to what it's warning about" rule in §12, so density serves triage rather than decoration.</li>
+          <li><strong>Workflow efficiency risk (Vendor):</strong> too many taps between "open app" and "start capturing" kills adoption for a paid-per-job workforce — the dashboard's one-tap "start next job" exists specifically to remove this friction.</li>
+          <li><strong>Accessibility risk (shared):</strong> map-based interactions (customer's portfolio map, vendor's boundary capture) need a non-pointer fallback in all three portals per the same discipline as the single-portal engine blueprint — address/coordinate entry as an alternative to drawing.</li>
+        </ul>
+      </section>
+
+      <!-- 15 ECOSYSTEM -->
+      <section class="section" id="s15">
+        <div class="section-head"><span class="num">15</span><h2>Designing the Ecosystem</h2></div>
+        <div class="section-sub">Connected without being identical</div>
+
+        <div class="grid cols-2">
+          <div class="card"><h5>Shared brand layer</h5><p>One wordmark, one typographic system, one neutral palette, one icon set, one verdict/status vocabulary. A screenshot from any portal should be immediately recognisable as the same product family.</p></div>
+          <div class="card"><h5>Portal layer</h5><p>Customer → consumer-grade simplicity on top of that brand. Vendor → business/operations efficiency on top of that brand. Super Admin → platform-control precision on top of that brand. The accent color, density and navigation pattern are the only things that change — never the underlying grammar of type, spacing units, or how a status is communicated.</p></div>
+        </div>
+        <p>A useful test: a user moving between portals (a support admin viewing a tenant's data, for instance) should feel like they've walked into a different room of the same building — not a different building entirely.</p>
+      </section>
+
+      <!-- 16 DESIGN ORDER -->
+      <section class="section" id="s16">
+        <div class="section-head"><span class="num">16</span><h2>Recommended Design Order</h2></div>
+        <div class="section-sub">Sequenced by actual dependency, not by portal importance</div>
+
+        <ol class="order-list">
+          <li><b>Product UX foundation</b><span>Confirm the customer/vendor/admin mapping in §1 against the real business model before anything else — everything downstream depends on this being right.</span></li>
+          <li><b>Shared design system</b><span>Tokens, type scale, spacing, the verdict/status vocabulary, base component shapes — built once, before any portal-specific screen.</span></li>
+          <li><b>Authentication &amp; role routing</b><span>Login, role detection, portal routing — every portal needs this before it needs anything else.</span></li>
+          <li><b>Customer core journey</b><span>Home → Site List → Site Detail → Add Site. The highest-volume, most-validated flow, and the one most similar to work already scoped for the single-portal engine.</span></li>
+          <li><b>Customer mobile experience</b><span>Apply the mobile-first patterns from §3 to the core journey before moving on — retrofitting mobile later is exactly what this brief said not to do.</span></li>
+          <li><b>Vendor core workflow</b><span>Job Queue → Job Detail → Boundary/USN Capture. This is the operational backbone the whole supply side depends on.</span></li>
+          <li><b>Vendor dashboard &amp; earnings</b><span>Lower urgency than the capture flow, but needed before a vendor workforce can be onboarded for real.</span></li>
+          <li><b>Super Admin architecture</b><span>IA, navigation, and the dense-table/drawer/page patterns from §5 — admin work depends on customer and vendor data models being stable first, which is why it comes after both.</span></li>
+          <li><b>Admin data-heavy workflows</b><span>Tenant/vendor management, assessments table, jurisdiction packs, model approval — built on the architecture from step 8.</span></li>
+          <li><b>Shared states</b><span>Empty/loading/error/confirmation, applied per-portal per §13 — across everything built in steps 4–9.</span></li>
+          <li><b>Responsive refinement</b><span>Tablet behaviour for all three, and the mobile-monitoring slice of Super Admin.</span></li>
+          <li><b>Accessibility pass</b><span>Non-pointer map fallbacks, contrast audit on all three accent/verdict combinations, keyboard and screen-reader pass.</span></li>
+          <li><b>Micro-interactions</b><span>Job-queue updates, notification delivery, form validation feedback — purposeful motion only, per portal personality.</span></li>
+          <li><b>Final visual polish</b><span>Cross-portal consistency audit — the "same building, different room" test from §15.</span></li>
+        </ol>
+      </section>
+
+      <!-- 17 FINAL -->
+      <section class="section" id="s17">
+        <div class="section-head"><span class="num">17</span><h2>Final Deliverable — Three-Portal Blueprint</h2></div>
+        <div class="section-sub">The single reference to build from</div>
+
+        <div class="grid cols-3">
+          <div class="card customer"><h5>A. Customer Portal</h5><p>Mobile-first, low-density, trust-building. Home digest, site list/detail, add/import, portfolio map, reports, team, billing. Bottom-nav mobile pattern, full parity with desktop.</p></div>
+          <div class="card vendor"><h5>B. Vendor Portal</h5><p>Operational, task-completion-first. Job queue, capture flows, submission history, earnings, performance, service area. Mobile-critical for field capture, desktop-supported for admin-of-self tasks.</p></div>
+          <div class="card admin"><h5>C. Super Admin Portal</h5><p>Control-center, dense, desktop-primary. Tenant/vendor management, platform-wide assessments, jurisdiction/model/calibration governance, reports, audit log, configuration.</p></div>
+        </div>
+
+        <h3>D. Shared Design System</h3>
+        <p>IBM Plex Sans/Mono typography, one neutral scale, one semantic verdict palette, shared 4px spacing scale and breakpoint set, small-radius philosophy, floating-only shadows, one line-icon set — each portal applying its own accent (amber / teal / slate) and density calibration on top, never a different visual language.</p>
+
+        <h3>E. Permission Matrix</h3>
+        <p>See §8 in full. Governing rule: hide functionality a role has no legitimate reason to know about; disable-with-explanation only for in-context actions the current user can see themselves eventually taking.</p>
+
+        <h3>F. Complete Screen Count</h3>
+        <div class="countgrid">
+          <div><div class="num">14</div><div class="lbl">Customer</div></div>
+          <div><div class="num">14</div><div class="lbl">Vendor</div></div>
+          <div><div class="num">16</div><div class="lbl">Super Admin</div></div>
+          <div class="total"><div class="num">44</div><div class="lbl">Total unique screens</div></div>
+        </div>
+        <p style="font-size:.85rem;color:var(--ink-faint);">Counts are primary named screens per §7; each also carries its own empty/loading/error/success state variants, not counted separately here. Shared infrastructure (auth/login, role routing) is built once and is not double-counted per portal.</p>
+
+        <h3>G. Recommended Design Sequence</h3>
+        <p>Foundation → auth/routing → Customer core → Customer mobile → Vendor core → Vendor dashboard → Admin architecture → Admin data-heavy workflows → shared states → responsive refinement → accessibility → micro-interactions → final polish. Full detail in §16.</p>
+
+        <div class="callout">
+          <span class="label">Governing question, per portal</span>
+          <p>Customer: does this make the answer easy to trust and act on? Vendor: does this get the job done faster with less friction? Super Admin: does this give real control with nothing hidden and nothing irreversible done by accident?</p>
+        </div>
+      </section>
+
+    </main>
+
+    <footer>
+      <span>Customer, Vendor &amp; Super Admin — Three-Portal UI/UX Blueprint</span>
+      <span>Architecture only — no screens designed yet</span>
+    </footer>
+  </div>
+</div>
+
+<script>
+(function(){
+  var links = Array.prototype.slice.call(document.querySelectorAll('.rail nav a'));
+  var sections = links.map(function(l){ return document.querySelector(l.getAttribute('href')); }).filter(Boolean);
+  if(!('IntersectionObserver' in window) || !sections.length) return;
+  var map = {};
+  sections.forEach(function(sec, i){ map[sec.id] = links[i]; });
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){
+        links.forEach(function(l){ l.classList.remove('active'); });
+        var link = map[e.target.id];
+        if(link) link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-10% 0px -75% 0px', threshold: 0 });
+  sections.forEach(function(sec){ io.observe(sec); });
+})();
+</script>

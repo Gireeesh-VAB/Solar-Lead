@@ -1,0 +1,420 @@
+<title>Frontend Build Scope</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --paper:#f5f4ee; --surface:#eae8de; --surface-2:#e0ddcf; --line:#c7c1af;
+  --ink:#1e2b30; --ink-soft:#54626a; --ink-faint:#8a8f86;
+  --blue:#2c5c6b; --blue-soft:#5c8695; --amber:#a9691f; --amber-soft:#c98a3f;
+  --good:#3f6b3f; --good-bg:#e3ecdf; --warn:#8a5a17; --warn-bg:#f1e3c8;
+  --bad:#8c3b32; --bad-bg:#f2ddd8; --neutral-verdict:#5b5f5a; --neutral-bg:#e6e4da;
+  --shadow: 0 1px 2px rgba(30,43,48,.06), 0 6px 20px rgba(30,43,48,.06);
+  --serif:'IBM Plex Serif',Georgia,serif; --sans:'IBM Plex Sans',-apple-system,'Segoe UI',Arial,sans-serif;
+  --mono:'IBM Plex Mono','SF Mono',Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#141b1d; --surface:#1b2427; --surface-2:#212c2f; --line:#334046;
+    --ink:#e9e6dc; --ink-soft:#aab2ac; --ink-faint:#767f79;
+    --blue:#7fadbb; --blue-soft:#5c8695; --amber:#d99a4e; --amber-soft:#c98a3f;
+    --good:#8fbd8a; --good-bg:#233024; --warn:#d3a75a; --warn-bg:#332818;
+    --bad:#d99087; --bad-bg:#33201e; --neutral-verdict:#a9ada6; --neutral-bg:#242923;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 24px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#141b1d; --surface:#1b2427; --surface-2:#212c2f; --line:#334046;
+  --ink:#e9e6dc; --ink-soft:#aab2ac; --ink-faint:#767f79;
+  --blue:#7fadbb; --blue-soft:#5c8695; --amber:#d99a4e; --amber-soft:#c98a3f;
+  --good:#8fbd8a; --good-bg:#233024; --warn:#d3a75a; --warn-bg:#332818;
+  --bad:#d99087; --bad-bg:#33201e; --neutral-verdict:#a9ada6; --neutral-bg:#242923;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 24px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:16.5px;line-height:1.6;-webkit-font-smoothing:antialiased;}
+::selection{background:var(--amber-soft);color:#1a1a1a;}
+a{color:var(--blue);}
+a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
+
+.shell{display:grid;grid-template-columns:240px minmax(0,1fr);max-width:1240px;margin:0 auto;}
+@media (max-width:980px){.shell{grid-template-columns:1fr;} .rail{display:none;}}
+.rail{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:2.6rem 1.1rem 2rem 1.6rem;border-right:1px solid var(--line);font-family:var(--sans);}
+.rail-mark{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;color:var(--ink-faint);text-transform:uppercase;margin-bottom:1.4rem;}
+.rail nav ol{list-style:none;margin:0;padding:0;}
+.rail nav a{display:block;padding:.32rem .5rem;margin:1px 0;border-radius:3px;font-size:.82rem;color:var(--ink-soft);text-decoration:none;border-left:2px solid transparent;}
+.rail nav a .n{font-family:var(--mono);color:var(--ink-faint);margin-right:.5em;font-size:.78em;}
+.rail nav a:hover{color:var(--ink);background:var(--surface);}
+.rail nav a.active{color:var(--ink);border-left-color:var(--amber);background:var(--surface);font-weight:600;}
+
+.cover{padding:4.2rem 3rem 3.4rem;border-bottom:1px solid var(--line);}
+.cover .eyebrow{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--blue);margin-bottom:1.1rem;display:flex;gap:.9rem;align-items:center;}
+.cover .eyebrow::before{content:"◈";color:var(--amber);}
+.cover h1{font-family:var(--sans);font-weight:600;font-size:clamp(2rem,4.4vw,2.9rem);line-height:1.08;margin:0 0 1rem;text-wrap:balance;letter-spacing:-.01em;}
+.cover .dek{font-size:1.14rem;color:var(--ink-soft);max-width:44rem;margin:0 0 1.8rem;text-wrap:pretty;}
+.cover .meta{display:flex;flex-wrap:wrap;gap:1.6rem;font-family:var(--mono);font-size:.78rem;color:var(--ink-faint);border-top:1px solid var(--line);padding-top:1.2rem;}
+.cover .meta b{color:var(--ink-soft);font-weight:500;}
+
+main{padding:0 3rem 6rem;}
+.section{padding-top:3.6rem;scroll-margin-top:1.5rem;}
+.section:first-of-type{padding-top:3rem;}
+.section-head{display:flex;align-items:baseline;gap:.9rem;margin-bottom:.4rem;border-bottom:1px solid var(--line);padding-bottom:.7rem;}
+.section-head .num{font-family:var(--mono);color:var(--amber);font-size:1rem;font-weight:500;}
+.section-head h2{font-family:var(--sans);font-size:1.5rem;font-weight:600;margin:0;letter-spacing:-.01em;}
+.section-sub{font-family:var(--sans);color:var(--ink-faint);font-size:.86rem;margin:.55rem 0 1.6rem;text-transform:uppercase;letter-spacing:.05em;}
+h3{font-family:var(--sans);font-weight:600;font-size:1.08rem;margin:2rem 0 .7rem;color:var(--ink);}
+h4{font-family:var(--sans);font-weight:600;font-size:.78rem;margin:1.4rem 0 .5rem;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;}
+p{max-width:72ch;margin:0 0 1rem;}
+p.lead{font-size:1.05rem;color:var(--ink-soft);max-width:68ch;}
+ul,ol{max-width:72ch;padding-left:1.3rem;}
+li{margin-bottom:.35rem;}
+strong{color:var(--ink);font-weight:600;}
+code{font-family:var(--mono);font-size:.87em;background:var(--surface);padding:.1em .35em;border-radius:3px;}
+
+.tbl-wrap{overflow-x:auto;margin:1.1rem 0 1.8rem;border:1px solid var(--line);border-radius:4px;}
+table{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:.85rem;min-width:520px;}
+th{text-align:left;background:var(--surface);color:var(--ink-soft);font-weight:600;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;padding:.6rem .8rem;border-bottom:1px solid var(--line);white-space:nowrap;}
+td{padding:.6rem .8rem;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink);}
+tr:last-child td{border-bottom:none;}
+tbody tr:hover{background:var(--surface);}
+td code{white-space:nowrap;}
+
+.chip{display:inline-flex;align-items:center;gap:.35em;font-family:var(--mono);font-size:.7rem;padding:.16em .5em;border-radius:3px;white-space:nowrap;text-transform:uppercase;letter-spacing:.03em;}
+.chip.p1{color:var(--bad);background:var(--bad-bg);}
+.chip.p2{color:var(--warn);background:var(--warn-bg);}
+.chip.p3{color:var(--blue);background:var(--surface-2);}
+.chip.out{color:var(--neutral-verdict);background:var(--neutral-bg);}
+
+.grid{display:grid;gap:1rem;margin:1.3rem 0 1.8rem;}
+.grid.cols-2{grid-template-columns:repeat(2,1fr);}
+.grid.cols-3{grid-template-columns:repeat(3,1fr);}
+@media (max-width:760px){.grid.cols-2,.grid.cols-3{grid-template-columns:1fr;}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:1.1rem 1.3rem;}
+.card h5{font-family:var(--sans);font-size:.94rem;font-weight:600;margin:0 0 .5rem;color:var(--ink);}
+.card p{font-size:.89rem;color:var(--ink-soft);margin:0;}
+
+.callout{border-left:3px solid var(--amber);background:var(--surface);padding:1rem 1.3rem;margin:1.4rem 0;border-radius:0 5px 5px 0;}
+.callout p{margin:0;font-size:.94rem;}
+.callout .label{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);display:block;margin-bottom:.4rem;}
+
+.tree{font-family:var(--mono);font-size:.82rem;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:1.3rem 1.4rem;overflow-x:auto;white-space:pre;line-height:1.65;margin:1.4rem 0;}
+.tree .d1{color:var(--blue);font-weight:600;}
+.tree .d2{color:var(--amber);}
+.tree .d3{color:var(--ink-soft);}
+
+.order-list{list-style:none;margin:1.4rem 0;padding:0;counter-reset:step;}
+.order-list li{counter-increment:step;display:flex;gap:1rem;padding:.75rem 0;border-bottom:1px solid var(--line);align-items:baseline;}
+.order-list li:last-child{border-bottom:none;}
+.order-list li::before{content:counter(step);font-family:var(--mono);color:var(--paper);background:var(--blue);width:1.6rem;height:1.6rem;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;flex-shrink:0;font-weight:600;}
+.order-list b{font-family:var(--sans);color:var(--ink);font-size:.95rem;}
+.order-list span{display:block;color:var(--ink-soft);font-size:.86rem;margin-top:.15rem;}
+
+footer{border-top:1px solid var(--line);padding:2.2rem 3rem 3rem;font-family:var(--sans);font-size:.8rem;color:var(--ink-faint);display:flex;justify-content:space-between;flex-wrap:wrap;gap:1rem;}
+
+@media (max-width:640px){.cover{padding:3rem 1.3rem 2.4rem;} main{padding:0 1.3rem 4rem;} footer{padding:2rem 1.3rem;}}
+</style>
+
+<div class="shell">
+  <aside class="rail">
+    <div class="rail-mark">Frontend Scope — Contents</div>
+    <nav>
+      <ol id="toc">
+        <li><a href="#s1"><span class="n">01</span>Boundary</a></li>
+        <li><a href="#s2"><span class="n">02</span>Stack</a></li>
+        <li><a href="#s3"><span class="n">03</span>Routes</a></li>
+        <li><a href="#s4"><span class="n">04</span>Page Specs</a></li>
+        <li><a href="#s5"><span class="n">05</span>Components</a></li>
+        <li><a href="#s6"><span class="n">06</span>Data Layer</a></li>
+        <li><a href="#s7"><span class="n">07</span>Map &amp; Geometry</a></li>
+        <li><a href="#s8"><span class="n">08</span>Cross-Cutting</a></li>
+        <li><a href="#s9"><span class="n">09</span>Build Order</a></li>
+        <li><a href="#s10"><span class="n">10</span>Out of Scope</a></li>
+      </ol>
+    </nav>
+  </aside>
+
+  <div>
+    <div class="cover">
+      <div class="eyebrow">Frontend-Only · Development Scope</div>
+      <h1>Frontend Build Scope</h1>
+      <p class="dek">Everything the Next.js app needs to build, assuming the FastAPI engine, OpenAPI contract, and background pipeline (vision, 3D, ML, cache) already exist behind it. This is the complete frontend-side work list.</p>
+      <div class="meta">
+        <span><b>Companion to</b> UX/UI Design Blueprint</span>
+        <span><b>Assumes</b> Backend engine per Development Document v1.1</span>
+        <span><b>Delivers</b> apps/web — Next.js, React, TypeScript</span>
+      </div>
+    </div>
+
+    <main>
+
+      <!-- 01 BOUNDARY -->
+      <section class="section" id="s1">
+        <div class="section-head"><span class="num">01</span><h2>What "Frontend Only" Means Here</h2></div>
+        <div class="section-sub">Drawing the line cleanly so nothing backend leaks into the sprint plan</div>
+
+        <p class="lead">The backend team owns the engine: geometry providers, constraint packs, the capacity resolver, generation modelling, fitness scoring, vision refinement, 3D generation, ML scoring, the result cache, and the whole PostGIS/FastAPI/Celery stack. We consume all of it through one versioned REST API (<code>API‑01…09</code>) and one generated TypeScript type set. Nothing below assumes we can see inside that boundary — every screen is built against the response shape, not the implementation.</p>
+
+        <div class="grid cols-2">
+          <div class="card"><h5>We own</h5><p>Every route, page, component, client-side state, map interaction, form, chart, and export trigger in <code>apps/web</code>. Client-side geometry math (live area preview only, via Turf) — never authoritative.</p></div>
+          <div class="card"><h5>We consume, never reimplement</h5><p>Capacity/verdict computation, constraint evaluation, vision refinement, 3D mesh generation, ML scoring, caching logic, calibration math. If a number needs computing, it comes from the API — we never shadow-calculate it in the browser.</p></div>
+        </div>
+      </section>
+
+      <!-- 02 STACK -->
+      <section class="section" id="s2">
+        <div class="section-head"><span class="num">02</span><h2>Frontend Stack</h2></div>
+        <div class="section-sub">As fixed in Development Document §10.3 — restated here as the frontend team's actual dependency list</div>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Layer</th><th>Choice</th><th>What we build with it</th></tr></thead>
+            <tbody>
+              <tr><td>Framework</td><td>Next.js (App Router, TypeScript)</td><td>SSR on portfolio/dashboard routes for fast first paint at portfolio scale.</td></tr>
+              <tr><td>Map</td><td>@vis.gl/react-google-maps</td><td>Every map surface — portfolio map, site detail, boundary editor.</td></tr>
+              <tr><td>Drawing</td><td>terra-draw + Google Maps adapter</td><td>Manual boundary + exclusion polygon capture.</td></tr>
+              <tr><td>Client geometry</td><td>@turf/turf</td><td>Live area feedback while drawing only — server remains authoritative on submit.</td></tr>
+              <tr><td>Data overlays</td><td>deck.gl</td><td>Portfolio clustering, verdict-colored heat/point layers at scale.</td></tr>
+              <tr><td>3D / panorama</td><td>@react-three/fiber, or an image-panorama viewer per artifact type</td><td>Renders the <code>panorama_url</code> the API returns — never generates geometry client-side.</td></tr>
+              <tr><td>Server state</td><td>TanStack Query</td><td>All API reads/writes, polling for batch job status.</td></tr>
+              <tr><td>Types</td><td>openapi-typescript</td><td>Generated client types in <code>lib/api/</code> — regenerated on every backend schema change, never hand-edited.</td></tr>
+              <tr><td>Forms</td><td>React Hook Form + Zod</td><td>Validated against the same JSON Schema shape the backend enforces per site type (SITE‑02).</td></tr>
+              <tr><td>Styling</td><td>Tailwind CSS + design tokens (from the UX/UI Blueprint) as CSS variables</td><td>Design-system components share one token file, light/dark both defined.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 03 ROUTES -->
+      <section class="section" id="s3">
+        <div class="section-head"><span class="num">03</span><h2>Complete Route Map</h2></div>
+        <div class="section-sub">apps/web/app — Next.js App Router structure</div>
+
+        <div class="tree">app/
+<span class="d1">├── (auth)/</span>
+<span class="d2">│   ├── login/</span>                          <span class="d3">page.tsx</span>
+<span class="d2">│   └── onboarding/</span>                     <span class="d3">first-site walkthrough</span>
+<span class="d1">├── (workspace)/</span>                        <span class="d3">shell: sidebar + header, all routes below nest here</span>
+<span class="d2">│   ├── portfolio/</span>
+<span class="d3">│   │   ├── page.tsx</span>                    <span class="d3">Overview — shortlist, saturation</span>
+<span class="d3">│   │   ├── map/page.tsx</span>                <span class="d3">Portfolio map (deck.gl clusters)</span>
+<span class="d3">│   │   └── compare/page.tsx</span>            <span class="d3">Ranking / comparison table</span>
+<span class="d2">│   ├── sites/</span>
+<span class="d3">│   │   ├── page.tsx</span>                    <span class="d3">Site list, filters, bulk actions</span>
+<span class="d3">│   │   ├── new/page.tsx</span>                <span class="d3">Create — address/pin, manual draw, import row</span>
+<span class="d3">│   │   ├── [siteId]/page.tsx</span>           <span class="d3">Assessment (default tab)</span>
+<span class="d3">│   │   ├── [siteId]/boundary/page.tsx</span>  <span class="d3">Boundary &amp; geometry + AI review</span>
+<span class="d3">│   │   ├── [siteId]/panorama/page.tsx</span>  <span class="d3">3D / panorama viewer</span>
+<span class="d3">│   │   ├── [siteId]/history/page.tsx</span>   <span class="d3">Version timeline</span>
+<span class="d3">│   │   ├── [siteId]/usn/page.tsx</span>       <span class="d3">USN capture (rooftop types only, guarded route)</span>
+<span class="d3">│   │   └── composite/new/page.tsx</span>      <span class="d3">Feeder/DT composite builder</span>
+<span class="d2">│   ├── imports/</span>
+<span class="d3">│   │   ├── page.tsx</span>                    <span class="d3">New bulk import wizard</span>
+<span class="d3">│   │   └── [jobId]/page.tsx</span>            <span class="d3">Batch job status + error report</span>
+<span class="d2">│   ├── reports/</span>
+<span class="d3">│   │   ├── export/page.tsx</span>             <span class="d3">CSV / GeoJSON / PDF export</span>
+<span class="d3">│   │   ├── calibration/page.tsx</span>        <span class="d3">Variance report (admin)</span>
+<span class="d3">│   │   └── disclosure/page.tsx</span>         <span class="d3">Audit-ready report (Case E)</span>
+<span class="d2">│   ├── search/page.tsx</span>                 <span class="d3">Global search results</span>
+<span class="d2">│   └── settings/</span>
+<span class="d3">│       ├── organisation/page.tsx
+│       ├── jurisdictions/page.tsx             constraint pack viewer
+│       ├── models/page.tsx                    ML model approval queue
+│       ├── api-keys/page.tsx
+│       ├── notifications/page.tsx
+│       └── billing/page.tsx</span>
+<span class="d1">└── (field)/</span>                            <span class="d3">stripped-down layout for mobile boundary/USN capture</span>
+<span class="d2">    ├── capture/[siteId]/boundary/page.tsx</span>
+<span class="d2">    └── capture/[siteId]/usn/page.tsx</span></div>
+      </section>
+
+      <!-- 04 PAGE SPECS -->
+      <section class="section" id="s4">
+        <div class="section-head"><span class="num">04</span><h2>Page-by-Page Build Spec</h2></div>
+        <div class="section-sub">What each route renders, fetches, and lets a user do</div>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Route</th><th>Fetches (API)</th><th>Renders</th><th>Key actions</th><th>Priority</th></tr></thead>
+            <tbody>
+              <tr><td><code>/portfolio</code></td><td>GET assessments (paged, filtered)</td><td>Shortlist table, saturation summary, active jobs</td><td>Open site, filter, export</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td><code>/portfolio/map</code></td><td>GET assessments (geo-bounded)</td><td>deck.gl cluster map, verdict color layer</td><td>Select cluster, drill to site</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td><code>/portfolio/compare</code></td><td>GET assessments (all facets)</td><td>Sortable/filterable full table</td><td>Rank, multi-filter, export selection</td><td><span class="chip p2">P2</span></td></tr>
+              <tr><td><code>/sites</code></td><td>GET sites (paged, filtered)</td><td>Table, bulk-select toolbar</td><td>Open, bulk tag, bulk re-run, export</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td><code>/sites/new</code></td><td>POST site (single); GEO provider resolution feedback</td><td>Address/pin form, type picker, manual-draw entry</td><td>Submit for assessment</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td><code>/sites/[id]</code></td><td>GET assessment (API‑01 shape)</td><td>Verdict, capacity, confidence, binding constraint, reason list, ceiling ledger</td><td>Act on verdict, open boundary/panorama tabs</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td><code>/sites/[id]/boundary</code></td><td>GET geometry + VIS annotation</td><td>Map with provider boundary + AI suggestion overlay</td><td>Accept / adjust / reject suggestion; manual redraw</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td><code>/sites/[id]/panorama</code></td><td>GET <code>panorama_url</code></td><td>3D/panorama viewer or explicit not-generated state</td><td>Inspect, share, download</td><td><span class="chip p2">P2</span></td></tr>
+              <tr><td><code>/sites/[id]/usn</code></td><td>POST usn (manual / OCR)</td><td>Manual field + bill/payment-proof upload, OCR confirm step</td><td>Confirm extracted value, submit</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td><code>/sites/[id]/history</code></td><td>GET version log</td><td>Timeline, actor, timestamp, superseded values</td><td>Inspect only</td><td><span class="chip p3">P3</span></td></tr>
+              <tr><td><code>/sites/composite/new</code></td><td>POST composite site; GET member candidates</td><td>Member-site picker + aggregate preview</td><td>Build &amp; save composite</td><td><span class="chip p3">P3</span></td></tr>
+              <tr><td><code>/imports</code></td><td>POST bulk import (CSV/GeoJSON/shapefile)</td><td>Upload, column mapping, validation preview</td><td>Submit batch</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td><code>/imports/[jobId]</code></td><td>GET job status (poll)</td><td>Live progress, per-row results, error report</td><td>Retry failed rows, open results</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td><code>/reports/export</code></td><td>GET export (CSV/GeoJSON/PDF)</td><td>Format + scope picker</td><td>Generate &amp; download</td><td><span class="chip p2">P2</span></td></tr>
+              <tr><td><code>/reports/calibration</code></td><td>GET variance report (CAL)</td><td>Variance by type/region/source, proposed factor changes</td><td>Approve/hold a recalibration</td><td><span class="chip p3">P3</span></td></tr>
+              <tr><td><code>/reports/disclosure</code></td><td>GET portfolio, phased by payback</td><td>Phased summary, jurisdiction attribution</td><td>Generate PDF</td><td><span class="chip p2">P2</span></td></tr>
+              <tr><td><code>/search</code></td><td>GET search (address/USN/name/coords)</td><td>Unified result list</td><td>Jump to site</td><td><span class="chip p2">P2</span></td></tr>
+              <tr><td><code>/settings/*</code></td><td>GET/PATCH org, keys, models, jurisdictions</td><td>Six admin sub-pages per route map</td><td>Manage, approve, rotate</td><td><span class="chip p3">P3</span></td></tr>
+              <tr><td><code>/capture/[siteId]/boundary</code></td><td>GET/POST FIELD_MEASURED geometry</td><td>Mobile-first draw surface</td><td>Draw, close polygon, submit</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td><code>/capture/[siteId]/usn</code></td><td>POST usn via OCR</td><td>Camera capture, OCR confirm</td><td>Confirm &amp; submit</td><td><span class="chip p1">P1</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 05 COMPONENTS -->
+      <section class="section" id="s5">
+        <div class="section-head"><span class="num">05</span><h2>Component Inventory</h2></div>
+        <div class="section-sub">apps/web/src — organised by feature, per the repository structure in the source document</div>
+
+        <div class="tree">src/
+<span class="d1">├── design-system/</span>                      <span class="d3">tokens.css, primitives — build first</span>
+<span class="d3">│   ├── VerdictChip · ConfidenceMeter · BindingConstraintTag
+│   ├── CacheProvenanceBadge · DataTable · FilterBar
+│   ├── Modal · Drawer · Toast · JobProgressCard
+│   └── FormField (schema-driven), FileUpload, OcrConfirmField</span>
+<span class="d1">├── features/</span>
+<span class="d2">│   ├── sites/</span>                          <span class="d3">list, detail, create, bulk import UI</span>
+<span class="d2">│   ├── map/</span>
+<span class="d3">│   │   ├── components/</span>                 <span class="d3">MapView, SiteMarker, BoundaryPolygon, ExclusionPolygon</span>
+<span class="d3">│   │   └── drawing/</span>                    <span class="d3">Terra Draw integration, vertex editor</span>
+<span class="d2">│   ├── assessment/</span>                     <span class="d3">verdict card, ceiling ledger, reason list</span>
+<span class="d3">│   │   └── panorama/</span>                   <span class="d3">3D/panorama viewer wrapper</span>
+<span class="d2">│   ├── boundary-review/</span>                <span class="d3">AI suggestion card, accept/reject rhythm</span>
+<span class="d2">│   ├── usn-capture/</span>                    <span class="d3">manual field, camera capture, OCR confirm</span>
+<span class="d2">│   ├── portfolio/</span>                      <span class="d3">shortlist, saturation summary, comparison table</span>
+<span class="d2">│   ├── imports/</span>                        <span class="d3">upload wizard, column mapper, job monitor</span>
+<span class="d2">│   ├── reports/</span>                        <span class="d3">export picker, calibration view, disclosure builder</span>
+<span class="d2">│   └── settings/</span>                       <span class="d3">org, keys, jurisdictions, model approval</span>
+<span class="d1">└── lib/</span>
+<span class="d2">    ├── api/</span>                            <span class="d3">generated from OpenAPI — never hand-edited</span>
+<span class="d2">    ├── hooks/</span>                          <span class="d3">TanStack Query hooks, one per resource</span>
+<span class="d2">    └── auth/</span></div>
+      </section>
+
+      <!-- 06 DATA LAYER -->
+      <section class="section" id="s6">
+        <div class="section-head"><span class="num">06</span><h2>Data Layer</h2></div>
+        <div class="section-sub">Every API surface the frontend talks to, and how</div>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>API requirement</th><th>Frontend hook</th><th>Pattern</th></tr></thead>
+            <tbody>
+              <tr><td>API‑01 assessment shape</td><td><code>useAssessment(siteId)</code></td><td>Single query; optional fields (<code>vision_refinement</code>, <code>panorama_url</code>, <code>ml_suitability_score</code>, <code>cache_hit</code>) rendered conditionally, never assumed present.</td></tr>
+              <tr><td>API‑02 sync assessment</td><td><code>useCreateSite()</code></td><td>Mutation; on cache hit, response renders instantly with the provenance badge already set.</td></tr>
+              <tr><td>API‑03 async batch</td><td><code>useBatchJob(jobId)</code></td><td>Polling query (interval backoff), or SSE/webhook-fed if the backend exposes one — never a fire-and-forget submit.</td></tr>
+              <tr><td>API‑04/05 versioning</td><td>global response interceptor</td><td>Engine/pack version surfaced in a detail-view footer, never blocking the UI.</td></tr>
+              <tr><td>API‑06 auth &amp; quota</td><td><code>lib/auth</code></td><td>API key/session scoped per tenant; quota exhaustion shown as a specific, actionable banner, not a generic 429.</td></tr>
+              <tr><td>API‑07 bulk import</td><td><code>useBulkImport()</code></td><td>Multipart upload + per-row error array rendered as the Import Error Report.</td></tr>
+              <tr><td>API‑08 export</td><td><code>useExport(format)</code></td><td>Triggers server-generated file; frontend never assembles CSV/PDF client-side.</td></tr>
+              <tr><td>API‑09 webhooks</td><td>settings only</td><td>Configuration UI only — the frontend does not consume its own webhooks.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>State management rules</h3>
+        <ul>
+          <li>TanStack Query owns all server state; no assessment/verdict data duplicated into a global client store.</li>
+          <li>Client-side (Zustand or React context, whichever is already standard) is reserved for pure UI state: map viewport, drawer open/closed, selected rows, draft form values before submit.</li>
+          <li>Optimistic updates are used only for reversible, low-stakes actions (tagging, filter changes) — never for verdict-affecting submissions like boundary promotion.</li>
+        </ul>
+      </section>
+
+      <!-- 07 MAP -->
+      <section class="section" id="s7">
+        <div class="section-head"><span class="num">07</span><h2>Map &amp; Geometry Layer</h2></div>
+        <div class="section-sub">The single most complex piece of frontend work in this product</div>
+
+        <div class="grid cols-2">
+          <div class="card"><h5>Base map</h5><p>@vis.gl/react-google-maps, one shared instance/config reused across portfolio map, site detail and boundary editor — not three separate integrations.</p></div>
+          <div class="card"><h5>Drawing</h5><p>terra-draw for boundary + exclusion polygon capture; enforce closed-polygon and minimum-vertex rules client-side as immediate feedback, with the server (GEO‑07/08) as final authority.</p></div>
+          <div class="card"><h5>Live area feedback</h5><p>@turf/turf computes an approximate area as the user draws — always labelled "approximate," never presented with the precision of the server-computed usable area.</p></div>
+          <div class="card"><h5>Portfolio-scale overlays</h5><p>deck.gl for clustering and verdict-colored layers once site counts move into the thousands — a plain marker-per-site approach breaks down well before then.</p></div>
+          <div class="card"><h5>AI suggestion overlay</h5><p>Renders the VIS-annotated boundary as a distinct, equal-weight layer beside (not replacing) the provider original — the accept/reject decision needs both visible at once.</p></div>
+          <div class="card"><h5>Panorama/3D</h5><p>@react-three/fiber for interactive mesh artifacts, or a flat panorama-image viewer depending on what <code>VIZ</code> returns — the frontend renders whichever <code>panorama_url</code> type it's given, never assumes one format.</p></div>
+        </div>
+      </section>
+
+      <!-- 08 CROSS-CUTTING -->
+      <section class="section" id="s8">
+        <div class="section-head"><span class="num">08</span><h2>Cross-Cutting Frontend Concerns</h2></div>
+        <div class="section-sub">Work that touches every screen, not one</div>
+
+        <ul>
+          <li><strong>Auth &amp; tenant context</strong> — session/API-key handling, tenant switcher for multi-org users, route guards on admin-only settings pages.</li>
+          <li><strong>Design tokens as code</strong> — the palette, type scale, spacing and radius from the UX/UI Blueprint implemented as CSS variables (light + dark), consumed by every design-system primitive — never a hard-coded hex in a component.</li>
+          <li><strong>Empty / loading / error / insufficient-data states</strong> — built once per pattern in the design system, then applied to every list, card and detail view — not re-invented per screen.</li>
+          <li><strong>Notifications</strong> — job completion, calibration proposals, model-approval requests surfaced consistently via the header bell + toast pattern.</li>
+          <li><strong>Accessibility</strong> — non-pointer path into every geo-selection flow (address/coordinate entry as an alternative to map interaction), verified focus order, and color-paired-with-text on every verdict/status chip.</li>
+          <li><strong>Responsive shell</strong> — one workspace layout that collapses sidebar → icon rail → tab-based map/panel as width drops, plus the separate, deliberately minimal <code>(field)</code> route group for mobile capture.</li>
+          <li><strong>Error boundaries</strong> — per-route boundary so a failed panorama render or map load never takes down the verdict card next to it.</li>
+          <li><strong>Testing</strong> — component tests for the design-system primitives (verdict chip states, confidence tiers), integration tests for the create-site → assessment flow and the bulk-import → job-status flow.</li>
+        </ul>
+      </section>
+
+      <!-- 09 BUILD ORDER -->
+      <section class="section" id="s9">
+        <div class="section-head"><span class="num">09</span><h2>Frontend Build Order</h2></div>
+        <div class="section-sub">Mapped onto the engine's own sprint numbering (Development Document §15) so frontend and backend land in step</div>
+
+        <ol class="order-list">
+          <li><b>Design tokens &amp; primitives</b><span>VerdictChip, ConfidenceMeter, BindingConstraintTag, DataTable, FormField — before any real page.</span></li>
+          <li><b>Workspace shell</b><span>Sidebar, header, auth guard, tenant context. (Aligns with backend Sprint 1–2.)</span></li>
+          <li><b>Site creation + single assessment view</b><span>Address/pin form → verdict card. Needs API v1 (Sprint 4).</span></li>
+          <li><b>Portfolio list + map</b><span>The FSPV statewide-inventory demo screen (Sprint 5).</span></li>
+          <li><b>Boundary editor (Terra Draw) + rooftop create flow</b><span>Aligns with backend Sprint 6.</span></li>
+          <li><b>Bulk import wizard + job status</b><span>Needed for the RESCO bid-window journey as soon as batch API is ready.</span></li>
+          <li><b>Calibration report view</b><span>Aligns with backend Sprint 7.</span></li>
+          <li><b>Cache provenance badge, AI boundary review, panorama viewer</b><span>Aligns with backend Sprint 8 (VIS/VIZ/CACHE go live).</span></li>
+          <li><b>USN capture flow (manual + OCR) + ML score panel</b><span>Aligns with backend Sprint 9.</span></li>
+          <li><b>Field capture route group (mobile)</b><span>Boundary + USN, stripped layout, once the desktop flows are stable.</span></li>
+          <li><b>Reports — export, disclosure, settings/admin surfaces</b><span>Lower urgency; build after every P1/P2 screen above is live.</span></li>
+          <li><b>Empty/error/loading pass, accessibility audit, responsive polish</b><span>Applied across everything built so far, not deferred to "later."</span></li>
+        </ol>
+      </section>
+
+      <!-- 10 OUT OF SCOPE -->
+      <section class="section" id="s10">
+        <div class="section-head"><span class="num">10</span><h2>Explicitly Out of Scope for Frontend</h2></div>
+        <div class="section-sub">So nobody accidentally starts building engine logic in the browser</div>
+
+        <div class="grid cols-3">
+          <div class="card"><h5><span class="chip out">Not ours</span> Geometry &amp; constraints</h5><p>Water-index extraction, area/setback math, constraint packs, the capacity resolver. We render their output.</p></div>
+          <div class="card"><h5><span class="chip out">Not ours</span> Vision, 3D, ML</h5><p>GPT‑4 Vision calls, mesh/panorama generation, model training/serving. We render URLs and annotations they return.</p></div>
+          <div class="card"><h5><span class="chip out">Not ours</span> Caching &amp; jobs</h5><p>The result cache, Celery workers, retraining schedule. We poll job status and display <code>cache_hit</code> — we don't implement either.</p></div>
+        </div>
+
+        <div class="callout">
+          <span class="label">The one rule that keeps this boundary honest</span>
+          <p>If a screen needs a number the API doesn't already return, the fix is a backend ticket, not a client-side calculation. The frontend's job is to make the engine's output legible and fast to act on — never to quietly reproduce the engine.</p>
+        </div>
+      </section>
+
+    </main>
+
+    <footer>
+      <span>Solar Site Fitness &amp; Capacity Engine — Frontend Build Scope</span>
+      <span>Companion to the UX/UI Design Blueprint</span>
+    </footer>
+  </div>
+</div>
+
+<script>
+(function(){
+  var links = Array.prototype.slice.call(document.querySelectorAll('.rail nav a'));
+  var sections = links.map(function(l){ return document.querySelector(l.getAttribute('href')); }).filter(Boolean);
+  if(!('IntersectionObserver' in window) || !sections.length) return;
+  var map = {};
+  sections.forEach(function(sec, i){ map[sec.id] = links[i]; });
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){
+        links.forEach(function(l){ l.classList.remove('active'); });
+        var link = map[e.target.id];
+        if(link) link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-10% 0px -75% 0px', threshold: 0 });
+  sections.forEach(function(sec){ io.observe(sec); });
+})();
+</script>

@@ -1,0 +1,163 @@
+@import "tailwindcss";
+
+/* ---------- Design tokens (light default) ---------- */
+:root {
+  --paper: #f5f4ee;
+  --surface: #eae8de;
+  --surface-2: #e0ddcf;
+  --line: #c7c1af;
+  --ink: #1e2b30;
+  --ink-soft: #54626a;
+  --ink-faint: #8a8f86;
+
+  --blue: #2c5c6b;
+  --blue-soft: #5c8695;
+  --amber: #a9691f;
+  --amber-soft: #c98a3f;
+  --teal: #3f7d6b;
+  --teal-soft: #5c9985;
+  --slate: #545a72;
+  --slate-soft: #767ba0;
+
+  --good: #3f6b3f;
+  --good-bg: #e3ecdf;
+  --warn: #8a5a17;
+  --warn-bg: #f1e3c8;
+  --bad: #8c3b32;
+  --bad-bg: #f2ddd8;
+  --neutral-verdict: #5b5f5a;
+  --neutral-bg: #e6e4da;
+
+  --radius: 5px;
+  --shadow-float: 0 6px 20px -6px rgb(30 43 48 / 0.28), 0 2px 6px -2px rgb(30 43 48 / 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #141b1d;
+    --surface: #1b2427;
+    --surface-2: #212c2f;
+    --line: #33403f;
+    --ink: #e9e6dc;
+    --ink-soft: #a9b0ab;
+    --ink-faint: #6f7a76;
+
+    --blue: #7fadbb;
+    --blue-soft: #5c8695;
+    --amber: #d99a4e;
+    --amber-soft: #c98a3f;
+    --teal: #7fc1ac;
+    --teal-soft: #5c9985;
+    --slate: #9ba1c4;
+    --slate-soft: #767ba0;
+
+    --good: #7fb37f;
+    --good-bg: #1e2c1e;
+    --warn: #d0a350;
+    --warn-bg: #33290f;
+    --bad: #d68b7f;
+    --bad-bg: #38201c;
+    --neutral-verdict: #a8ada4;
+    --neutral-bg: #232821;
+
+    --shadow-float: 0 6px 20px -6px rgb(0 0 0 / 0.6), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #141b1d;
+  --surface: #1b2427;
+  --surface-2: #212c2f;
+  --line: #33403f;
+  --ink: #e9e6dc;
+  --ink-soft: #a9b0ab;
+  --ink-faint: #6f7a76;
+
+  --blue: #7fadbb;
+  --blue-soft: #5c8695;
+  --amber: #d99a4e;
+  --amber-soft: #c98a3f;
+  --teal: #7fc1ac;
+  --teal-soft: #5c9985;
+  --slate: #9ba1c4;
+  --slate-soft: #767ba0;
+
+  --good: #7fb37f;
+  --good-bg: #1e2c1e;
+  --warn: #d0a350;
+  --warn-bg: #33290f;
+  --bad: #d68b7f;
+  --bad-bg: #38201c;
+  --neutral-verdict: #a8ada4;
+  --neutral-bg: #232821;
+
+  --shadow-float: 0 6px 20px -6px rgb(0 0 0 / 0.6), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+
+  --color-blue: var(--blue);
+  --color-blue-soft: var(--blue-soft);
+  --color-amber: var(--amber);
+  --color-amber-soft: var(--amber-soft);
+  --color-teal: var(--teal);
+  --color-teal-soft: var(--teal-soft);
+  --color-slate: var(--slate);
+  --color-slate-soft: var(--slate-soft);
+
+  --color-good: var(--good);
+  --color-good-bg: var(--good-bg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-bad: var(--bad);
+  --color-bad-bg: var(--bad-bg);
+  --color-neutral-verdict: var(--neutral-verdict);
+  --color-neutral-bg: var(--neutral-bg);
+
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  --radius-app: 5px;
+  --shadow-float: var(--shadow-float);
+}
+
+* {
+  border-color: var(--line);
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+.font-mono,
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--amber-soft);
+  color: #fff;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 4px;
+}

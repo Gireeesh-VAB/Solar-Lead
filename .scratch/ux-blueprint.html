@@ -1,0 +1,1023 @@
+<title>Site Fitness Blueprint</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --paper:#f5f4ee;
+  --surface:#eae8de;
+  --surface-2:#e0ddcf;
+  --line:#c7c1af;
+  --ink:#1e2b30;
+  --ink-soft:#54626a;
+  --ink-faint:#8a8f86;
+  --blue:#2c5c6b;
+  --blue-soft:#5c8695;
+  --amber:#a9691f;
+  --amber-soft:#c98a3f;
+  --good:#3f6b3f;
+  --good-bg:#e3ecdf;
+  --warn:#8a5a17;
+  --warn-bg:#f1e3c8;
+  --bad:#8c3b32;
+  --bad-bg:#f2ddd8;
+  --neutral-verdict:#5b5f5a;
+  --neutral-bg:#e6e4da;
+  --shadow: 0 1px 2px rgba(30,43,48,.06), 0 6px 20px rgba(30,43,48,.06);
+  --serif: 'IBM Plex Serif', Georgia, 'Times New Roman', serif;
+  --sans: 'IBM Plex Sans', -apple-system, 'Segoe UI', Arial, sans-serif;
+  --mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#141b1d;
+    --surface:#1b2427;
+    --surface-2:#212c2f;
+    --line:#334046;
+    --ink:#e9e6dc;
+    --ink-soft:#aab2ac;
+    --ink-faint:#767f79;
+    --blue:#7fadbb;
+    --blue-soft:#5c8695;
+    --amber:#d99a4e;
+    --amber-soft:#c98a3f;
+    --good:#8fbd8a;
+    --good-bg:#233024;
+    --warn:#d3a75a;
+    --warn-bg:#332818;
+    --bad:#d99087;
+    --bad-bg:#33201e;
+    --neutral-verdict:#a9ada6;
+    --neutral-bg:#242923;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 24px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#141b1d;
+  --surface:#1b2427;
+  --surface-2:#212c2f;
+  --line:#334046;
+  --ink:#e9e6dc;
+  --ink-soft:#aab2ac;
+  --ink-faint:#767f79;
+  --blue:#7fadbb;
+  --blue-soft:#5c8695;
+  --amber:#d99a4e;
+  --amber-soft:#c98a3f;
+  --good:#8fbd8a;
+  --good-bg:#233024;
+  --warn:#d3a75a;
+  --warn-bg:#332818;
+  --bad:#d99087;
+  --bad-bg:#33201e;
+  --neutral-verdict:#a9ada6;
+  --neutral-bg:#242923;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 24px rgba(0,0,0,.35);
+}
+
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:16.5px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--amber-soft); color:#1a1a1a;}
+
+a{color:var(--blue); text-decoration-thickness:1px;}
+a:focus-visible, button:focus-visible, summary:focus-visible{outline:2px solid var(--amber); outline-offset:2px;}
+
+/* ---------- Shell ---------- */
+.shell{
+  display:grid;
+  grid-template-columns: 240px minmax(0,1fr);
+  gap:0;
+  max-width:1240px;
+  margin:0 auto;
+}
+@media (max-width: 980px){
+  .shell{grid-template-columns: 1fr;}
+  .rail{display:none;}
+}
+
+.rail{
+  position:sticky; top:0; align-self:start;
+  height:100vh; overflow-y:auto;
+  padding:2.6rem 1.1rem 2rem 1.6rem;
+  border-right:1px solid var(--line);
+  font-family:var(--sans);
+}
+.rail-mark{
+  font-family:var(--mono);
+  font-size:.72rem;
+  letter-spacing:.08em;
+  color:var(--ink-faint);
+  text-transform:uppercase;
+  margin-bottom:1.4rem;
+}
+.rail nav ol{list-style:none; margin:0; padding:0;}
+.rail nav li{margin:0;}
+.rail nav a{
+  display:block;
+  padding:.32rem .5rem;
+  margin:1px 0;
+  border-radius:3px;
+  font-size:.82rem;
+  color:var(--ink-soft);
+  text-decoration:none;
+  border-left:2px solid transparent;
+}
+.rail nav a .n{
+  font-family:var(--mono); color:var(--ink-faint); margin-right:.5em; font-size:.78em;
+}
+.rail nav a:hover{color:var(--ink); background:var(--surface);}
+.rail nav a.active{color:var(--ink); border-left-color:var(--amber); background:var(--surface); font-weight:600;}
+
+/* ---------- Cover ---------- */
+.cover{
+  padding:4.2rem 3rem 3.4rem;
+  border-bottom:1px solid var(--line);
+}
+.cover .eyebrow{
+  font-family:var(--mono); font-size:.78rem; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--blue); margin-bottom:1.1rem; display:flex; gap:.9rem; align-items:center;
+}
+.cover .eyebrow::before{content:"◈"; color:var(--amber);}
+.cover h1{
+  font-family:var(--sans); font-weight:600; font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.08; margin:0 0 1rem; text-wrap:balance; letter-spacing:-.01em;
+}
+.cover .dek{
+  font-size:1.18rem; color:var(--ink-soft); max-width:44rem; margin:0 0 1.8rem; text-wrap:pretty;
+}
+.cover .meta{
+  display:flex; flex-wrap:wrap; gap:1.6rem; font-family:var(--mono); font-size:.78rem;
+  color:var(--ink-faint); border-top:1px solid var(--line); padding-top:1.2rem;
+}
+.cover .meta b{color:var(--ink-soft); font-weight:500;}
+
+/* ---------- Content ---------- */
+main{padding:0 3rem 6rem;}
+.section{padding-top:3.6rem; scroll-margin-top:1.5rem;}
+.section:first-of-type{padding-top:3rem;}
+
+.section-head{
+  display:flex; align-items:baseline; gap:.9rem; margin-bottom:.4rem;
+  border-bottom:1px solid var(--line); padding-bottom:.7rem;
+}
+.section-head .num{
+  font-family:var(--mono); color:var(--amber); font-size:1rem; font-weight:500;
+}
+.section-head h2{
+  font-family:var(--sans); font-size:1.5rem; font-weight:600; margin:0; letter-spacing:-.01em;
+}
+.section-sub{
+  font-family:var(--sans); color:var(--ink-faint); font-size:.86rem; margin:.55rem 0 1.6rem;
+  text-transform:uppercase; letter-spacing:.05em;
+}
+
+h3{font-family:var(--sans); font-weight:600; font-size:1.08rem; margin:2.1rem 0 .7rem; color:var(--ink);}
+h4{font-family:var(--sans); font-weight:600; font-size:.94rem; margin:1.5rem 0 .5rem; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em; font-size:.78rem;}
+p{max-width:70ch; margin:0 0 1rem;}
+p.lead{font-size:1.06rem; color:var(--ink-soft); max-width:66ch;}
+ul,ol{max-width:70ch; padding-left:1.3rem;}
+li{margin-bottom:.35rem;}
+strong{color:var(--ink); font-weight:600;}
+code{font-family:var(--mono); font-size:.88em; background:var(--surface); padding:.1em .35em; border-radius:3px;}
+
+/* ---------- Tables ---------- */
+.tbl-wrap{overflow-x:auto; margin:1.1rem 0 1.8rem; border:1px solid var(--line); border-radius:4px;}
+table{border-collapse:collapse; width:100%; font-family:var(--sans); font-size:.87rem; min-width:560px;}
+th{
+  text-align:left; background:var(--surface); color:var(--ink-soft);
+  font-weight:600; font-size:.72rem; text-transform:uppercase; letter-spacing:.05em;
+  padding:.6rem .85rem; border-bottom:1px solid var(--line); white-space:nowrap;
+}
+td{padding:.65rem .85rem; border-bottom:1px solid var(--line); vertical-align:top; color:var(--ink);}
+tr:last-child td{border-bottom:none;}
+tbody tr:hover{background:var(--surface);}
+td.num, th.num{font-variant-numeric:tabular-nums; font-family:var(--mono);}
+
+/* ---------- Chips / pills ---------- */
+.chip{
+  display:inline-flex; align-items:center; gap:.35em; font-family:var(--mono); font-size:.72rem;
+  padding:.18em .55em; border-radius:3px; border:1px solid var(--line); white-space:nowrap;
+  text-transform:uppercase; letter-spacing:.03em;
+}
+.chip.must{color:var(--bad); background:var(--bad-bg); border-color:transparent;}
+.chip.should{color:var(--warn); background:var(--warn-bg); border-color:transparent;}
+.chip.p1{color:var(--bad); background:var(--bad-bg); border-color:transparent;}
+.chip.p2{color:var(--warn); background:var(--warn-bg); border-color:transparent;}
+.chip.p3{color:var(--blue); background:var(--surface-2); border-color:transparent;}
+.chip.good{color:var(--good); background:var(--good-bg); border-color:transparent;}
+.chip.neutral{color:var(--neutral-verdict); background:var(--neutral-bg); border-color:transparent;}
+
+/* ---------- Cards / grids ---------- */
+.grid{display:grid; gap:1rem; margin:1.3rem 0 1.8rem;}
+.grid.cols-2{grid-template-columns:repeat(2,1fr);}
+.grid.cols-3{grid-template-columns:repeat(3,1fr);}
+@media (max-width:760px){.grid.cols-2,.grid.cols-3{grid-template-columns:1fr;}}
+
+.card{
+  background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:1.15rem 1.3rem;
+}
+.card h5{
+  font-family:var(--sans); font-size:.95rem; font-weight:600; margin:0 0 .5rem; color:var(--ink);
+  display:flex; align-items:center; gap:.5rem;
+}
+.card p{font-size:.9rem; color:var(--ink-soft); margin:0;}
+
+.callout{
+  border-left:3px solid var(--amber); background:var(--surface); padding:1rem 1.3rem;
+  margin:1.4rem 0; border-radius:0 5px 5px 0;
+}
+.callout p{margin:0; font-size:.94rem;}
+.callout .label{
+  font-family:var(--mono); font-size:.7rem; text-transform:uppercase; letter-spacing:.08em;
+  color:var(--amber); display:block; margin-bottom:.4rem;
+}
+
+/* classification 4-up */
+.classify{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:6px; overflow:hidden; margin:1.4rem 0;}
+@media (max-width:900px){.classify{grid-template-columns:1fr;}}
+.classify > div{background:var(--paper); padding:1rem 1.1rem;}
+.classify h6{
+  font-family:var(--mono); font-size:.68rem; text-transform:uppercase; letter-spacing:.06em;
+  margin:0 0 .6rem; padding-bottom:.5rem; border-bottom:1px solid var(--line);
+}
+.classify .c1 h6{color:var(--blue);}
+.classify .c2 h6{color:var(--good);}
+.classify .c3 h6{color:var(--amber);}
+.classify .c4 h6{color:var(--bad);}
+.classify ul{margin:0; padding-left:1.05rem; font-size:.85rem;}
+.classify li{margin-bottom:.5rem; color:var(--ink-soft);}
+
+/* journey */
+.journey{
+  border:1px solid var(--line); border-radius:6px; margin:1.6rem 0; overflow:hidden;
+}
+.journey-head{
+  display:flex; justify-content:space-between; align-items:center; gap:1rem;
+  background:var(--surface); padding:.9rem 1.3rem; border-bottom:1px solid var(--line);
+}
+.journey-head h4{margin:0; font-size:.85rem; color:var(--ink);}
+.journey-body{padding:1.2rem 1.3rem;}
+.journey-steps{
+  display:flex; flex-wrap:wrap; gap:.4rem; margin:.8rem 0 1.1rem; font-family:var(--sans);
+}
+.journey-steps span{
+  font-size:.78rem; background:var(--surface); border:1px solid var(--line); border-radius:3px;
+  padding:.32rem .6rem; color:var(--ink-soft);
+}
+.journey-steps span::after{content:"→"; margin-left:.5rem; color:var(--ink-faint);}
+.journey-steps span:last-child::after{content:"";}
+.kv{display:grid; grid-template-columns:auto 1fr; gap:.35rem 1rem; font-size:.88rem; margin:0;}
+.kv dt{font-family:var(--sans); font-weight:600; color:var(--ink-faint); font-size:.74rem; text-transform:uppercase; letter-spacing:.04em; padding-top:.15rem;}
+.kv dd{margin:0 0 .6rem;}
+
+/* IA tree */
+.tree{
+  font-family:var(--mono); font-size:.84rem; background:var(--surface); border:1px solid var(--line);
+  border-radius:6px; padding:1.3rem 1.4rem; overflow-x:auto; white-space:pre; line-height:1.65; margin:1.4rem 0;
+}
+.tree .d1{color:var(--blue); font-weight:600;}
+.tree .d2{color:var(--amber);}
+.tree .d3{color:var(--ink-soft);}
+
+/* palette swatches */
+.swatches{display:flex; flex-wrap:wrap; gap:.9rem; margin:1.3rem 0 1.8rem;}
+.swatch{width:132px;}
+.swatch .fill{height:64px; border-radius:5px; border:1px solid var(--line);}
+.swatch .lbl{font-family:var(--mono); font-size:.72rem; margin-top:.4rem; color:var(--ink-soft);}
+.swatch .lbl b{display:block; font-family:var(--sans); font-size:.78rem; color:var(--ink); font-weight:600;}
+
+/* type specimen */
+.specimen{border:1px solid var(--line); border-radius:6px; padding:1.4rem 1.6rem; margin:1.3rem 0 1.8rem; background:var(--surface);}
+.specimen .row{display:flex; align-items:baseline; gap:1rem; padding:.55rem 0; border-bottom:1px dashed var(--line);}
+.specimen .row:last-child{border-bottom:none;}
+.specimen .tag{font-family:var(--mono); font-size:.68rem; color:var(--ink-faint); width:9.5rem; flex-shrink:0; text-transform:uppercase; letter-spacing:.04em;}
+
+/* footer */
+footer{
+  border-top:1px solid var(--line); padding:2.2rem 3rem 3rem; font-family:var(--sans);
+  font-size:.8rem; color:var(--ink-faint); display:flex; justify-content:space-between; flex-wrap:wrap; gap:1rem;
+}
+
+/* order list */
+.order-list{list-style:none; margin:1.4rem 0; padding:0; counter-reset:step;}
+.order-list li{
+  counter-increment:step; display:flex; gap:1rem; padding:.75rem 0; border-bottom:1px solid var(--line);
+  align-items:baseline;
+}
+.order-list li:last-child{border-bottom:none;}
+.order-list li::before{
+  content:counter(step);
+  font-family:var(--mono); color:var(--paper); background:var(--blue);
+  width:1.6rem; height:1.6rem; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-size:.75rem; flex-shrink:0; font-weight:600;
+}
+.order-list b{font-family:var(--sans); color:var(--ink); font-size:.95rem;}
+.order-list span{display:block; color:var(--ink-soft); font-size:.86rem; margin-top:.15rem;}
+
+@media (max-width:640px){
+  .cover{padding:3rem 1.3rem 2.4rem;}
+  main{padding:0 1.3rem 4rem;}
+  footer{padding:2rem 1.3rem;}
+}
+</style>
+
+<div class="shell">
+  <aside class="rail">
+    <div class="rail-mark">Blueprint — Contents</div>
+    <nav>
+      <ol id="toc">
+        <li><a href="#s1"><span class="n">01</span>Product</a></li>
+        <li><a href="#s2"><span class="n">02</span>UX Strategy</a></li>
+        <li><a href="#s3"><span class="n">03</span>Architecture</a></li>
+        <li><a href="#s4"><span class="n">04</span>Journeys</a></li>
+        <li><a href="#s5"><span class="n">05</span>Screens</a></li>
+        <li><a href="#s6"><span class="n">06</span>Visual Direction</a></li>
+        <li><a href="#s7"><span class="n">07</span>Design System</a></li>
+        <li><a href="#s8"><span class="n">08</span>Layout</a></li>
+        <li><a href="#s9"><span class="n">09</span>Hierarchy</a></li>
+        <li><a href="#s10"><span class="n">10</span>States</a></li>
+        <li><a href="#s11"><span class="n">11</span>Accessibility</a></li>
+        <li><a href="#s12"><span class="n">12</span>Responsive</a></li>
+        <li><a href="#s13"><span class="n">13</span>Premium UX</a></li>
+        <li><a href="#s14"><span class="n">14</span>Signature UI</a></li>
+        <li><a href="#s15"><span class="n">15</span>Phasing</a></li>
+        <li><a href="#s16"><span class="n">16</span>Final Blueprint</a></li>
+      </ol>
+    </nav>
+  </aside>
+
+  <div>
+    <div class="cover">
+      <div class="eyebrow">UX/UI Foundation · Pre-Screen Design Blueprint</div>
+      <h1>Solar Site Fitness &amp; Capacity Engine</h1>
+      <p class="dek">A design blueprint for the interface layer of a decision-support engine that answers, for any candidate rooftop or water body: can solar be installed here, and at what capacity — with the evidence to defend that answer.</p>
+      <div class="meta">
+        <span><b>Source</b> Development Document v1.1, rev. 24 Aug 2026</span>
+        <span><b>Scope</b> Product understanding → screen-by-screen readiness</span>
+        <span><b>Status</b> Foundation — no screens designed yet</span>
+      </div>
+    </div>
+
+    <main>
+
+      <!-- ============ 01 PRODUCT ============ -->
+      <section class="section" id="s1">
+        <div class="section-head"><span class="num">01</span><h2>Understand the Product</h2></div>
+        <div class="section-sub">What it is, who it serves, what it must never get wrong</div>
+
+        <p class="lead">The engine answers two questions about a site — <em>can solar go here</em>, and <em>at what capacity</em> — and returns a verdict with a number, a confidence level, and the one constraint that produced that number. Everything the interface does is in service of making that answer fast to get and easy to trust.</p>
+
+        <p>Five external buyers sit around one engine: a state renewable-energy agency screening thousands of water bodies for floating solar; the same agency triaging tens of thousands of government rooftops; a RESCO bid team pricing a portfolio it has never visited; a DISCOM programme cell targeting rooftop subsidy outreach by feeder; and a corporate sustainability head building an audit-ready site portfolio. A sixth persona is internal but load-bearing: the field/geometry operator who draws boundaries by hand, confirms OCR-extracted data, and reconciles survey results against the model.</p>
+
+        <h3>Primary personas</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Persona</th><th>Comes from</th><th>Primary task</th><th>Success looks like</th></tr></thead>
+            <tbody>
+              <tr><td><strong>State Inventory Analyst</strong></td><td>Case A — floating solar</td><td>Turn thousands of water bodies into a ranked, fundable shortlist</td><td>A defensible statewide list ready for a ₹50L feasibility allocation</td></tr>
+              <tr><td><strong>Rooftop Programme Manager</strong></td><td>Case B — govt rooftops</td><td>Direct a scarce survey team at the buildings most likely to convert</td><td>Survey conversion rate roughly doubles</td></tr>
+              <tr><td><strong>Bid Analyst</strong></td><td>Case C — RESCO/IPP</td><td>Price a 300–2,000 site portfolio inside a 30-day window</td><td>A bid submitted with P50/P90 numbers, no post-award surprises</td></tr>
+              <tr><td><strong>DISCOM Programme Cell</strong></td><td>Case D — PM Surya Ghar</td><td>Target outreach at feeders with headroom, not blind broadcast</td><td>Subsidy spend concentrated on absorbable capacity</td></tr>
+              <tr><td><strong>Sustainability Lead</strong></td><td>Case E — Corporate C&amp;I</td><td>Get a defensible, phased number for disclosure</td><td>An audit-ready basis a board or auditor accepts without pushback</td></tr>
+              <tr><td><strong>Field / Geometry Operator</strong></td><td>Internal, all cases</td><td>Draw boundaries, confirm OCR, reconcile survey vs. estimate</td><td>Every boundary they touch improves the model, not just one record</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>What must feel effortless vs. what must ask for confirmation</h3>
+        <div class="grid cols-2">
+          <div class="card">
+            <h5>Effortless</h5>
+            <p>Entering an address or dropping a pin and getting a verdict back; re-selecting a site someone else already analysed (served from cache, instantly); scanning a portfolio table for the sites worth a second look; reading <em>why</em> a number is what it is without opening a manual.</p>
+          </div>
+          <div class="card">
+            <h5>Requires confirmation / deliberate weight</h5>
+            <p>Promoting a GPT‑4&nbsp;Vision boundary suggestion over the provider's original geometry; accepting OCR‑extracted USN data before it's stored; forcing a cache refresh on a location everyone else is relying on; publishing a recalibrated utilisation factor or a new ML model version; any bulk recompute across a jurisdiction.</p>
+          </div>
+        </div>
+
+        <h3>What a user must understand in the first few seconds</h3>
+        <ul>
+          <li>This is a <strong>pre-feasibility instrument, not an approval</strong> — every result carries that limitation visibly, not in a footnote.</li>
+          <li>A verdict is never a bare number. It always arrives with <strong>confidence</strong> and the <strong>one constraint holding it back</strong>.</li>
+          <li>Whether they're looking at a single site or a portfolio of forty thousand, the same four facts anchor the screen: <strong>capacity, verdict, confidence, binding constraint.</strong></li>
+        </ul>
+
+        <h3>Requirement classification</h3>
+        <p>Separating what the document states from what follows from it keeps the design honest about where it is inventing.</p>
+        <div class="classify">
+          <div class="c1"><h6>Explicit in the document</h6>
+            <ul>
+              <li>Single response shape across all site types (API‑01)</li>
+              <li>Verdict set: SUITABLE / SUITABLE_SUBJECT_TO_SURVEY / CONDITIONAL / INSUFFICIENT_DATA / NOT_SUITABLE</li>
+              <li>Confidence, binding constraint and reason list on every result (FIT‑04–06)</li>
+              <li>ML score is additive, never authoritative (FIT‑06, ML‑01)</li>
+              <li>Cache hits must be visibly labelled, never disguised (CACHE‑05)</li>
+              <li>Async batch jobs with pollable status (API‑03)</li>
+              <li>USN capture only on billing‑linked rooftop types, three converging input paths (USN‑01–05)</li>
+            </ul>
+          </div>
+          <div class="c2"><h6>Strong UX conclusions</h6>
+            <ul>
+              <li>The interface is a workspace tool, used repeatedly by professionals — not a marketing funnel</li>
+              <li>Map and evidence panel must coexist in one view; verdicts detached from geography lose trust</li>
+              <li>Confidence needs a consistent visual language reused everywhere, not a tooltip</li>
+              <li>Portfolio scale (hundreds–tens of thousands of sites) must be the default screen, not an edge case</li>
+              <li>Boundary review (VIS/VIZ) is a judged human decision, so it needs its own deliberate screen, not an inline diff</li>
+            </ul>
+          </div>
+          <div class="c3"><h6>Assumptions (flag before building)</h6>
+            <ul>
+              <li>Most analysts work primarily on desktop/laptop; field operators need a lightweight mobile mode</li>
+              <li>Tenants see only their own sites, but benefit anonymously from the shared cache</li>
+              <li>Registry/dashboard/survey workflow screens exist as noted in the spec but are out of this FRD's scope — assumed present in v1.0 packaging</li>
+              <li>Government buyers expect exportable, offline-shareable artefacts (PDF/CSV) alongside the live product</li>
+            </ul>
+          </div>
+          <div class="c4"><h6>Open questions</h6>
+            <ul>
+              <li>Who approves a promoted VIS boundary or a new ML model version — a named role, or any operator?</li>
+              <li>Does a tenant ever see that a result came from another tenant's earlier analysis, or is provenance fully hidden?</li>
+              <li>What does "force refresh" require procedurally — reason code, approval, audit log surfaced in UI?</li>
+              <li>Weather API provider is still open (§10.3) — does its latency profile affect the "instant" promise?</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 02 UX STRATEGY ============ -->
+      <section class="section" id="s2">
+        <div class="section-head"><span class="num">02</span><h2>UX Strategy</h2></div>
+        <div class="section-sub">The principles every screen answers to before any screen exists</div>
+
+        <h3>Product hierarchy</h3>
+        <p><strong>Engine → Site → Analysis → Assessment → Portfolio.</strong> A <em>site</em> is a place; an <em>analysis</em> is what the engine computed at that location (and may be shared across tenants via the cache); an <em>assessment</em> is a tenant's dated, versioned view of that analysis attached to their site record; a <em>portfolio</em> is a ranked collection of assessments. The interface must keep these four nouns visually distinct — conflating "site" and "assessment" is the single most likely source of confusion once caching and re-analysis enter the picture.</p>
+
+        <h3>Information hierarchy — the constant, at every zoom level</h3>
+        <div class="grid cols-2">
+          <div class="card"><h5>1 · Verdict</h5><p>The word — SUITABLE, CONDITIONAL, etc. Read before anything else.</p></div>
+          <div class="card"><h5>2 · Capacity</h5><p>The number, in kWp DC, with its unit basis always explicit.</p></div>
+          <div class="card"><h5>3 · Confidence</h5><p>How much to trust the number, expressed the same way everywhere.</p></div>
+          <div class="card"><h5>4 · Binding constraint</h5><p>The one thing holding the number back — the fact a user will act on.</p></div>
+        </div>
+        <p>Everything else — the full ceiling list, generation P50/P90, the ML score, the panorama, imagery date — is supporting evidence one level down. Nothing at that second level competes visually with the four facts above it.</p>
+
+        <h3>Navigation model</h3>
+        <p>A persistent <strong>workspace shell</strong> (left sidebar + top utility bar), not a marketing-style top nav. Primary sections are nouns a professional already thinks in: <strong>Portfolio, Sites, Imports/Jobs, Reports, Configuration.</strong> The map is not a section — it is a mode available from Portfolio and from any Site. Search is global and geography-aware: typing an address, a USN, or a site name all resolve the same way.</p>
+
+        <h3>User mental model</h3>
+        <p>Every persona is really doing one thing: <em>spending a limited survey/decision budget on the right subset of sites.</em> The product's job is to make that subset obvious. This reframes "dashboard" away from vanity metrics and toward a single question the home screen must answer immediately: <em>which sites, out of everything I have, deserve my next hour?</em></p>
+
+        <h3>Primary vs. secondary actions</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Context</th><th>Primary action</th><th>Secondary actions</th></tr></thead>
+            <tbody>
+              <tr><td>Portfolio home</td><td>Open the ranked shortlist</td><td>Filter, export, start new import</td></tr>
+              <tr><td>Site list</td><td>Open a site</td><td>Bulk-select, tag, re-run, export selection</td></tr>
+              <tr><td>Assessment view</td><td>Accept / act on the verdict (route to survey, bid, or archive)</td><td>View full ceiling list, view panorama, view ML score, download report</td></tr>
+              <tr><td>Boundary review</td><td>Confirm or reject the AI-suggested boundary</td><td>Redraw manually, flag imagery quality, add note</td></tr>
+              <tr><td>Batch import</td><td>Submit for assessment</td><td>Fix row errors, map columns, preview sample</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Progressive disclosure strategy</h3>
+        <ol>
+          <li><strong>Glance</strong> — verdict, capacity, confidence, binding constraint. This is the entire portfolio table row and the entire assessment card header.</li>
+          <li><strong>Scan</strong> — the reason list, the ceiling breakdown, generation estimate, imagery/geometry provenance. One click or one panel away.</li>
+          <li><strong>Inspect</strong> — the full ceiling ledger, ML score with model version, cache lineage, vision-refinement annotation, panorama, raw geometry. Reached deliberately, never defaulted into.</li>
+          <li><strong>Audit</strong> — parameter pack version, constraint pack version, historical reproduction of a past result. For configuration and compliance roles, not day-to-day analysts.</li>
+        </ol>
+
+        <h3>Where users will get confused, and the counter-move</h3>
+        <div class="grid cols-2">
+          <div class="card"><h5>ML score vs. FIT verdict</h5><p>Two numbers that both sound like "the answer." Counter-move: the ML score never appears in the same visual weight or position as the verdict — it lives in a clearly labelled "model comparison" panel, always with a one-line reminder of which one is authoritative.</p></div>
+          <div class="card"><h5>Cache reuse feeling like a shortcut was taken</h5><p>An instant result can read as "it didn't really check." Counter-move: make the cache hit a visible, positive state — "Already analysed on &lt;date&gt; · reused" — not a hidden optimisation.</p></div>
+          <div class="card"><h5>Site types with different field sets (USN only on rooftop, minimum-spread only on floating)</h5><p>Counter-move: forms and detail views are generated from the same type registry the backend validates against — a field that doesn't apply to this site type is never shown greyed out, it's simply absent.</p></div>
+          <div class="card"><h5>Async batch jobs disappearing from view</h5><p>A 2,000-site bid-window import must never feel like it vanished into a queue. Counter-move: a persistent, always-reachable Jobs surface with live progress, not a one-time toast.</p></div>
+        </div>
+
+        <h3>Reducing cognitive load</h3>
+        <ul>
+          <li>One consistent verdict/confidence visual language, reused identically in the table row, the card, the map pin, and the PDF export.</li>
+          <li>Numbers are never shown without their unit and basis (kWp DC, m², P50/P90) — inconsistency here is where trust erodes fastest.</li>
+          <li>Filters and rankings default to the decision the persona is there to make (e.g. floating inventory defaults to sorted-by-MW-descending, not alphabetical).</li>
+          <li>Every INSUFFICIENT_DATA state names exactly what is missing — never a bare "no data" dead end.</li>
+        </ul>
+      </section>
+
+      <!-- ============ 03 IA ============ -->
+      <section class="section" id="s3">
+        <div class="section-head"><span class="num">03</span><h2>Information Architecture</h2></div>
+        <div class="section-sub">The complete product structure</div>
+
+        <div class="tree">Solar Site Fitness &amp; Capacity Engine
+<span class="d1">├── Portfolio</span>                         <span class="d3">— the home surface</span>
+<span class="d2">│   ├── Overview</span>                      <span class="d3">shortlist, saturation, ranked queue</span>
+<span class="d2">│   ├── Map view</span>                      <span class="d3">geo-clustered sites, layers by verdict/type</span>
+<span class="d2">│   ├── Comparison / ranking</span>          <span class="d3">sort &amp; filter across the whole portfolio</span>
+<span class="d2">│   └── Saved views</span>
+
+<span class="d1">├── Sites</span>
+<span class="d2">│   ├── Site list</span>                     <span class="d3">table, filters, bulk actions</span>
+<span class="d2">│   ├── Site detail</span>
+<span class="d3">│   │   ├── Assessment (verdict, ceilings, confidence)
+│   │   ├── Boundary &amp; geometry (map, provider, versions)
+│   │   ├── Vision refinement review (VIS)
+│   │   ├── 3D / panorama viewer (VIZ)
+│   │   ├── ML score panel (comparison, never primary)
+│   │   ├── Generation estimate (fast / detailed, P50-P90)
+│   │   ├── History / version timeline
+│   │   └── Notes &amp; attachments</span>
+<span class="d2">│   ├── Create site</span>                   <span class="d3">address/pin, manual draw, import row</span>
+<span class="d2">│   ├── Composite site builder</span>        <span class="d3">feeder/DT aggregation</span>
+<span class="d2">│   └── Duplicate review queue</span>
+
+<span class="d1">├── Boundary Capture</span>                  <span class="d3">— the drawing surface, entered from a Site</span>
+<span class="d2">│   ├── Draw / edit boundary + exclusions</span>
+<span class="d2">│   ├── AI boundary review (accept / adjust / reject)</span>
+<span class="d2">│   └── USN capture</span>                   <span class="d3">manual · bill OCR · payment-proof OCR</span>
+
+<span class="d1">├── Imports &amp; Jobs</span>
+<span class="d2">│   ├── New bulk import</span>               <span class="d3">CSV / GeoJSON / shapefile, column mapping</span>
+<span class="d2">│   ├── Import error report</span>
+<span class="d2">│   ├── Batch assessment jobs</span>         <span class="d3">live progress, per-site results</span>
+<span class="d2">│   └── Webhooks &amp; API keys</span>
+
+<span class="d1">├── Reports</span>
+<span class="d2">│   ├── Portfolio export</span>              <span class="d3">CSV / GeoJSON / PDF</span>
+<span class="d2">│   ├── Calibration &amp; variance report</span> <span class="d3">field vs. remote estimate</span>
+<span class="d2">│   └── Disclosure / audit report</span>     <span class="d3">Case E — corporate</span>
+
+<span class="d1">├── Search</span>                            <span class="d3">global — address, USN, site name, coordinates</span>
+
+<span class="d1">└── Settings</span>
+<span class="d3">    ├── Organisation &amp; members
+    ├── Jurisdiction / constraint packs (view, request override)
+    ├── Parameter pack version history
+    ├── ML model version &amp; approval queue
+    ├── API keys &amp; rate limits
+    ├── Notifications
+    └── Billing / subscription tier</span></div>
+
+        <p>Registry, survey-workforce dispatch and dashboards proper belong to the v1.0 packaging layer and are treated here only where the engine depends on them — the geometry-capture and boundary-review surfaces above, and the calibration report that feeds CAL back into the engine.</p>
+      </section>
+
+      <!-- ============ 04 JOURNEYS ============ -->
+      <section class="section" id="s4">
+        <div class="section-head"><span class="num">04</span><h2>User Journeys</h2></div>
+        <div class="section-sub">Prioritised by business sequencing (§8 of the source document)</div>
+
+        <div class="journey">
+          <div class="journey-head"><h4>Journey 1 · Build a statewide floating-solar inventory</h4><span class="chip p1">Priority 1</span></div>
+          <div class="journey-body">
+            <p><strong>Goal:</strong> produce a ranked, fundable candidate list of water bodies before any customer conversation. <strong>Entry:</strong> bulk import of known water bodies, or a statewide auto-scan.</p>
+            <div class="journey-steps"><span>Bulk import / auto-scan</span><span>Batch job runs (async)</span><span>Portfolio ranking view</span><span>Filter by MW, confidence, CV</span><span>Export shortlist</span></div>
+            <dl class="kv">
+              <dt>Decisions</dt><dd>Which threshold of confidence/CV is fundable; which sites to exclude on ownership grounds.</dd>
+              <dt>Primary action</dt><dd>Sort by indicative MW, then export the top-N for the ₹50L feasibility line.</dd>
+              <dt>Friction risk</dt><dd>Thousands of results with no way to triage quickly; seasonal-variability data (CV) buried instead of surfaced as its own column.</dd>
+              <dt>Success state</dt><dd>A ranked, exportable list with capacity, confidence and CV visible without opening a single record.</dd>
+              <dt>Failure state</dt><dd>Sentinel-2 scene count too low for a reliable seasonal profile — shown as a distinct, explained low-confidence flag, not a silent gap.</dd>
+            </dl>
+          </div>
+        </div>
+
+        <div class="journey">
+          <div class="journey-head"><h4>Journey 2 · Price a portfolio inside a 30-day bid window</h4><span class="chip p1">Priority 2</span></div>
+          <div class="journey-body">
+            <p><strong>Goal:</strong> aggregate capacity and risk across 300–2,000 unvisited buildings fast enough to inform a bid. <strong>Entry:</strong> bulk import of the tender's building list.</p>
+            <div class="journey-steps"><span>Import list</span><span>Batch assessment (async, cache-accelerated)</span><span>Portfolio aggregate view</span><span>Per-site risk flag review</span><span>Panorama sign-off on flagged sites</span><span>Export to financial model</span></div>
+            <dl class="kv">
+              <dt>Decisions</dt><dd>Which flagged sites to visually verify via panorama before the bid; where to price in risk margin.</dd>
+              <dt>Primary action</dt><dd>Export aggregate P50/P90 and per-site risk flags in a financial-model-ready format.</dd>
+              <dt>Friction risk</dt><dd>A 2,000-row job that appears to have "disappeared" once submitted.</dd>
+              <dt>Success state</dt><dd>Bid submitted with numbers the team can defend if challenged post-award.</dd>
+              <dt>Failure state</dt><dd>A share of sites return INSUFFICIENT_DATA — must be counted and shown as its own bucket, not silently dropped from the aggregate.</dd>
+            </dl>
+          </div>
+        </div>
+
+        <div class="journey">
+          <div class="journey-head"><h4>Journey 3 · Direct a survey team toward convertible rooftops</h4><span class="chip p2">Priority 3</span></div>
+          <div class="journey-body">
+            <p><strong>Goal:</strong> turn tens of thousands of ungeometrised buildings into a ranked survey queue. <strong>Entry:</strong> address/pin selection or bulk import from a building register.</p>
+            <div class="journey-steps"><span>Select / import buildings</span><span>Solar API + AI boundary refinement</span><span>Boundary review (accept/adjust)</span><span>Pre-feasibility verdict + panorama</span><span>Ranked survey queue</span><span>Field result reconciliation</span></div>
+            <dl class="kv">
+              <dt>Decisions</dt><dd>Accept the AI-suggested boundary as-is, nudge it, or defer to manual draw; which buildings clear the bar for a physical survey visit.</dd>
+              <dt>Primary action</dt><dd>Push the ranked shortlist to the survey team's queue.</dd>
+              <dt>Friction risk</dt><dd>Reviewing boundary suggestions one at a time at portfolio scale — needs a fast accept/reject rhythm, not a full editor open every time.</dd>
+              <dt>Success state</dt><dd>Survey conversion measurably improves; reconciled results feed calibration automatically.</dd>
+              <dt>Failure state</dt><dd>Low-confidence vision annotation — pipeline proceeds on the unrefined boundary and says so plainly.</dd>
+            </dl>
+          </div>
+        </div>
+
+        <div class="journey">
+          <div class="journey-head"><h4>Journey 4 · Draw a boundary and capture a USN in the field</h4><span class="chip p2">Priority — ongoing, internal</span></div>
+          <div class="journey-body">
+            <p><strong>Goal:</strong> produce ground-truth geometry and a confirmed billing identifier for one site. <strong>Entry:</strong> opened from a survey queue item, often on a tablet or phone.</p>
+            <div class="journey-steps"><span>Open queued site</span><span>Draw boundary + exclusions</span><span>Capture USN (manual / bill photo / payment-proof photo)</span><span>Confirm OCR extraction</span><span>Submit — supersedes remote estimate</span></div>
+            <dl class="kv">
+              <dt>Decisions</dt><dd>Which OCR-suggested USN value is correct when the scan is ambiguous.</dd>
+              <dt>Primary action</dt><dd>Submit the field-measured boundary, which supersedes (never silently deletes) the remote one.</dd>
+              <dt>Friction risk</dt><dd>Drawing precision on a small touch screen; poor connectivity mid-field.</dd>
+              <dt>Success state</dt><dd>Variance against the remote estimate is computed automatically and logged for calibration.</dd>
+              <dt>Failure state</dt><dd>OCR fails to extract a USN — falls straight to manual entry, never a dead end.</dd>
+            </dl>
+          </div>
+        </div>
+
+        <div class="journey">
+          <div class="journey-head"><h4>Journey 5 · Produce an audit-ready disclosure basis</h4><span class="chip p3">Priority 4</span></div>
+          <div class="journey-body">
+            <p><strong>Goal:</strong> a defensible, phased solar-potential figure across all corporate sites. <strong>Entry:</strong> subscription onboarding, sites added incrementally.</p>
+            <div class="journey-steps"><span>Add sites (one by one or bulk)</span><span>Portfolio assessment</span><span>Phase by payback</span><span>Generate disclosure report</span><span>Export PDF</span></div>
+            <dl class="kv">
+              <dt>Decisions</dt><dd>Which payback threshold defines each phase.</dd>
+              <dt>Primary action</dt><dd>Generate and export the audit-ready PDF.</dd>
+              <dt>Friction risk</dt><dd>Jurisdiction rules (open-access/captive) applied inconsistently across states — must be visibly attributed per site.</dd>
+              <dt>Success state</dt><dd>A report an external auditor accepts without follow-up questions.</dd>
+              <dt>Failure state</dt><dd>A site with no applicable jurisdiction pack — flagged explicitly rather than silently excluded from the total.</dd>
+            </dl>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 05 SCREENS ============ -->
+      <section class="section" id="s5">
+        <div class="section-head"><span class="num">05</span><h2>Screen Inventory</h2></div>
+        <div class="section-sub">Every screen the engine and geometry surface require</div>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Screen</th><th>Purpose</th><th>Primary user</th><th>Primary action</th><th>Complexity</th><th>Priority</th></tr></thead>
+            <tbody>
+              <tr><td>Portfolio Overview</td><td>Answer "what deserves my next hour"</td><td>All</td><td>Open shortlist</td><td>Med</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td>Portfolio Map</td><td>Geo-cluster sites by verdict/type</td><td>Analyst</td><td>Select cluster / site</td><td>High</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td>Portfolio Comparison / Ranking</td><td>Sort &amp; filter the full set</td><td>Analyst, Bid</td><td>Rank + export</td><td>Med</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td>Site List</td><td>Table of all sites, filterable</td><td>All</td><td>Open site / bulk-select</td><td>Med</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td>Create Site (address/pin)</td><td>Start a new single assessment</td><td>All</td><td>Submit for assessment</td><td>Low</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td>Bulk Import Wizard</td><td>CSV/GeoJSON/shapefile upload + column mapping</td><td>Analyst, Bid</td><td>Submit batch</td><td>High</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td>Import Error Report</td><td>Per-row validation failures</td><td>Analyst</td><td>Fix &amp; resubmit</td><td>Med</td><td><span class="chip p2">P2</span></td></tr>
+              <tr><td>Batch Job Status</td><td>Live progress on async assessment</td><td>All</td><td>Monitor / open results</td><td>Med</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td>Site Detail — Assessment</td><td>Verdict, capacity, confidence, binding constraint, reasons</td><td>All</td><td>Act on verdict</td><td>High</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td>Site Detail — Full Ceiling Ledger</td><td>Every constraint's value &amp; status</td><td>Analyst</td><td>Inspect</td><td>Med</td><td><span class="chip p2">P2</span></td></tr>
+              <tr><td>Site Detail — Boundary &amp; Geometry</td><td>Map view of boundary/exclusions, source, version history</td><td>Analyst, Operator</td><td>Review / edit</td><td>High</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td>Boundary Draw / Edit</td><td>Manual polygon capture on satellite imagery</td><td>Operator</td><td>Draw &amp; submit</td><td>High</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td>AI Boundary Review</td><td>Accept/adjust/reject GPT‑4 Vision suggestion</td><td>Operator</td><td>Accept or reject</td><td>Med</td><td><span class="chip p2">P2</span></td></tr>
+              <tr><td>3D / Panorama Viewer</td><td>Visual sign-off alongside the numeric verdict</td><td>Bid, Sustainability</td><td>Inspect / share</td><td>Med</td><td><span class="chip p2">P2</span></td></tr>
+              <tr><td>ML Score Panel</td><td>Supplementary score, model version, vs. FIT comparison</td><td>Analyst</td><td>Compare</td><td>Low</td><td><span class="chip p3">P3</span></td></tr>
+              <tr><td>USN Capture</td><td>Manual entry / bill OCR / payment-proof OCR</td><td>Operator, Homeowner-facing</td><td>Confirm &amp; store</td><td>Med</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td>Composite Site Builder</td><td>Feeder/DT aggregation of member sites</td><td>DISCOM cell</td><td>Build &amp; save composite</td><td>High</td><td><span class="chip p3">P3</span></td></tr>
+              <tr><td>Duplicate Review Queue</td><td>Resolve probable-duplicate flags</td><td>Analyst</td><td>Merge / dismiss</td><td>Low</td><td><span class="chip p3">P3</span></td></tr>
+              <tr><td>Site Version History</td><td>Boundary &amp; assessment timeline, actor, timestamp</td><td>Analyst, Admin</td><td>Inspect / restore view</td><td>Med</td><td><span class="chip p3">P3</span></td></tr>
+              <tr><td>Calibration &amp; Variance Report</td><td>Remote vs. measured accuracy by class</td><td>Admin</td><td>Approve factor update</td><td>Med</td><td><span class="chip p2">P2</span></td></tr>
+              <tr><td>ML Model Approval Queue</td><td>Review a newly trained model before activation</td><td>Admin</td><td>Approve / hold</td><td>Med</td><td><span class="chip p3">P3</span></td></tr>
+              <tr><td>Jurisdiction / Constraint Pack Viewer</td><td>See active pack &amp; version per jurisdiction</td><td>Admin</td><td>Request override</td><td>Med</td><td><span class="chip p3">P3</span></td></tr>
+              <tr><td>Disclosure / Audit Report</td><td>Phased, exportable PDF basis</td><td>Sustainability</td><td>Generate &amp; export</td><td>Med</td><td><span class="chip p2">P2</span></td></tr>
+              <tr><td>API Keys &amp; Webhooks</td><td>Tenant credential &amp; quota management</td><td>Admin</td><td>Rotate / configure</td><td>Low</td><td><span class="chip p3">P3</span></td></tr>
+              <tr><td>Notifications Centre</td><td>Job completion, calibration proposals, model approvals</td><td>All</td><td>Review / dismiss</td><td>Low</td><td><span class="chip p2">P2</span></td></tr>
+              <tr><td>Global Search</td><td>Address, USN, site name, coordinates</td><td>All</td><td>Jump to result</td><td>Low</td><td><span class="chip p2">P2</span></td></tr>
+              <tr><td>Onboarding — first site</td><td>Guide a first-time tenant to one completed assessment</td><td>New user</td><td>Complete first assessment</td><td>Med</td><td><span class="chip p2">P2</span></td></tr>
+              <tr><td>Empty / Loading / Error states</td><td>Every list, job and assessment surface</td><td>All</td><td>—</td><td>Low–Med</td><td><span class="chip p1">P1</span></td></tr>
+              <tr><td>Organisation &amp; Billing Settings</td><td>Members, tier, subscription</td><td>Admin</td><td>Manage</td><td>Low</td><td><span class="chip p3">P3</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============ 06 VISUAL DIRECTION ============ -->
+      <section class="section" id="s6">
+        <div class="section-head"><span class="num">06</span><h2>UI Design Direction</h2></div>
+        <div class="section-sub">A visual language earned by the subject: survey precision, not startup gloss</div>
+
+        <p class="lead">The product sits closer to a surveying instrument than a marketing app — it is used by people who need to defend a number to a tender committee or an auditor. The direction is <strong>technical, calm and evidentiary</strong>: precise, quiet, and built to make data trustworthy at a glance, never decorative for its own sake.</p>
+
+        <div class="grid cols-3">
+          <div class="card"><h5>Precision</h5><p>Hairline rules, tabular numerals, exact alignment — the visual grammar of a survey table, not a dashboard template.</p></div>
+          <div class="card"><h5>Restraint</h5><p>One accent, used sparingly for action and emphasis. Verdict color is semantic and kept separate from brand color.</p></div>
+          <div class="card"><h5>Evidentiary</h5><p>Every figure is traceable — source, date, version sit one glance away, never hidden behind a hover.</p></div>
+        </div>
+
+        <h3>Color strategy</h3>
+        <p>A cool, low-saturation neutral base — paper, not chrome — carries the density of tables and maps without fatigue. A single warm accent (solar amber) marks action and emphasis, kept deliberately apart from the cooler structural blue used for wayfinding and labels. Verdict and status colors are a <em>separate</em> semantic palette so a user never confuses "this is clickable" with "this is suitable."</p>
+
+        <div class="swatches">
+          <div class="swatch"><div class="fill" style="background:#f5f4ee;border:1px solid #c7c1af"></div><div class="lbl"><b>Paper</b>#F5F4EE — base ground</div></div>
+          <div class="swatch"><div class="fill" style="background:#eae8de"></div><div class="lbl"><b>Surface</b>#EAE8DE — cards, table zebra</div></div>
+          <div class="swatch"><div class="fill" style="background:#1e2b30"></div><div class="lbl"><b>Ink</b>#1E2B30 — primary text</div></div>
+          <div class="swatch"><div class="fill" style="background:#2c5c6b"></div><div class="lbl"><b>Structural blue</b>#2C5C6B — labels, links, wayfinding</div></div>
+          <div class="swatch"><div class="fill" style="background:#a9691f"></div><div class="lbl"><b>Solar amber</b>#A9691F — the one accent, actions &amp; emphasis</div></div>
+          <div class="swatch"><div class="fill" style="background:#c7c1af"></div><div class="lbl"><b>Line</b>#C7C1AF — hairline borders</div></div>
+        </div>
+
+        <h4>Semantic verdict palette — deliberately distinct from the accent above</h4>
+        <div class="grid cols-3">
+          <div class="card"><h5><span class="chip good">SUITABLE</span></h5><p>Deep, low-chroma green. Reserved for verdict states only — never reused as a UI accent.</p></div>
+          <div class="card"><h5><span class="chip should">CONDITIONAL</span></h5><p>Warm amber-brown, close enough to the brand accent to read as "attention" but distinguishable in context and never used for buttons.</p></div>
+          <div class="card"><h5><span class="chip must">NOT SUITABLE</span></h5><p>Muted brick red — never pure red. Paired with an icon, never color alone.</p></div>
+        </div>
+        <p>INSUFFICIENT_DATA takes the neutral grey chip above, deliberately un-alarming — it is a data gap, not a bad outcome, and must never visually read as a low score (per FIT‑03 / non‑negotiables).</p>
+
+        <h3>Typography</h3>
+        <p>For the <em>product</em> (distinct from this document, which is set in a reading-optimised serif): <strong>IBM Plex Sans</strong> for interface and headings, and <strong>IBM Plex Mono</strong> for every place a number, coordinate, ID or code needs to line up and be trusted — table figures, capacity values, requirement/version tags, coordinates. The Plex family was built for technical documentation, which is exactly this product's register: legible, unpretentious, and comfortable holding dense data.</p>
+        <div class="specimen">
+          <div class="row"><span class="tag">Display / H1</span><span style="font-family:var(--sans);font-weight:600;font-size:1.9rem;">Portfolio Overview</span></div>
+          <div class="row"><span class="tag">Section / H2</span><span style="font-family:var(--sans);font-weight:600;font-size:1.3rem;">Water Body Inventory — Andhra Pradesh</span></div>
+          <div class="row"><span class="tag">Body</span><span style="font-family:var(--sans);font-size:1rem;">Binding constraint: transformer headroom at the nearest substation.</span></div>
+          <div class="row"><span class="tag">Label / caption</span><span style="font-family:var(--sans);font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);">Confidence · Imagery Date · Source</span></div>
+          <div class="row"><span class="tag">Data / numeric</span><span style="font-family:var(--mono);font-size:1.15rem;">2,340.5 kWp <span style="color:var(--ink-faint);font-size:.7em;">DC</span></span></div>
+          <div class="row"><span class="tag">Identifier / code</span><span style="font-family:var(--mono);font-size:.85rem;color:var(--ink-soft);">GEO-04 · SOLAR_API · v2.3.1</span></div>
+        </div>
+
+        <h3>Spacing, radius, shadow, icons</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>System</th><th>Rule</th></tr></thead>
+            <tbody>
+              <tr><td>Spacing</td><td>4px base unit, scale 4/8/12/16/24/32/48/64. Table and form density stays tight (8–12px); page-level rhythm stays generous (32–48px) so dense data doesn't read as clutter.</td></tr>
+              <tr><td>Radius</td><td>Small and consistent — 3–6px. This is an instrument, not a consumer app; large rounded corners read as playful and undercut the evidentiary tone. Map controls and modals share the same 6px ceiling.</td></tr>
+              <tr><td>Shadow</td><td>Reserved for things that float above content — modals, dropdowns, the map's floating panel. Flat elsewhere. No shadow on static cards; a table row hover uses a background shift, never a shadow.</td></tr>
+              <tr><td>Iconography</td><td>A single-weight line icon set, geospatial and technical in vocabulary (pin, polygon, layers, ruler, compass, cloud-cover, confidence-tier). Icons never carry meaning alone — always paired with a label or used alongside a semantic color, never as the sole signal.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============ 07 DESIGN SYSTEM ============ -->
+      <section class="section" id="s7">
+        <div class="section-head"><span class="num">07</span><h2>Design System</h2></div>
+        <div class="section-sub">Foundations and the component set that carries them</div>
+
+        <h3>Foundations</h3>
+        <p>Colour, type, spacing, radius, elevation and icons as defined in §06, plus: a <strong>12-column grid</strong> at desktop widths with a fixed sidebar, collapsing to a <strong>4-column</strong> grid below tablet width; breakpoints at 640 / 900 / 1200 / 1440px, chosen around the map+panel split rather than generic device sizes.</p>
+
+        <h3>Components — intended behaviour, not just appearance</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Component</th><th>Key variants</th><th>UX behaviour</th></tr></thead>
+            <tbody>
+              <tr><td>Verdict Chip</td><td>5 verdict states + loading</td><td>Same shape and position everywhere it appears; never color-only — always paired with the word.</td></tr>
+              <tr><td>Confidence Meter</td><td>High / Medium / Low / N/A</td><td>A short, discrete tier indicator (not a raw percentage) reused in table, card, map pin and PDF export alike.</td></tr>
+              <tr><td>Binding Constraint Tag</td><td>Physical / Regulatory / Commercial</td><td>Always names the constraint in plain language; kind (physical/regulatory/commercial) shown as a subtle secondary marker, since it changes what a user can do about it.</td></tr>
+              <tr><td>Data Table</td><td>Dense / comfortable, sortable, multi-select</td><td>Sticky header, tabular numerals, row-level verdict chip as the leading column — never buried mid-row.</td></tr>
+              <tr><td>Map + Panel Split</td><td>50/50, panel-collapsed, panel-only</td><td>Selecting a map feature updates the panel without a page transition; panel state persists across pan/zoom.</td></tr>
+              <tr><td>Boundary Editor</td><td>Draw, edit-vertex, exclusion mode</td><td>Explicit "close polygon" action; self-intersection and out-of-bounds vertices rejected inline with a specific reason, not a generic error.</td></tr>
+              <tr><td>AI Suggestion Card</td><td>Pending / Accepted / Rejected / Insufficient data</td><td>Suggestion always rendered beside — never over — the original geometry; accept is one click, reject requires no justification.</td></tr>
+              <tr><td>Cache Provenance Badge</td><td>Fresh / Reused</td><td>"Reused" always shows original analysis date; never visually indistinguishable from a fresh result.</td></tr>
+              <tr><td>Panorama Viewer</td><td>3D interactive / static fallback</td><td>Falls back to a labelled "not generated — imagery insufficient" state rather than a blank viewer.</td></tr>
+              <tr><td>Job Progress Card</td><td>Queued / Running / Partial / Complete / Failed rows</td><td>Shows per-site completion count live; partial failures are enumerated, not folded into "done."</td></tr>
+              <tr><td>Filter / Facet Bar</td><td>Verdict, confidence, capacity range, site type, jurisdiction</td><td>Filters combine as AND by default; active filters shown as removable chips, never hidden in a drawer once applied.</td></tr>
+              <tr><td>Form Field (typed)</td><td>Text, number+unit, geo-picker, file, OCR-assisted</td><td>Rendered from the site-type JSON Schema — a field absent for this type is never shown disabled.</td></tr>
+              <tr><td>Modal / Drawer</td><td>Confirm, destructive-confirm, side-panel detail</td><td>Destructive or hard-to-reverse actions (force refresh, model approval) require a typed or explicit confirm step, never a single click.</td></tr>
+              <tr><td>Toast</td><td>Success, error, background-job-complete</td><td>Job-complete toasts always link directly to the result — never a bare "done."</td></tr>
+              <tr><td>Version Timeline</td><td>Compact, expanded</td><td>Actor + timestamp on every entry; superseded values remain visible, struck through, not deleted.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============ 08 LAYOUT ============ -->
+      <section class="section" id="s8">
+        <div class="section-head"><span class="num">08</span><h2>Layout System</h2></div>
+        <div class="section-sub">How the application holds itself together</div>
+
+        <div class="grid cols-2">
+          <div class="card"><h5>Sidebar</h5><p>Fixed, collapsible to icon-only rail. Persistent across the whole app so a 40-site detour never loses the analyst's place in the portfolio.</p></div>
+          <div class="card"><h5>Header</h5><p>Slim utility bar: global search, job status indicator, notifications, tenant switcher. Never carries primary navigation — that stays in the sidebar.</p></div>
+          <div class="card"><h5>Content width</h5><p>Tables and maps run full-bleed within the content area; text-heavy panels (reason lists, reports) cap at ~72ch for legibility.</p></div>
+          <div class="card"><h5>Map + panel split</h5><p>The core interaction pattern of the product. Map left/center, evidence panel right, resizable. On any screen with geography, this split is the default, not an alternate view.</p></div>
+          <div class="card"><h5>Sticky elements</h5><p>Table header, the four-fact verdict summary on a long assessment page, and the job-progress indicator stay pinned — everything else scrolls freely.</p></div>
+          <div class="card"><h5>Density</h5><p>Dense by default in tables and lists (portfolio scale demands it); spacious in the assessment detail view, where a single verdict deserves room to be read, not scanned.</p></div>
+        </div>
+        <p>This layout is appropriate because the product's two fundamental activities — <em>scanning many sites</em> and <em>examining one site's evidence</em> — are structurally different tasks that should not share one layout template. The shell stays constant; the content area switches modes.</p>
+      </section>
+
+      <!-- ============ 09 HIERARCHY ============ -->
+      <section class="section" id="s9">
+        <div class="section-head"><span class="num">09</span><h2>Information Hierarchy per Screen Type</h2></div>
+        <div class="section-sub">What dominates, what recedes</div>
+
+        <div class="grid cols-2">
+          <div class="card">
+            <h5>Assessment detail</h5>
+            <p style="font-family:var(--mono);font-size:.82rem;line-height:1.9;color:var(--ink-soft);">
+            Site name + type → <b style="color:var(--ink)">Verdict + capacity (dominant)</b> → confidence + binding constraint → reason list → map/boundary preview → panorama → generation P50/P90 → ML comparison (recedes) → provenance metadata (recedes furthest)
+            </p>
+          </div>
+          <div class="card">
+            <h5>Portfolio table row</h5>
+            <p style="font-family:var(--mono);font-size:.82rem;line-height:1.9;color:var(--ink-soft);">
+            <b style="color:var(--ink)">Verdict chip (dominant, leftmost)</b> → site name → capacity → confidence → binding constraint → last updated (recedes) → row-hover actions (recedes furthest)
+            </p>
+          </div>
+          <div class="card">
+            <h5>Portfolio overview</h5>
+            <p style="font-family:var(--mono);font-size:.82rem;line-height:1.9;color:var(--ink-soft);">
+            <b style="color:var(--ink)">Ranked shortlist (dominant)</b> → saturation summary (how much of the portfolio is assessed) → active job status → recent verdict changes (recedes) → quick filters
+            </p>
+          </div>
+          <div class="card">
+            <h5>Boundary review</h5>
+            <p style="font-family:var(--mono);font-size:.82rem;line-height:1.9;color:var(--ink-soft);">
+            <b style="color:var(--ink)">Cropped imagery + suggested boundary (dominant)</b> → provider original (adjacent, equal weight — never subordinate) → obstruction notes → accept/reject (always visible, never scrolled past)
+            </p>
+          </div>
+        </div>
+        <p>The rule that holds across all four: <strong>the thing a user must read to make a decision dominates; the thing that explains or justifies that decision recedes one step; raw provenance recedes furthest and is never load-bearing for the first read.</strong></p>
+      </section>
+
+      <!-- ============ 10 STATES ============ -->
+      <section class="section" id="s10">
+        <div class="section-head"><span class="num">10</span><h2>UX States</h2></div>
+        <div class="section-sub">Designed for every state, not the perfect-data path</div>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>State</th><th>Where it matters most</th><th>Design note</th></tr></thead>
+            <tbody>
+              <tr><td>Default / Hover / Focus / Active</td><td>All interactive elements</td><td>Focus ring visible and identical across map controls, table rows and form fields — a keyboard user must never lose track of position.</td></tr>
+              <tr><td>Selected</td><td>Table multi-select, map feature</td><td>Selection state persists across a panel/map sync, not just visually on the table.</td></tr>
+              <tr><td>Disabled</td><td>Actions unavailable by permission or missing prerequisite</td><td>Always paired with a reason on hover/focus, not a bare greyed control.</td></tr>
+              <tr><td>Loading</td><td>Single assessment, batch job, map tile fetch</td><td>Single-site: skeleton of the four-fact layout, not a spinner over blank space. Batch: live count, not indeterminate.</td></tr>
+              <tr><td>Empty</td><td>New tenant, no sites yet; filtered view with zero matches</td><td>Distinguish "you have nothing" from "nothing matches your filter" — different messages, different recovery action.</td></tr>
+              <tr><td>Insufficient data</td><td>Any ceiling, verdict, or ML score</td><td>Named explicitly — which input is missing — never rendered as a blank cell or a zero.</td></tr>
+              <tr><td>Error</td><td>Import row failure, vision-call failure, API timeout</td><td>Row-level errors never block the rest of the batch; a specific, actionable message, not a stack trace.</td></tr>
+              <tr><td>Success</td><td>Submission, export, promotion of a boundary</td><td>Confirms exactly what changed and offers the obvious next step.</td></tr>
+              <tr><td>Validation</td><td>Boundary drawing, USN entry, bulk import mapping</td><td>Inline, at the point of entry — self-intersecting polygon flagged the moment it's closed, not on submit.</td></tr>
+              <tr><td>Permission restricted</td><td>Model approval, jurisdiction override, force refresh</td><td>Explains who can do this, not just that the current user can't.</td></tr>
+              <tr><td>Cache hit vs. fresh compute</td><td>Every new site/geo-selection</td><td>Its own explicit state — see §14 — never merged into generic "loaded."</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============ 11 ACCESSIBILITY ============ -->
+      <section class="section" id="s11">
+        <div class="section-head"><span class="num">11</span><h2>Accessibility</h2></div>
+        <div class="section-sub">Risks specific to this product, not a generic checklist</div>
+
+        <ul>
+          <li><strong>Map-based interaction is the biggest risk.</strong> Boundary drawing on a map is inherently pointer-driven. Every geo-selection flow needs a keyboard/non-pointer fallback: address search → geocode, or coordinate/GeoJSON paste, so a screen-reader or motor-impaired user is never blocked from creating a site.</li>
+          <li><strong>Color-only verdict communication is explicitly disallowed by the product's own logic</strong> (INSUFFICIENT_DATA must never read as a low score) — every verdict chip pairs color with text and, ideally, a distinct icon shape per verdict.</li>
+          <li><strong>Data tables at portfolio scale</strong> need real header associations (<code>scope</code>, not just visual styling) so a screen reader announces "capacity, 2,340 kilowatts DC" rather than a bare number.</li>
+          <li><strong>Contrast on semantic chips</strong> — amber/green/red on a warm paper background must be checked against WCAG AA independently of the brand palette's own contrast, since status colors are lower-chroma by design.</li>
+          <li><strong>Touch targets</strong> for boundary-vertex editing are small by nature (map precision) — provide a zoom-assisted or numeric-nudge alternative for anyone who can't place a vertex precisely with touch or mouse.</li>
+          <li><strong>Form accessibility for OCR-assisted fields</strong> (USN) — the extracted value and the confirm step must both be reachable and clearly labelled by keyboard, since this is a "must confirm before store" flow by requirement (USN‑02/03).</li>
+          <li><strong>Error communication</strong> for constraint/geometry rejections should read as plain language ("boundary lies outside the plausible area for a rooftop site"), not internal codes.</li>
+        </ul>
+      </section>
+
+      <!-- ============ 12 RESPONSIVE ============ -->
+      <section class="section" id="s12">
+        <div class="section-head"><span class="num">12</span><h2>Responsive Design</h2></div>
+        <div class="section-sub">Two real usage contexts, not one shrinking layout</div>
+
+        <p class="lead">This product has two genuinely different device stories, not a single desktop app that degrades: an <strong>analyst workstation</strong> context (desktop/laptop, portfolio scale) and a <strong>field capture</strong> context (tablet/phone, single site, often outdoors).</p>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Breakpoint</th><th>What changes</th></tr></thead>
+            <tbody>
+              <tr><td>Desktop (≥1200px)</td><td>Full sidebar, map+panel 50/50 split, dense multi-column tables.</td></tr>
+              <tr><td>Laptop (900–1199px)</td><td>Sidebar collapses to icon rail by default; map+panel split narrows, panel becomes a slide-over on demand.</td></tr>
+              <tr><td>Tablet (640–899px)</td><td>Map and panel become tabs instead of a split; portfolio tables shift from columns to stacked cards carrying the same four-fact hierarchy.</td></tr>
+              <tr><td>Mobile (&lt;640px)</td><td>Full analyst workflows are not optimised here — this width targets the field-capture flow specifically: boundary draw, USN capture, survey reconciliation. Navigation collapses to a bottom bar of 3–4 field-relevant actions.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Screens requiring special mobile UX</h3>
+        <ul>
+          <li><strong>Boundary Draw / Edit</strong> — needs pinch-zoom-aware vertex placement and a large, unambiguous "close polygon" affordance.</li>
+          <li><strong>USN Capture</strong> — camera capture for bill/payment-proof OCR is a first-class mobile flow, not a desktop upload dialog shrunk down.</li>
+          <li><strong>Field reconciliation</strong> — a deliberately minimal single-site view: what the model predicted vs. what to measure, nothing else competing for attention outdoors, possibly in bright sunlight (high-contrast mode matters here specifically).</li>
+        </ul>
+        <p>Portfolio ranking, bulk import and the ML/calibration admin surfaces are intentionally <em>not</em> designed mobile-first — they assume desk-based, sustained analytical work, and forcing them into a phone layout would cost more clarity than it returns.</p>
+      </section>
+
+      <!-- ============ 13 PREMIUM UX ============ -->
+      <section class="section" id="s13">
+        <div class="section-head"><span class="num">13</span><h2>Premium UX Principles</h2></div>
+        <div class="section-sub">What "excellent" means for this specific product</div>
+
+        <div class="grid cols-2">
+          <div class="card"><h5>Clarity over decoration</h5><p>A tender committee will screenshot a verdict card into a government memo. It must read correctly at low resolution, in grayscale print, with zero context — verdict, number, confidence, constraint, nothing extraneous.</p></div>
+          <div class="card"><h5>Speed as trust</h5><p>The cache (§9.14) makes most repeat selections instant. The UI should make that speed visible and celebrated, not hidden — instant is a feature the product actually earned.</p></div>
+          <div class="card"><h5>Predictability</h5><p>The same four facts, the same order, on every surface — table row, card, map pin, PDF. A user should never have to re-learn where "confidence" lives.</p></div>
+          <div class="card"><h5>Honest empty &amp; error states</h5><p>INSUFFICIENT_DATA is designed with the same care as SUITABLE — it is a legitimate, common, non-alarming outcome, never a broken-looking dead end.</p></div>
+          <div class="card"><h5>Efficient bulk workflows</h5><p>Boundary review at portfolio scale needs a keyboard-driven accept/reject rhythm (like a triage inbox), not a modal reopened per site.</p></div>
+          <div class="card"><h5>Purposeful motion</h5><p>Motion only where it carries meaning: a job's progress count ticking up, a map feature easing into view on selection, a verdict chip's subtle settle on load. Nothing decorative.</p></div>
+        </div>
+
+        <h3>Deliberately avoided</h3>
+        <p>Gradients and glassmorphism (this is a survey instrument, not a landing page); dashboard-template card sprawl (every card must justify its presence against the four-fact hierarchy); heavy shadows and oversized radii (undercuts the precision the product is selling); decorative icons without labels (a misread icon on a capacity figure is a real-world costly mistake); animated counters or celebratory confetti on a verdict (a NOT_SUITABLE result is not a failure state to apologise for, and a SUITABLE one is not a game win).</p>
+      </section>
+
+      <!-- ============ 14 SIGNATURE ============ -->
+      <section class="section" id="s14">
+        <div class="section-head"><span class="num">14</span><h2>Signature UX/UI</h2></div>
+        <div class="section-sub">What makes this feel like this product, not another SaaS shell</div>
+
+        <div class="grid cols-2">
+          <div class="card"><h5>The Binding Constraint Spotlight</h5><p>Most tools would show a capacity number. This one always shows <em>the one thing stopping it from being higher</em>, in the same visual weight as the number itself. It reframes every assessment from "here's a fact" to "here's what to do next" — survey the transformer, check the ownership record, request the exclusion review.</p></div>
+          <div class="card"><h5>The Cache-Aware Result</h5><p>A second selection of an already-analysed water body returns instantly, and the product says so plainly: "Already analysed 12 Aug 2026 · reused, zero new calls." Most products hide caching as an invisible optimisation; here it's evidence the platform gets smarter and cheaper with every user, worth surfacing as a feature.</p></div>
+          <div class="card"><h5>Numeric Verdict + Panorama, Paired</h5><p>The 3D panorama isn't a gimmick screen — it sits directly beside the capacity figure at the moment a bid team needs to sign off. Seeing the roof or the water surface next to the number is what makes a portfolio decision feel safe to make quickly.</p></div>
+          <div class="card"><h5>Confidence as a First-Class Language</h5><p>Not a tooltip afterthought — a consistent tiered indicator that appears everywhere a number does, so a user can triage a thousand-row portfolio by trustworthiness as easily as by size.</p></div>
+          <div class="card"><h5>The Seasonal Spread Chart</h5><p>For floating solar, min/mean/max water spread plus coefficient of variation is a genuinely novel data product nobody else surfaces (§13.3 of the source). A small, honest sparkline-style chart showing the driest month driving the boundary — with CV as an explicit ranking dimension — turns an obscure hydrology detail into the product's most defensible differentiator.</p></div>
+          <div class="card"><h5>Boundary Provenance, Always Visible</h5><p>Every geometry on screen carries a quiet, permanent tag — source, imagery date, confidence — the same discipline a surveyor's own field notes would carry. It's not a feature to discover; it's ambient, and it's what makes the product feel like an instrument rather than a guess.</p></div>
+        </div>
+        <p>None of these are gimmicks: each one exists because a specific requirement in the source document (CACHE‑05, VIZ, FIT‑04/05, the water-index seasonal profile, GEO‑04/09) already demands the underlying data — the design work is making that data legible instead of burying it.</p>
+      </section>
+
+      <!-- ============ 15 PHASING ============ -->
+      <section class="section" id="s15">
+        <div class="section-head"><span class="num">15</span><h2>Prioritising the Design Work</h2></div>
+        <div class="section-sub">Aligned to the engine's own build order (§15 of the source document)</div>
+
+        <div class="grid cols-2">
+          <div class="card"><h5>Phase 1 — Core UX</h5><p>Site creation (address/pin + manual draw), single-site assessment view, portfolio list + map, batch import + job status. The product must be usable for one site and for a few hundred before anything else matters.</p></div>
+          <div class="card"><h5>Phase 2 — Core UI</h5><p>The design system: verdict chip, confidence meter, binding-constraint tag, data table, map+panel split, form-from-schema pattern. Built once, reused everywhere from here on.</p></div>
+          <div class="card"><h5>Phase 3 — Secondary Screens</h5><p>Boundary review (VIS), panorama viewer (VIZ), ML score panel, USN capture, calibration report, composite site builder, disclosure report.</p></div>
+          <div class="card"><h5>Phase 4 — Polish</h5><p>Motion on job progress and selection states; every empty/error/insufficient-data state individually designed; accessibility pass on map interactions; responsive field-capture mode; cross-surface consistency audit.</p></div>
+        </div>
+      </section>
+
+      <!-- ============ 16 FINAL BLUEPRINT ============ -->
+      <section class="section" id="s16">
+        <div class="section-head"><span class="num">16</span><h2>Final Design Blueprint</h2></div>
+        <div class="section-sub">The single reference for everything that follows</div>
+
+        <h3>Product UX</h3>
+        <p>Six personas around one engine; the shared job is spending a limited survey/decision budget on the right subset of sites. Hierarchy: Engine → Site → Analysis → Assessment → Portfolio. Four facts — verdict, capacity, confidence, binding constraint — anchor every surface, from a table row to a PDF export.</p>
+
+        <h3>UI</h3>
+        <p>Technical, calm, evidentiary. Paper-neutral ground, one warm accent (solar amber) kept apart from a cooler structural blue used for wayfinding, and a semantic verdict palette kept apart from both. IBM Plex Sans for interface, IBM Plex Mono wherever numbers must be trusted. Small consistent radii, hairline structure, shadow reserved for floating layers only.</p>
+
+        <h3>Screens</h3>
+        <p>~28 screens across Portfolio, Sites, Boundary Capture, Imports/Jobs, Reports and Settings. MVP is the nine Phase‑1 screens; secondary screens carry the product's real differentiation (panorama, seasonal spread, cache provenance); the boundary editor and portfolio comparison view are the most complex builds.</p>
+
+        <h3>UX Quality</h3>
+        <p>Accessible non-pointer paths into every geo-selection flow; color never the sole signal on a verdict; states designed for insufficient-data and cache-hit as first-class outcomes, not edge cases; two distinct responsive stories (analyst desktop, field mobile) rather than one shrinking layout; motion used only where it carries meaning.</p>
+
+        <h3>Design order</h3>
+        <ol class="order-list">
+          <li><b>Design foundation</b><span>Color, type, spacing, radius, elevation, icon set — locked before any screen.</span></li>
+          <li><b>Navigation shell</b><span>Sidebar, header, map+panel split pattern.</span></li>
+          <li><b>Core component set</b><span>Verdict chip, confidence meter, binding-constraint tag, data table.</span></li>
+          <li><b>Site creation flow</b><span>Address/pin entry, manual draw, provider chain resolution feedback.</span></li>
+          <li><b>Single-site assessment view</b><span>The four-fact hierarchy, reason list, ceiling ledger.</span></li>
+          <li><b>Portfolio list &amp; map</b><span>The home surface most personas open first.</span></li>
+          <li><b>Bulk import &amp; batch job status</b><span>Async at portfolio scale, the RESCO/state-agency critical path.</span></li>
+          <li><b>Boundary review &amp; USN capture</b><span>The judged, human-in-the-loop screens.</span></li>
+          <li><b>Panorama, seasonal chart, ML panel</b><span>The signature, differentiating surfaces.</span></li>
+          <li><b>Reports &amp; settings</b><span>Disclosure export, calibration, jurisdiction packs, API keys.</span></li>
+          <li><b>Empty / loading / error / insufficient-data states</b><span>Applied to every screen built so far.</span></li>
+          <li><b>Responsive &amp; field-capture pass, then final polish</b><span>Motion, accessibility audit, cross-surface consistency.</span></li>
+        </ol>
+
+        <div class="callout">
+          <span class="label">Governing question</span>
+          <p>For every screen from here forward: who is using it, what are they trying to accomplish, what information do they need to trust the answer, what should they do next — and how do we make that faster and clearer than the spreadsheet or the site visit it's replacing.</p>
+        </div>
+      </section>
+
+    </main>
+
+    <footer>
+      <span>Solar Site Fitness &amp; Capacity Engine — UX/UI Design Blueprint</span>
+      <span>Foundation document · no screens designed yet</span>
+    </footer>
+  </div>
+</div>
+
+<script>
+(function(){
+  var links = Array.prototype.slice.call(document.querySelectorAll('.rail nav a'));
+  var sections = links.map(function(l){ return document.querySelector(l.getAttribute('href')); }).filter(Boolean);
+  if(!('IntersectionObserver' in window) || !sections.length) return;
+  var map = {};
+  sections.forEach(function(sec, i){ map[sec.id] = links[i]; });
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){
+        links.forEach(function(l){ l.classList.remove('active'); });
+        var link = map[e.target.id];
+        if(link) link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-10% 0px -75% 0px', threshold: 0 });
+  sections.forEach(function(sec){ io.observe(sec); });
+})();
+</script>
