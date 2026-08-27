@@ -46,7 +46,7 @@ arguably Person 1's territory, not this cache layer's).
 
 Depends on: solarfit.domain.assessment.AnalysisResult (frozen, Day 0),
 solarfit.packs.config_pack.get_cache_precision (frozen loader, Day 0),
-solarfit.db.get_session (session factory, added Day 1).
+solarfit.db.session_scope (session factory, real since Day 1; renamed after the karthik+sameeksha db.py merge).
 """
 
 import uuid
@@ -63,7 +63,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
 
-from solarfit.db import Base, get_session
+from solarfit.db import Base, session_scope
 from solarfit.domain.assessment import AnalysisResult, MLScore, PanoramaResult, VisionRefinement
 from solarfit.domain.site import Site
 from solarfit.packs.config_pack import get_cache_precision
@@ -123,7 +123,7 @@ def _row_to_result(row: SiteAnalysisCache, *, cache_hit: bool, reused_from_analy
 
 def find_by_key(lat_rounded: float, lng_rounded: float) -> AnalysisResult | None:
     """CACHE-01. Returns None on a miss — callers decide what to do next."""
-    with get_session() as session:
+    with session_scope() as session:
         row = session.execute(
             select(SiteAnalysisCache).where(
                 SiteAnalysisCache.lat_rounded == lat_rounded,
@@ -149,7 +149,7 @@ def create(
     pipeline has run — never called speculatively."""
     row_id = uuid.uuid4()
     boundary_shape = from_shape(shapely_shape(boundary), srid=4326)
-    with get_session() as session:
+    with session_scope() as session:
         session.add(
             SiteAnalysisCache(
                 id=row_id,
@@ -182,7 +182,7 @@ def create(
 def mark_reused(analysis_id: str) -> None:
     """CACHE-05. Stamps last_reused_at — called on every cache hit so a
     reused row is never indistinguishable from a fresh one."""
-    with get_session() as session:
+    with session_scope() as session:
         row = session.execute(
             select(SiteAnalysisCache).where(SiteAnalysisCache.id == uuid.UUID(analysis_id))
         ).scalar_one()
@@ -194,7 +194,7 @@ def force_refresh(lat: float, lng: float, params: dict | None = None) -> None:
     next get_or_create_analysis() call is guaranteed a miss. Never
     called automatically — admin-triggered only."""
     lat_r, lng_r = round_latlng(lat, lng)
-    with get_session() as session:
+    with session_scope() as session:
         row = session.execute(
             select(SiteAnalysisCache).where(
                 SiteAnalysisCache.lat_rounded == lat_r,

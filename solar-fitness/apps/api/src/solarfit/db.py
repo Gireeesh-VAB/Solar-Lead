@@ -1,6 +1,4 @@
-"""Shared foundation piece — built Day 0, session factory added Day 1
-(by Person 3, first to need it for repositories/analysis_cache.py;
-Person 1 reuses the same factory for repositories/sites.py).
+"""Shared foundation piece — built Day 0.
 
 The single declarative Base every ORM model in the project attaches to
 (Person 1's sites/site_versions tables, Person 3's site_analysis_cache,
@@ -8,13 +6,24 @@ Person 4's calibration tables). geoalchemy2 is imported here purely for
 its side effect of registering PostGIS-aware column types with
 SQLAlchemy, so Alembic's autogenerate recognises `Geometry(...)` columns
 correctly.
+
+Merge note (karthik + sameeksha): every one of Person 1/2/3/4 built
+their own session-management code independently before this branch
+merge, each believing they were first. This is Person 1's version,
+adopted as-is — it's the only one that already supports both real
+calling conventions in use: `with session_scope() as session:` (P2/P3
+repositories) and `Depends(get_session)` (P1's FastAPI routers). P3's
+`repositories/analysis_cache.py` and P4's repositories/providers were
+updated to call `session_scope()` instead of their own former
+`get_session()` context-manager usage.
 """
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from functools import lru_cache
 
 import geoalchemy2  # noqa: F401  (side-effect import — registers PostGIS types)
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from solarfit.config import get_settings
@@ -24,17 +33,28 @@ class Base(DeclarativeBase):
     pass
 
 
-engine = create_engine(get_settings().database_url, pool_pre_ping=True)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+@lru_cache
+def get_engine() -> Engine:
+    """One pooled engine per process, built from DATABASE_URL."""
+    return create_engine(get_settings().database_url, pool_pre_ping=True, future=True)
+
+
+@lru_cache
+def get_sessionmaker() -> sessionmaker[Session]:
+    return sessionmaker(bind=get_engine(), expire_on_commit=False, future=True)
 
 
 @contextmanager
-def get_session() -> Iterator[Session]:
-    """Commits on clean exit, rolls back on exception, always closes.
+def session_scope() -> Iterator[Session]:
+    """Transactional scope around a series of operations.
 
-    Usage: `with get_session() as session: ...`
+    Commits on clean exit, rolls back on any exception. SITE-05's
+    "version rather than overwrite" rule depends on the new version row
+    and the updated `sites` row landing in the SAME transaction — a
+    partial write there would leave a site whose current geometry has no
+    corresponding history entry.
     """
-    session = SessionLocal()
+    session = get_sessionmaker()()
     try:
         yield session
         session.commit()
@@ -43,3 +63,9 @@ def get_session() -> Iterator[Session]:
         raise
     finally:
         session.close()
+
+
+def get_session() -> Iterator[Session]:
+    """FastAPI dependency: `session: Session = Depends(get_session)`."""
+    with session_scope() as session:
+        yield session
