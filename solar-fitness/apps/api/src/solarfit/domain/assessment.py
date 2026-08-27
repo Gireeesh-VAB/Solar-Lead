@@ -102,3 +102,36 @@ class AnalysisResult(BaseModel):
 
     engine_version: str | None = None
     constraint_pack_version: str | None = None
+
+
+FitnessVerdict = Literal[
+    "SUITABLE",
+    "SUITABLE_SUBJECT_TO_SURVEY",
+    "CONDITIONAL",
+    "INSUFFICIENT_DATA",
+    "NOT_SUITABLE",
+]
+
+
+class FitnessResult(BaseModel):
+    """§9.7 Fitness Scoring (FIT-01..07) + the scoring half of §9.17
+    Shading Analysis (SHADE-04). Owner: Person 4, engine/fitness.py.
+
+    This is the SOLE authoritative, reproducible verdict (FIT-06, §17) —
+    engine/ml_score.py's MLScore is additive metadata only and must never
+    substitute for this. Never constructed without confidence and
+    binding_constraint (FIT-06): binding_constraint is always a non-null
+    string, using an "insufficient_data:<input>" sentinel naming the
+    specific missing mandatory input when verdict == INSUFFICIENT_DATA.
+    score is None if and only if verdict == INSUFFICIENT_DATA (FIT-03
+    precedence — never a low score standing in for missing data, §17).
+    """
+
+    verdict: FitnessVerdict
+    score: float | None = None
+    confidence: float
+    binding_constraint: str
+    components: dict[str, float | None] = {}
+    reasons: list[str] = []
+    limitations: str
+    pack_version: str

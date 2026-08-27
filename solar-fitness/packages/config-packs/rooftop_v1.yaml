@@ -36,3 +36,84 @@ auto_apply_confidence_threshold: 0.85
 # factor)). Placeholder. Read by Person 2's engine/generation.py.
 shading_derate_factor: 1.0
 
+# FIT-01 — weighted components of the fitness score. Must sum to 1.0.
+# When a degradable component (shading, generation_yield) is excluded for
+# a given site, its weight is redistributed proportionally across the
+# remaining present components rather than assumed zero. Placeholder.
+# Read by Person 4's engine/fitness.py.
+fitness_weights:
+  capacity_adequacy: 0.30
+  constraint_headroom: 0.20
+  geometry_quality: 0.20
+  shading: 0.15
+  generation_yield: 0.15
+
+# FIT-02 — verdict thresholds against the weighted raw score (0..1).
+# score >= suitable -> SUITABLE; >= suitable_subject_to_survey ->
+# SUITABLE_SUBJECT_TO_SURVEY; >= conditional -> CONDITIONAL; else
+# NOT_SUITABLE (subject to the Gate override — see engine/fitness.py).
+# Placeholder.
+fitness_verdict_thresholds:
+  suitable: 0.75
+  suitable_subject_to_survey: 0.55
+  conditional: 0.35
+
+# FIT-01 capacity_adequacy component — capacity.recommended_kwp is scored
+# against (this multiple x minimum_viable_kwp), clamped to [0, 1].
+# Placeholder.
+fitness_capacity_adequacy_target_multiple: 5.0
+
+# FIT-01 constraint_headroom component — capacity.headroom_kwp is
+# normalised against this figure, clamped to [0, 1]. Placeholder.
+fitness_headroom_normalization_kwp: 5.0
+
+# FIT-04 — weighted components of the confidence figure. Must sum to 1.0.
+# Ceiling.confidence_delta values are added on top of this blend, not
+# folded into it. Placeholder.
+fitness_confidence_weights:
+  geometry: 0.30
+  imagery_recency: 0.15
+  constraint_completeness: 0.25
+  gate_resolution: 0.15
+  calibration_state: 0.15
+
+# FIT-04 imagery_recency sub-component — full confidence (1.0) at/below
+# this age in days, linearly decaying to 0.0 at
+# fitness_imagery_recency_zero_score_days. Placeholder.
+fitness_imagery_recency_full_score_days: 180
+fitness_imagery_recency_zero_score_days: 730
+
+# CAL-02 — field-survey vs. remote usable-area variance (fraction, e.g.
+# 0.15 = 15%) above which a calibration record is flagged and the remote
+# estimate marked superseded. Placeholder. Read by Person 4's
+# repositories/calibration.py.
+calibration_variance_threshold: 0.15
+
+# CAL-03 — minimum number of flagged/labelled calibration records for a
+# site_type before a utilisation-factor update is proposed (never applied
+# silently). Placeholder.
+calibration_sample_count_threshold: 20
+
+# USN-06 — days a bill/payment-proof image and its raw OCR text are kept
+# after upload before the purge job removes them. The confirmed usn
+# value itself is NOT covered by this window — it lives with the Site
+# indefinitely, since CON-05's subsidy-tier lookup needs it. Placeholder.
+# Read by Person 4's repositories/usn_uploads.py.
+usn_ocr_retention_days: 90
+
+# ML-01 — minimum distinct site_id groups required before train() will
+# attempt anything (below this, offline training returns None rather
+# than fitting on too little data). Placeholder. These three keys are
+# ML-ops parameters rather than rooftop business rules, kept here anyway
+# for consistency with the single-config-pack pattern. Read by Person
+# 4's engine/ml_score.py.
+ml_min_training_groups: 10
+
+# ML-01 — cap on cross-validation folds during hyperparameter search
+# (actual folds used is min(this, group_count)). Placeholder.
+ml_cv_max_folds: 5
+
+# ML-01 — fraction of site_id groups held out as the final test split
+# for the promotion-vs-baseline comparison. Placeholder.
+ml_test_split_fraction: 0.2
+

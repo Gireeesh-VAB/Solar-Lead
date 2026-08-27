@@ -74,3 +74,80 @@ def pack_version(*, pack: str = "rooftop_v1") -> str:
     """CFG-02. Stamped on every stored result alongside the constraint
     pack version."""
     return str(load_pack(pack)["version"])
+
+
+def get_fitness_weights(*, pack: str = "rooftop_v1") -> dict[str, float]:
+    """FIT-01. Component weights for the fitness score, keyed by
+    component name. Callers must redistribute weight across present
+    components when a degradable one (shading, generation_yield) is
+    excluded, rather than assuming it as zero."""
+    return dict(load_pack(pack)["fitness_weights"])
+
+
+def get_fitness_verdict_thresholds(*, pack: str = "rooftop_v1") -> dict[str, float]:
+    """FIT-02. Raw-score cutoffs for suitable / suitable_subject_to_survey
+    / conditional; below the lowest cutoff is NOT_SUITABLE."""
+    return dict(load_pack(pack)["fitness_verdict_thresholds"])
+
+
+def get_fitness_capacity_adequacy_target_multiple(*, pack: str = "rooftop_v1") -> float:
+    """FIT-01 capacity_adequacy component normalisation target."""
+    return float(load_pack(pack)["fitness_capacity_adequacy_target_multiple"])
+
+
+def get_fitness_headroom_normalization_kwp(*, pack: str = "rooftop_v1") -> float:
+    """FIT-01 constraint_headroom component normalisation target."""
+    return float(load_pack(pack)["fitness_headroom_normalization_kwp"])
+
+
+def get_fitness_confidence_weights(*, pack: str = "rooftop_v1") -> dict[str, float]:
+    """FIT-04. Confidence-blend weights, keyed by sub-input name."""
+    return dict(load_pack(pack)["fitness_confidence_weights"])
+
+
+def get_fitness_imagery_recency_full_score_days(*, pack: str = "rooftop_v1") -> int:
+    """FIT-04 imagery_recency sub-component — age in days at/below which
+    recency scores 1.0."""
+    return int(load_pack(pack)["fitness_imagery_recency_full_score_days"])
+
+
+def get_fitness_imagery_recency_zero_score_days(*, pack: str = "rooftop_v1") -> int:
+    """FIT-04 imagery_recency sub-component — age in days at/above which
+    recency scores 0.0."""
+    return int(load_pack(pack)["fitness_imagery_recency_zero_score_days"])
+
+
+def get_calibration_variance_threshold(*, pack: str = "rooftop_v1") -> float:
+    """CAL-02. Fractional variance above which a calibration record is
+    flagged and the remote estimate marked superseded."""
+    return float(load_pack(pack)["calibration_variance_threshold"])
+
+
+def get_calibration_sample_count_threshold(*, pack: str = "rooftop_v1") -> int:
+    """CAL-03. Minimum labelled-record count for a site_type before a
+    utilisation-factor update is proposed for approval."""
+    return int(load_pack(pack)["calibration_sample_count_threshold"])
+
+
+def get_usn_ocr_retention_days(*, pack: str = "rooftop_v1") -> int:
+    """USN-06. Days a bill/payment-proof upload and its raw OCR text are
+    retained before the purge job removes them."""
+    return int(load_pack(pack)["usn_ocr_retention_days"])
+
+
+def get_ml_min_training_groups(*, pack: str = "rooftop_v1") -> int:
+    """ML-01. Minimum distinct site_id groups before train() attempts
+    anything."""
+    return int(load_pack(pack)["ml_min_training_groups"])
+
+
+def get_ml_cv_max_folds(*, pack: str = "rooftop_v1") -> int:
+    """ML-01. Cap on cross-validation folds during hyperparameter
+    search."""
+    return int(load_pack(pack)["ml_cv_max_folds"])
+
+
+def get_ml_test_split_fraction(*, pack: str = "rooftop_v1") -> float:
+    """ML-01. Fraction of site_id groups held out for the final
+    promotion-vs-baseline test split."""
+    return float(load_pack(pack)["ml_test_split_fraction"])
