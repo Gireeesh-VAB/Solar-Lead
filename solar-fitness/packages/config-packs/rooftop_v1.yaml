@@ -31,9 +31,11 @@ minimum_viable_kwp: 1.0
 # advisory-only (OBS-05). Read by Person 3's engine/obstacles.py.
 auto_apply_confidence_threshold: 0.85
 
-# SHADE-03 — generation performance derate per shading_score unit
-# (GEN-01's performance ratio is multiplied by (1 - shading_score * this
-# factor)). Placeholder. Read by Person 2's engine/generation.py.
+# SHADE-03 — generation performance derate per unit of SHADED fraction
+# (shading_score is 0=fully shaded..1=unobstructed, so GEN-01's
+# performance ratio is multiplied by (1 - (1 - shading_score) * this
+# factor) — an unobstructed site gets no derate, a fully shaded site
+# gets the full factor). Placeholder. Read by Person 2's engine/generation.py.
 shading_derate_factor: 1.0
 
 # VIS-04 — below this self-reported confidence, a vision-refinement
@@ -56,4 +58,60 @@ max_obstacle_area_fraction_of_boundary: 0.5
 # crop before triangulation; higher = finer mesh, more triangles.
 # Placeholder. Read by Person 3's engine/panorama.py.
 panorama_grid_resolution: 24
+
+# CON-07 — usable-area-to-capacity conversion, kWp per m^2 of usable roof
+# area, used by packs/universal.py. ~0.2 kWp/m2 (200 Wp/m2) is a typical
+# rooftop panel-density placeholder pending real panel-spec tuning.
+capacity_density_kwp_per_m2: 0.2
+
+# CON-05 — net-metering export cap as a ratio of sanctioned load (kVA).
+# Placeholder ratio; real value needs DISCOM tariff-order research.
+net_metering_cap:
+  max_export_ratio_of_sanctioned_load: 1.0
+
+# CON-05 — consumption-offset ceiling. Placeholder ratio/yield pending
+# real billing-based tuning.
+consumption_offset_ceiling:
+  target_offset_ratio: 1.0
+  assumed_specific_yield_kwh_per_kwp: 1400
+
+# CON-05 — transformer headroom ceiling, as a fraction of nameplate
+# transformer capacity. Placeholder.
+transformer_headroom:
+  max_fraction_of_transformer_capacity: 0.8
+
+# CON-05/USN — subsidy tier caps, kWp, by declared consumer category.
+# UNKNOWN (null = insufficient_data) is the only tier usable while
+# site.usn is None, i.e. before Person 4 ships USN capture. Placeholder
+# tier boundaries; real values need scheme documentation.
+subsidy_tier_cap:
+  UNKNOWN: null
+  DOMESTIC: 10.0
+  COMMERCIAL: 100.0
+
+# GEN-03 — performance-ratio multiplier by site type. Rooftop-only scope
+# keeps every type at 1.0 for now; kept configurable per GEN-03 rather
+# than assumed, ready for e.g. floating's cooling uplift if scope reopens.
+performance_adjustment:
+  ROOFTOP_GOVT: 1.0
+  ROOFTOP_RESIDENTIAL: 1.0
+  ROOFTOP_CI: 1.0
+
+# GEN-01 — baseline performance ratio before GEN-03's adjustment and
+# SHADE-03's shading derate. Placeholder pending real-world calibration.
+default_performance_ratio: 0.8
+
+# GEN-01/02 — reference/fallback specific yield, kWh/kWp/year. Used
+# whenever the weather provider is unavailable, and as the base the
+# GEN-02 weather-refinement multiplier scales. Placeholder pending a
+# real per-district irradiance dataset (see §10.3's pvlib upgrade path).
+fallback_specific_yield_kwh_per_kwp: 1400
+
+# GEN-02 — baseline irradiance (W/m^2) the current weather reading is
+# compared against to build the weather-refinement multiplier.
+reference_irradiance_w_m2: 600
+
+# GEN-02 — clamp on the weather-refinement multiplier so one instantaneous
+# reading can't swing the yield implausibly far from the reference value.
+weather_refinement_multiplier_bounds: [0.7, 1.3]
 

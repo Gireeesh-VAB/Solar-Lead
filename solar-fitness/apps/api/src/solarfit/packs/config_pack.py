@@ -7,6 +7,18 @@ values (§9.10 Configuration); Person 1 and Person 3 both read specific
 keys from it early (AREA-05's utilisation_factor, CACHE-01's
 cache_precision) via the typed accessors below rather than touching YAML
 directly.
+
+CFG-02 (version stamping) and CFG-03 (reproducibility): pack_version()
+below is what gets stamped on a stored result, and
+tests/test_resolver.py's purity test plus test_generation.py demonstrate
+that resolve_capacity()/estimate_generation_kwh() are deterministic given
+the same inputs and pack version — the two things Person 2 can prove in
+isolation. CFG-04 (bulk recompute after a pack change) and CFG-05
+(tenant-scoped overrides) both require a stored-assessment
+repository/tenant model that doesn't exist yet anywhere in the codebase
+(Person 1/Person 3's repositories are still stubs) — flagged to the team
+as blocked on that landing first, rather than built against
+infrastructure that isn't there.
 """
 
 import os
@@ -92,6 +104,76 @@ def get_panorama_grid_resolution(*, pack: str = "rooftop_v1") -> int:
     """VIZ-01. Points per side of the elevation grid sampled from the DSM
     crop before triangulation."""
     return int(load_pack(pack)["panorama_grid_resolution"])
+
+
+def get_capacity_density_kwp_per_m2(*, pack: str = "rooftop_v1") -> float:
+    """CON-07/universal.py's area-to-kWp conversion for the usable-area
+    ceiling and the minimum-viable-size gate."""
+    return float(load_pack(pack)["capacity_density_kwp_per_m2"])
+
+
+def get_net_metering_export_ratio(*, pack: str = "rooftop_v1") -> float:
+    """CON-05. `pack` lets a jurisdiction override (e.g. 'jurisdictions/in_ap')
+    supply its own ratio with no change to the caller (CON-08)."""
+    return float(load_pack(pack)["net_metering_cap"]["max_export_ratio_of_sanctioned_load"])
+
+
+def get_consumption_offset_target_ratio(*, pack: str = "rooftop_v1") -> float:
+    """CON-05."""
+    return float(load_pack(pack)["consumption_offset_ceiling"]["target_offset_ratio"])
+
+
+def get_consumption_offset_assumed_yield(*, pack: str = "rooftop_v1") -> float:
+    """CON-05. kWh/kWp/year fallback used only when generation.py hasn't
+    produced a real yield figure yet for this site."""
+    return float(load_pack(pack)["consumption_offset_ceiling"]["assumed_specific_yield_kwh_per_kwp"])
+
+
+def get_transformer_headroom_max_fraction(*, pack: str = "rooftop_v1") -> float:
+    """CON-05."""
+    return float(load_pack(pack)["transformer_headroom"]["max_fraction_of_transformer_capacity"])
+
+
+def get_performance_adjustment(site_type: RoofSiteType, *, pack: str = "rooftop_v1") -> float:
+    """GEN-03. Multiplier on the default performance ratio, by site type
+    (e.g. floating arrays run cooler than rooftop in the wider engine —
+    rooftop-only scope keeps this at 1.0 today, but it must stay
+    configurable rather than assumed)."""
+    return float(load_pack(pack)["performance_adjustment"][site_type])
+
+
+def get_default_performance_ratio(*, pack: str = "rooftop_v1") -> float:
+    """GEN-01. Baseline performance ratio before the GEN-03 site-type
+    adjustment and SHADE-03 shading derate are applied."""
+    return float(load_pack(pack)["default_performance_ratio"])
+
+
+def get_fallback_specific_yield_kwh_per_kwp(*, pack: str = "rooftop_v1") -> float:
+    """GEN-01/02. Reference specific yield (kWh/kWp/year) used both as the
+    weather-unavailable fallback and as the base the GEN-02 weather
+    refinement multiplier scales."""
+    return float(load_pack(pack)["fallback_specific_yield_kwh_per_kwp"])
+
+
+def get_reference_irradiance_w_m2(*, pack: str = "rooftop_v1") -> float:
+    """GEN-02. Baseline irradiance the current weather reading is compared
+    against to produce the weather-refinement multiplier."""
+    return float(load_pack(pack)["reference_irradiance_w_m2"])
+
+
+def get_weather_refinement_multiplier_bounds(*, pack: str = "rooftop_v1") -> tuple[float, float]:
+    """GEN-02. Clamp on the weather-refinement multiplier so a single
+    instantaneous reading can't swing the estimate implausibly far from
+    the reference yield."""
+    low, high = load_pack(pack)["weather_refinement_multiplier_bounds"]
+    return float(low), float(high)
+
+
+def get_subsidy_tier_cap(tier: str, *, pack: str = "rooftop_v1") -> float | None:
+    """CON-05. Returns None (not a fabricated number) for a tier the pack
+    has no cap for, e.g. 'UNKNOWN' while USN hasn't been captured yet."""
+    caps = load_pack(pack)["subsidy_tier_cap"]
+    return caps.get(tier)
 
 
 def pack_version(*, pack: str = "rooftop_v1") -> str:

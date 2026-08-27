@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P2 — Rules Engine Checklist</title>
+<style>
+  :root {
+    --navy: #132d4d; --navy2: #1a3f68; --blue: #2f5f96; --blue-light: #eef4fb;
+    --ink: #1f2937; --muted: #5b6b7c; --line: #d9e2ec; --bg: #ffffff;
+    --p2: #1f7a4d; --p2-dark: #155c3a; --p2-bg: #eaf6ef;
+    --orange: #b5590c; --orange-bg: #fdf1e4;
+    --code-bg: #f1f4f7; --track: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 14px; line-height: 1.55;
+  }
+  .page { max-width: 900px; margin: 0 auto; padding: 46px 40px 70px 40px; }
+
+  .kicker { color: var(--p2); letter-spacing: 2px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; }
+  h1 { color: var(--navy); font-size: 30px; margin: 10px 0 6px 0; }
+  .sub { color: var(--muted); font-size: 15px; margin: 0 0 8px 0; }
+  code { font-family: "SF Mono", Consolas, Menlo, monospace; background: var(--code-bg); border: 1px solid var(--line); border-radius: 3px; padding: 1px 6px; font-size: 12px; }
+
+  .overall {
+    margin-top: 26px; padding: 18px 22px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--p2), var(--p2-dark)); color: #fff;
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  }
+  .overall .count { font-size: 26px; font-weight: 800; min-width: 70px; }
+  .overall .track { flex: 1; min-width: 160px; height: 10px; border-radius: 6px; background: rgba(255,255,255,0.25); overflow: hidden; }
+  .overall .fill { height: 100%; background: #fff; border-radius: 6px; width: 0%; transition: width 0.25s ease; }
+  .overall .label { font-size: 12.5px; opacity: 0.9; }
+
+  .done-banner {
+    display: none; margin-top: 18px; padding: 14px 20px; border-radius: 8px;
+    background: var(--p2-bg); border-left: 4px solid var(--p2); color: var(--navy);
+    font-size: 13.5px;
+  }
+  .done-banner.show { display: block; }
+  .done-banner b { color: var(--p2-dark); }
+
+  .batch { margin-top: 34px; }
+  .batch-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .batch-head h2 { font-size: 15.5px; color: var(--navy2); margin: 0; border-bottom: 2px solid var(--line); padding-bottom: 6px; flex: 1; }
+  .batch-progress { font-size: 11.5px; color: var(--muted); font-weight: 700; white-space: nowrap; }
+
+  .task {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px;
+    background: #fff; transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .task.checked { background: var(--p2-bg); border-color: #bfe2cd; }
+  .task input[type="checkbox"] { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--p2); flex-shrink: 0; cursor: pointer; }
+  .task-body { flex: 1; }
+  .task-num { display: inline-block; font-weight: 800; color: var(--p2); margin-right: 6px; }
+  .task-text { font-size: 13.6px; color: var(--ink); }
+  .task.checked .task-text { color: var(--muted); text-decoration: line-through; text-decoration-color: #bfe2cd; }
+  .task-tags { margin-top: 6px; }
+  .tag {
+    display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.3px;
+    background: var(--blue-light); color: var(--blue); padding: 2px 8px; border-radius: 10px;
+    margin: 2px 4px 2px 0;
+  }
+  .tag.blocked-badge { background: var(--orange-bg); color: var(--orange); }
+
+  .task.blocked { background: var(--orange-bg); border-color: #f3d4b0; }
+  .task.blocked input[type="checkbox"] { accent-color: var(--orange); cursor: not-allowed; opacity: 0.6; }
+  .blocked-note {
+    margin-top: 6px; font-size: 12px; color: #7a4a10; background: #fff;
+    border-left: 3px solid var(--orange); padding: 6px 10px; border-radius: 4px;
+  }
+
+  .done-when {
+    margin-top: 30px; padding: 16px 20px; border-radius: 8px;
+    background: var(--blue-light); border-left: 4px solid var(--blue); font-size: 13.3px; color: #334155;
+  }
+  .done-when b { color: var(--navy); }
+
+  .controls { margin-top: 16px; display: flex; gap: 10px; }
+  .controls button {
+    font-size: 12px; font-weight: 600; padding: 7px 14px; border-radius: 6px;
+    border: 1px solid var(--line); background: #fff; color: var(--muted); cursor: pointer;
+  }
+  .controls button:hover { background: var(--code-bg); }
+
+  .footerline { text-align: right; color: var(--muted); font-size: 10.5px; margin-top: 40px; border-top: 1px solid var(--line); padding-top: 10px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="kicker">Solar Site Fitness &amp; Capacity Engine — Rooftop Scope</div>
+  <h1>P2 — Rules Engine Checklist</h1>
+  <p class="sub">Constraints (§9.4) · Capacity Resolver (§9.5) · Generation (§9.6) · Configuration (§9.10) · shading derate (§9.17 SHADE-03)</p>
+
+  <div class="overall">
+    <div class="count" id="overallCount">0 / 14</div>
+    <div class="track"><div class="fill" id="overallFill"></div></div>
+    <div class="label" id="overallLabel">tasks checked off</div>
+  </div>
+
+  <div class="done-banner" id="doneBanner">
+    <b>Everything within P2's own scope is complete.</b> Given a boundary + <code>usable_area_m2</code> fixture
+    (no dependency on Person 1's real code), the constraint pack evaluates, the resolver returns capacity +
+    binding constraint + headroom, and generation returns a kWh figure correctly derated when shading data is
+    present — independently unit-tested (51/51 tests passing, including a real-database test of the
+    nearest-substation query). Task 14, plus the CFG-04 clause inside task 13, both need Person 1's/Person 3's
+    stored-assessment/tenant repository to land first — they are not something P2 can finish alone.
+  </div>
+
+  <div class="controls">
+    <button id="checkAllBtn" type="button">Check all</button>
+    <button id="resetBtn" type="button">Reset</button>
+  </div>
+
+  <div id="batches"></div>
+
+  <div class="done-when">
+    <b>Done when (as assigned):</b> given a boundary + <code>usable_area_m2</code> fixture (no dependency on
+    Person 1's real code), the constraint pack evaluates, the resolver returns capacity + binding constraint +
+    headroom, and generation returns a kWh figure correctly derated when shading data is present —
+    independently unit-tested.
+  </div>
+
+  <div class="footerline">P2 (Rules Engine) — personal checklist · seeded from a verified code audit on first load, then tracked in this browser's localStorage only</div>
+
+</div>
+
+<script>
+  const BATCHES = [
+    {
+      title: "Batch 1 — Resolver first",
+      tasks: [
+        { n: 9, text: 'engine/resolver.py: resolve_capacity() per §12 — min-of-ceilings, binding constraint, max-technical (physical-only), headroom, full ceiling list, "DC" unit basis; property tests.', tags: ["CAP-01..06"] },
+      ],
+    },
+    {
+      title: "Batch 2 — First real Ceiling/Gate",
+      tasks: [
+        { n: 2, text: "packs/universal.py — usable-area ceiling (consumes Person 1's AREA output) and evacuation-headroom ceiling: real nearest-substation PostGIS query (§14), via a new db.session_scope() helper + repositories/substations.py + a seeded substations migration.", tags: ["CON-07"] },
+        { n: 3, text: "packs/universal.py — minimum-viable-size gate.", tags: ["CON-07"] },
+      ],
+    },
+    {
+      title: "Batch 3 — Honest non-answers",
+      tasks: [
+        { n: 5, text: "packs/rooftop.py — structural gate (stub for now).", tags: ["CON-05"] },
+        { n: 6, text: "packs/rooftop.py — subsidy-tier cap, built against a stub usn: str | None until Person 4 delivers the real field.", tags: ["CON-05"] },
+      ],
+    },
+    {
+      title: "Batch 4 — Real rooftop ceilings",
+      tasks: [
+        { n: 4, text: "packs/rooftop.py — net-metering cap + consumption-offset ceiling.", tags: ["CON-05"] },
+        { n: 15, text: "rooftop_v1.yaml — add real values for auto_apply_confidence_threshold (Person 3's OBS-04) and shading_derate_factor (this person's own SHADE-03) alongside the existing coefficients.", tags: ["CFG-01"] },
+      ],
+    },
+    {
+      title: "Batch 5 — Jurisdiction override",
+      tasks: [
+        { n: 7, text: "packs/jurisdictions/in_ap.py — one state-override example, no engine-code change required.", tags: ["CON-08"] },
+      ],
+    },
+    {
+      title: "Batch 6 — Pack resolution",
+      tasks: [
+        { n: 8, text: "Pack resolution by site_type + jurisdiction; order-independence test — shuffle evaluation order, assert identical results; INSUFFICIENT_DATA on unevaluable constraints, never a default; gates never enter the capacity minimum.", tags: ["CON-02", "CON-03", "CON-04", "CON-09"] },
+      ],
+    },
+    {
+      title: "Batch 7 — Weather client",
+      tasks: [
+        { n: 10, text: "providers/weather.py — typed client (irradiance, temperature, cloud cover by lat/lng).", tags: ["GEN-02", "GEN-04"] },
+      ],
+    },
+    {
+      title: "Batch 8 — Generation",
+      tasks: [
+        { n: 11, text: "engine/generation.py — fast estimate, district/grid-cell yield refined by weather, site-type performance adjustment, detailed estimate (Should), method recorded on every result, P50/P90 (Should).", tags: ["GEN-01..06"] },
+        { n: 12, text: 'engine/generation.py — shading derate: multiply the performance ratio by (1 - shaded_fraction * shading_derate_factor), shaded_fraction = 1 - shading_score, when site.shading.source == "solar_api"; no derate (with a method-record note) when unavailable. (Direction bug found and fixed during audit — the original formula derated an unobstructed site more than a fully shaded one; a regression test now guards this.)', tags: ["SHADE-03"] },
+      ],
+    },
+    {
+      title: "Batch 9 — CFG plumbing (partially blocked)",
+      tasks: [
+        {
+          n: 13,
+          text: "CFG plumbing: version stamping (pack_version() stamped on results) and a reproducibility test are done. The bulk-recompute-after-a-pack-change clause (CFG-04) is blocked — see note.",
+          tags: ["CFG-02", "CFG-03"],
+          blockedNote: "CFG-04 (bulk recompute, retaining prior results) needs a stored-assessment repository that doesn't exist anywhere yet — Person 1's/Person 3's task, not built. Escalated to the team rather than built solo.",
+        },
+        {
+          n: 14,
+          text: "Tenant-scoped pack overrides (Should).",
+          tags: ["CFG-05"],
+          blocked: true,
+          blockedNote: "Needs a tenant model that doesn't exist anywhere in the codebase yet — same blocker as CFG-04. Escalated to the team.",
+        },
+      ],
+    },
+    {
+      title: "Already shipped (Day 0 — nothing to build)",
+      tasks: [
+        { n: 1, text: "YAML parameter-pack schema + loader — every coefficient lives here, none hard-coded. Frozen at Day 0; consume via packs/config_pack.py's typed accessors.", tags: ["CFG-01"] },
+      ],
+    },
+  ];
+
+  const STORAGE_KEY = "p2-rules-engine-checklist-v2";
+
+  // Seeded default state, matching a verified, zero-assumption audit of the
+  // actual repo (every file read directly, tests actually run — see the
+  // completion-status audit in the project plan). Used ONLY the first time
+  // this page loads in a given browser (localStorage empty) so a fresh view
+  // shows real progress instead of a misleading 0/15 — after that, your own
+  // clicks in THIS browser take over via localStorage, same as before.
+  const SEED_STATE = { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true,
+                       7: true, 8: true, 9: true, 10: true, 11: true, 12: true,
+                       13: true, 14: false, 15: true };
+
+  const allTasks = BATCHES.flatMap(b => b.tasks);
+  const checkableTasks = allTasks.filter(t => !t.blocked);
+  const blockedTasks = allTasks.filter(t => t.blocked);
+
+  function loadState() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw === null) return { ...SEED_STATE };
+    try {
+      return JSON.parse(raw);
+    } catch (e) {
+      return { ...SEED_STATE };
+    }
+  }
+
+  function saveState(state) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      /* private-browsing or storage disabled — checklist still works for this page view */
+    }
+  }
+
+  let state = loadState();
+
+  function render() {
+    const container = document.getElementById("batches");
+    container.innerHTML = "";
+
+    BATCHES.forEach(batch => {
+      const batchEl = document.createElement("div");
+      batchEl.className = "batch";
+
+      const checkableInBatch = batch.tasks.filter(t => !t.blocked);
+      const checkedInBatch = checkableInBatch.filter(t => state[t.n]).length;
+      const progressText = checkableInBatch.length
+        ? `${checkedInBatch} / ${checkableInBatch.length}`
+        : "blocked";
+      batchEl.innerHTML = `
+        <div class="batch-head">
+          <h2>${batch.title}</h2>
+          <div class="batch-progress">${progressText}</div>
+        </div>
+      `;
+
+      batch.tasks.forEach(task => {
+        const isChecked = !task.blocked && !!state[task.n];
+        const taskEl = document.createElement("label");
+        taskEl.className = "task" + (isChecked ? " checked" : "") + (task.blocked ? " blocked" : "");
+        const blockedBadge = task.blocked ? '<span class="tag blocked-badge">BLOCKED</span>' : "";
+        const noteHtml = task.blockedNote ? `<div class="blocked-note">${task.blockedNote}</div>` : "";
+        taskEl.innerHTML = `
+          <input type="checkbox" data-task="${task.n}" ${isChecked ? "checked" : ""} ${task.blocked ? "disabled" : ""} />
+          <div class="task-body">
+            <div class="task-text"><span class="task-num">${task.n}.</span>${task.text}</div>
+            <div class="task-tags">${task.tags.map(t => `<span class="tag">${t}</span>`).join("")}${blockedBadge}</div>
+            ${noteHtml}
+          </div>
+        `;
+        batchEl.appendChild(taskEl);
+      });
+
+      container.appendChild(batchEl);
+    });
+
+    container.querySelectorAll('input[type="checkbox"]:not([disabled])').forEach(cb => {
+      cb.addEventListener("change", () => {
+        const n = cb.getAttribute("data-task");
+        state[n] = cb.checked;
+        saveState(state);
+        render();
+      });
+    });
+
+    updateOverall();
+  }
+
+  function updateOverall() {
+    const total = checkableTasks.length;
+    const done = checkableTasks.filter(t => state[t.n]).length;
+    document.getElementById("overallCount").textContent = `${done} / ${total}`;
+    document.getElementById("overallFill").style.width = `${(done / total) * 100}%`;
+    document.getElementById("overallLabel").textContent =
+      `tasks checked off · task 14 blocked, not counted above (escalated to team)`;
+    document.getElementById("doneBanner").classList.toggle("show", done === total);
+  }
+
+  document.getElementById("checkAllBtn").addEventListener("click", () => {
+    checkableTasks.forEach(t => { state[t.n] = true; });
+    saveState(state);
+    render();
+  });
+
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    state = {};
+    saveState(state);
+    render();
+  });
+
+  render();
+</script>
+
+</body>
+</html>

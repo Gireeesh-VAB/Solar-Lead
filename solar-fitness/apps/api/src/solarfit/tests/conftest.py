@@ -8,12 +8,14 @@ Person 3's site_analysis_cache fixtures can hang off the same pattern.
 """
 
 from collections.abc import Iterator
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy.orm import Session
 
 from solarfit.config import Settings
 from solarfit.db import get_engine
+from solarfit.domain.site import Site
 
 
 @pytest.fixture
@@ -52,3 +54,24 @@ def _allow_header_tenant(monkeypatch):
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
+
+
+@pytest.fixture
+def make_site():
+    """Factory fixture for a fixture Site — used across Person 2's tests
+    so no test depends on Person 1's real repositories/providers."""
+
+    def _make(**overrides) -> Site:
+        defaults = {
+            "id": "site-1",
+            "site_type": "ROOFTOP_RESIDENTIAL",
+            "name": "Test Site",
+            "owner_org": "Test Org",
+            "jurisdiction": "TS",
+            "centroid": {"type": "Point", "coordinates": [78.4867, 17.3850]},
+            "created_at": datetime(2026, 1, 1, tzinfo=UTC),
+        }
+        defaults.update(overrides)
+        return Site(**defaults)
+
+    return _make
