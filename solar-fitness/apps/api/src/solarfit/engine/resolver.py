@@ -1,4 +1,4 @@
-"""STUB — Owner: Person 2 (Rules Engine).
+"""Owner: Person 2 (Rules Engine).
 
 Implements §9.5 Capacity Resolver (CAP-01..06) of
 Solar_Fitness_Engine_Development_Document_v1.1. The reference
@@ -18,10 +18,40 @@ Depends on: solarfit.domain.constraint.{Ceiling, CapacityResult}
 
 from solarfit.domain.constraint import CapacityResult, Ceiling
 
+_USABLE_STATUSES = {"ok", "estimated"}
+
 
 def resolve_capacity(ceilings: list[Ceiling]) -> CapacityResult:
-    """CAP-01..06. Raises NotImplementedError until Person 2 implements it.
+    """CAP-01..06."""
+    # insufficient_data/not_applicable ceilings carry ceiling_kwp=None or a
+    # value that isn't trustworthy — never coerce via `or 0`, that would let
+    # an unevaluable constraint silently win the minimum.
+    usable = [c for c in ceilings if c.ceiling_kwp is not None and c.status in _USABLE_STATUSES]
 
-    See §12 for the full reference implementation to port in.
-    """
-    raise NotImplementedError
+    if not usable:
+        return CapacityResult(
+            recommended_kwp=None,
+            max_technical_kwp=None,
+            binding_constraint=None,
+            headroom_kwp=0.0,
+            ceilings=ceilings,
+            unit_basis="DC",
+            status="INSUFFICIENT_DATA",
+        )
+
+    ordered = sorted(usable, key=lambda c: c.ceiling_kwp)
+    binding = ordered[0]
+    headroom_kwp = (ordered[1].ceiling_kwp - binding.ceiling_kwp) if len(ordered) > 1 else 0.0
+
+    physical = [c for c in usable if c.kind == "physical"]
+    max_technical_kwp = min((c.ceiling_kwp for c in physical), default=None)
+
+    return CapacityResult(
+        recommended_kwp=binding.ceiling_kwp,
+        max_technical_kwp=max_technical_kwp,
+        binding_constraint=binding.constraint,
+        headroom_kwp=headroom_kwp,
+        ceilings=ceilings,
+        unit_basis="DC",
+        status="ok",
+    )
