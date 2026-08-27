@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://solarfit:solarfit@localhost:5432/solarfit"
     redis_url: str = "redis://localhost:6379/0"
 
+    # API-06 escape hatch: accept an X-Owner-Org header instead of a real
+    # API key. Local development and the test suite only — it lets any
+    # caller claim any tenant, so it must stay false anywhere deployed.
+    allow_header_tenant: bool = False
+
     google_maps_api_key: str = ""
     google_solar_api_key: str = ""
     weather_api_key: str = ""
