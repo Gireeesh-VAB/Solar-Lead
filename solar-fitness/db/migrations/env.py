@@ -23,9 +23,11 @@ if config.config_file_name is not None:
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
 # Every model attaches to solarfit.db.Base — autogenerate compares
-# against this metadata. Import model modules here once they exist so
-# they register on Base.metadata before autogenerate runs, e.g.:
-#   from solarfit import repositories  # noqa: F401
+# against this metadata. Import model modules here so they register on
+# Base.metadata before autogenerate runs (Person 1 adds their sites/
+# site_versions models to this import the same way when they exist).
+from solarfit.repositories.analysis_cache import SiteAnalysisCache  # noqa: F401,E402
+
 target_metadata = Base.metadata
 
 
