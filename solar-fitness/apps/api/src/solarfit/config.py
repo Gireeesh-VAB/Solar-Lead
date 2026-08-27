@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     weather_api_key: str = ""
     openai_api_key: str = ""
 
+    # USN-02/03 — Google Cloud Vision (TEXT_DETECTION) service-account
+    # credentials, distinct from the API-key-style GCP settings above.
+    google_application_credentials_path: str = ""
+
     object_storage_bucket: str = ""
     object_storage_endpoint_url: str = ""
     object_storage_access_key: str = ""

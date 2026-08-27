@@ -55,8 +55,12 @@ def _base_entries() -> list[_Entry]:
 def _jurisdiction_overrides(jurisdiction: str | None) -> list[_Entry]:
     if jurisdiction == "AP":
         return [
-            _Entry("net_metering_cap", in_ap.net_metering_cap,
-                   applies_to=_BILLING_LINKED_TYPES, jurisdiction="AP"),
+            _Entry(
+                "net_metering_cap",
+                lambda site, usable_area_m2, params: in_ap.net_metering_cap(site, params),
+                applies_to=_BILLING_LINKED_TYPES,
+                jurisdiction="AP",
+            ),
         ]
     return []
 

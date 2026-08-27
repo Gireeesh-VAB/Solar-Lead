@@ -24,8 +24,9 @@ config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
 # Every model attaches to solarfit.db.Base — autogenerate compares
 # against this metadata. Import model modules here so they register on
-# Base.metadata before autogenerate runs (Person 1 adds their sites/
-# site_versions models to this import the same way when they exist).
+# Base.metadata before autogenerate runs.
+from solarfit.repositories import calibration, ml_models, usn_uploads  # noqa: F401,E402
+from solarfit.repositories import sites as _sites  # noqa: F401,E402  (registers SiteRow/SiteVersionRow)
 from solarfit.repositories.analysis_cache import SiteAnalysisCache  # noqa: F401,E402
 
 target_metadata = Base.metadata
