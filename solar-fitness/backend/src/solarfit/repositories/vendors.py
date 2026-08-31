@@ -12,10 +12,14 @@ Every "which vendor am I" scoping check happens one layer up, in the
 router, via current_user().vendor_id — these functions take vendor_id
 as an explicit parameter and never trust a caller-supplied one.
 
-There is deliberately no create_job() here — see the migration's
-docstring and keerthana's build-plan gap note: no frontend flow assigns
-a vendor to a site anywhere, so vendor_jobs has no populating path yet.
-Tests seed rows directly against these ORM classes.
+create_job() is the one populating path for vendor_jobs today: routers/
+app_checks.py::complete_check() queues an unassigned job when a check
+resolves to SUITABLE_SUBJECT_TO_SURVEY, since that verdict means the
+engine couldn't be confident from imagery alone and a vendor needs to
+confirm the roof in person. Every other write in this module still
+takes an existing job/vendor id — this is the only one that creates a
+vendor_jobs row from scratch. Tests otherwise seed rows directly
+against these ORM classes.
 """
 
 from __future__ import annotations
@@ -36,6 +40,7 @@ __all__ = [
     "VendorPayoutRow",
     "VendorRow",
     "count_active_jobs_for_sites",
+    "create_job",
     "dispute_job",
     "get_accuracy_history",
     "get_earnings_summary",
@@ -46,6 +51,8 @@ __all__ = [
     "list_submissions",
     "list_vendors",
     "remove_job",
+    "set_panorama_photo",
+    "set_shading_notes",
     "set_verification_status",
     "update_availability",
     "update_job_status",
@@ -107,6 +114,8 @@ class VendorJobRow(Base):
     variance_pct: Mapped[float | None] = mapped_column(nullable=True)
     dispute_status: Mapped[str | None] = mapped_column(String(16), nullable=True, default="none")
     dispute_reason: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    panorama_photo_data_url: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    shading_notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -258,6 +267,34 @@ def get_accuracy_history(session: Session, vendor_id: str | uuid.UUID) -> list[V
 # --------------------------------------------------------------------- #
 
 
+def create_job(
+    session: Session,
+    *,
+    site_id: str | uuid.UUID,
+    district: str,
+    state: str,
+    requirements: list[str],
+    payout_inr: float,
+    estimated_capacity_kwp: float | None,
+    deadline: datetime,
+) -> VendorJobRow:
+    """Queues an unassigned (vendor_id=None) job — nothing here decides
+    which vendor picks it up, that's the existing accept flow. status
+    defaults to "queued" via the column default."""
+    row = VendorJobRow(
+        site_id=uuid.UUID(str(site_id)),
+        district=district,
+        state=state,
+        deadline=deadline,
+        payout_inr=payout_inr,
+        requirements=requirements,
+        estimated_capacity_kwp=estimated_capacity_kwp,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
 def list_jobs(
     session: Session,
     vendor_id: str | uuid.UUID,
@@ -324,6 +361,28 @@ def dispute_job(
     return update_job_status(
         session, job_id, vendor_id, status="submitted", dispute_status="open", dispute_reason=reason
     )
+
+
+def set_panorama_photo(
+    session: Session, job_id: str | uuid.UUID, vendor_id: str | uuid.UUID, *, data_url: str
+) -> VendorJobRow | None:
+    row = get_job(session, job_id, vendor_id)
+    if row is None:
+        return None
+    row.panorama_photo_data_url = data_url
+    session.flush()
+    return row
+
+
+def set_shading_notes(
+    session: Session, job_id: str | uuid.UUID, vendor_id: str | uuid.UUID, *, notes: str
+) -> VendorJobRow | None:
+    row = get_job(session, job_id, vendor_id)
+    if row is None:
+        return None
+    row.shading_notes = notes
+    session.flush()
+    return row
 
 
 # --------------------------------------------------------------------- #

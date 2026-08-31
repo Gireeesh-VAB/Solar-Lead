@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Loader2, MapPin } from "lucide-react";
+import { CalendarClock, Loader2, MapPin } from "lucide-react";
 import { getCheckServer as getCheck } from "@/lib/api/serverFetch";
 import { VERDICT_EXPLAINER } from "@/lib/fixtures/customer";
 import { VerdictChip } from "@/components/ui/VerdictChip";
@@ -81,6 +81,21 @@ export default async function ResultPage({ params }: { params: Promise<{ checkId
         <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-faint">What this means</p>
         <p className="text-sm text-ink">{VERDICT_EXPLAINER[assessment.verdict]}</p>
       </Card>
+
+      {assessment.verdict === "SUITABLE_SUBJECT_TO_SURVEY" && (
+        <div
+          className="flex items-start gap-2.5 rounded-[var(--radius-app)] border px-4 py-3 text-sm"
+          style={{ borderColor: "var(--warn)", background: "var(--warn-bg)", color: "var(--warn)" }}
+        >
+          <CalendarClock size={16} strokeWidth={1.75} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <div>
+            <p className="font-medium">Site survey requested</p>
+            <p className="mt-0.5 text-xs opacity-90">
+              We&apos;ve queued a verified installer to visit and confirm the roof in person. You&apos;ll be notified here once the survey is complete.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <Link href="/check/new" className="flex-1">

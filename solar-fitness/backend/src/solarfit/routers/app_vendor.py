@@ -58,6 +58,8 @@ class VendorJobOut(CamelModel):
     variance_pct: float | None = None
     dispute_status: Literal["none", "open", "resolved"] | None = None
     dispute_reason: str | None = None
+    panorama_photo_data_url: str | None = None
+    shading_notes: str | None = None
 
 
 class VendorServiceAreaOut(CamelModel):
@@ -113,6 +115,14 @@ class DisputeRequest(CamelModel):
     reason: str = Field(min_length=1)
 
 
+class PanoramaPhotoRequest(CamelModel):
+    data_url: str = Field(min_length=1)
+
+
+class ShadingNotesRequest(CamelModel):
+    notes: str = Field(min_length=1)
+
+
 # --------------------------------------------------------------------- #
 # converters
 # --------------------------------------------------------------------- #
@@ -140,6 +150,8 @@ def _job_out(session: Session, row: VendorJobRow) -> VendorJobOut:
         variance_pct=row.variance_pct,
         dispute_status=row.dispute_status,
         dispute_reason=row.dispute_reason,
+        panorama_photo_data_url=row.panorama_photo_data_url,
+        shading_notes=row.shading_notes,
     )
 
 
@@ -255,6 +267,32 @@ def submit_job(
     row = repo.update_job_status(
         session, job_id, vendor_id, status="submitted", submitted_at=datetime.now().astimezone()
     )
+    return _job_out(session, row)
+
+
+@router.patch("/jobs/{job_id}/panorama", response_model=VendorJobOut)
+def upload_panorama_photo(
+    job_id: str,
+    payload: PanoramaPhotoRequest,
+    session: Annotated[Session, Depends(get_session)],
+    user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
+) -> VendorJobOut:
+    vendor_id = _require_vendor_id(user)
+    _job_or_404(session, job_id, vendor_id)
+    row = repo.set_panorama_photo(session, job_id, vendor_id, data_url=payload.data_url)
+    return _job_out(session, row)
+
+
+@router.patch("/jobs/{job_id}/shading-notes", response_model=VendorJobOut)
+def save_shading_notes(
+    job_id: str,
+    payload: ShadingNotesRequest,
+    session: Annotated[Session, Depends(get_session)],
+    user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
+) -> VendorJobOut:
+    vendor_id = _require_vendor_id(user)
+    _job_or_404(session, job_id, vendor_id)
+    row = repo.set_shading_notes(session, job_id, vendor_id, notes=payload.notes)
     return _job_out(session, row)
 
 

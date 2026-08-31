@@ -193,6 +193,8 @@ export interface VendorJob {
   variancePct?: number;
   disputeStatus?: "none" | "open" | "resolved";
   disputeReason?: string;
+  panoramaPhotoDataUrl?: string;
+  shadingNotes?: string;
 }
 
 export interface VendorServiceArea {
@@ -237,22 +239,6 @@ export interface PayoutEntry {
 // -----------------------------------------------------------------------------
 // Super admin portal types
 // -----------------------------------------------------------------------------
-
-export type TenantTier = "starter" | "growth" | "enterprise";
-export type TenantStatus = "active" | "trial" | "suspended" | "churned";
-
-export interface Tenant {
-  id: string;
-  name: string;
-  tier: TenantTier;
-  status: TenantStatus;
-  seatCount: number;
-  sitesAssessedThisMonth: number;
-  apiCallsThisMonth: number;
-  createdAt: string;
-  billingContactEmail: string;
-  users: { name: string; role: string; email: string }[];
-}
 
 export type VendorVerificationStatus = "verified" | "pending" | "rejected" | "suspended";
 

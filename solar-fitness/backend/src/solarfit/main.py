@@ -8,7 +8,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from solarfit.config import get_settings
 from solarfit.routers import (
-    app_admin_customers,
     app_admin_engine,
     app_admin_platform,
     app_admin_vendors,
@@ -50,7 +49,6 @@ app.include_router(app_imports.router)
 app.include_router(app_admin_platform.router)
 app.include_router(app_admin_engine.router)
 app.include_router(app_vendor.router)
-app.include_router(app_admin_customers.router)
 app.include_router(app_admin_vendors.router)
 app.include_router(app_jurisdictions.router)
 app.include_router(app_calibration_ml.router)

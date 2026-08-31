@@ -270,3 +270,40 @@ def test_dispute_submission(client, vendor_auth_header, job, db_session):
     body = r.json()
     assert body["disputeStatus"] == "open"
     assert body["disputeReason"] == "measured capacity looks wrong"
+
+
+def test_upload_panorama_photo(client, vendor_auth_header, job):
+    r = client.patch(
+        f"/app/vendor/jobs/{job.id}/panorama",
+        json={"dataUrl": "data:image/png;base64,abc123"},
+        headers=vendor_auth_header,
+    )
+    assert r.status_code == 200
+    assert r.json()["panoramaPhotoDataUrl"] == "data:image/png;base64,abc123"
+
+
+def test_upload_panorama_photo_not_owned_by_caller_is_404(client, make_auth_header, db_session, job):
+    other_vendor = VendorRow(
+        name="Other Vendor",
+        payout_method_type="UPI",
+        payout_masked_account="other@upi",
+    )
+    db_session.add(other_vendor)
+    db_session.flush()
+    header = make_auth_header(role="vendor", vendor_id=other_vendor.id)
+    r = client.patch(
+        f"/app/vendor/jobs/{job.id}/panorama",
+        json={"dataUrl": "data:image/png;base64,abc123"},
+        headers=header,
+    )
+    assert r.status_code == 404
+
+
+def test_save_shading_notes(client, vendor_auth_header, job):
+    r = client.patch(
+        f"/app/vendor/jobs/{job.id}/shading-notes",
+        json={"notes": "Tree shading on the east side after 3pm."},
+        headers=vendor_auth_header,
+    )
+    assert r.status_code == 200
+    assert r.json()["shadingNotes"] == "Tree shading on the east side after 3pm."

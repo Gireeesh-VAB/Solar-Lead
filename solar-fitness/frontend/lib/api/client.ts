@@ -27,8 +27,6 @@ import type {
   PlatformHealthMetric,
   Site,
   SiteType,
-  Tenant,
-  TenantTier,
   Verdict,
   VendorJob,
   VendorProfile,
@@ -226,6 +224,14 @@ export async function submitVendorJob(jobId: string): Promise<VendorJob> {
   return apiFetch(`/app/vendor/jobs/${jobId}/submit`, { method: "POST" });
 }
 
+export async function uploadPanoramaPhoto(jobId: string, dataUrl: string): Promise<VendorJob> {
+  return apiFetch(`/app/vendor/jobs/${jobId}/panorama`, { method: "PATCH", body: { dataUrl } });
+}
+
+export async function saveShadingNotes(jobId: string, notes: string): Promise<VendorJob> {
+  return apiFetch(`/app/vendor/jobs/${jobId}/shading-notes`, { method: "PATCH", body: { notes } });
+}
+
 export async function getVendorProfile(): Promise<VendorProfile> {
   return apiFetch("/app/vendor/profile");
 }
@@ -261,32 +267,6 @@ export async function disputeSubmission(id: string, reason: string): Promise<Ven
 // -----------------------------------------------------------------------------
 // Super admin portal
 // -----------------------------------------------------------------------------
-
-export interface TenantListParams {
-  q?: string;
-  tier?: string;
-  status?: string;
-}
-
-export async function listTenants(params: TenantListParams = {}): Promise<Tenant[]> {
-  return apiFetch("/app/admin/customers", { query: { ...params } });
-}
-
-export async function getTenant(id: string): Promise<Tenant> {
-  return apiFetch(`/app/admin/customers/${id}`);
-}
-
-export async function updateTenantTier(id: string, tier: TenantTier): Promise<Tenant> {
-  return apiFetch(`/app/admin/customers/${id}/tier`, { method: "PATCH", body: { tier } });
-}
-
-export async function suspendTenant(id: string): Promise<Tenant> {
-  return apiFetch(`/app/admin/customers/${id}/suspend`, { method: "POST" });
-}
-
-export async function reinstateTenant(id: string): Promise<Tenant> {
-  return apiFetch(`/app/admin/customers/${id}/reinstate`, { method: "POST" });
-}
 
 export interface AdminVendorListParams {
   q?: string;

@@ -10,7 +10,7 @@
 // -----------------------------------------------------------------------------
 
 import { cookies } from "next/headers";
-import type { AdminVendorSummary, Site, Tenant, VendorJob, VendorProfile } from "@/lib/types";
+import type { AdminVendorSummary, Site, VendorJob, VendorProfile } from "@/lib/types";
 import type { CustomerProfile } from "@/lib/fixtures/customer";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
@@ -37,8 +37,6 @@ export const getVendorProfileServer = (): Promise<VendorProfile> => serverApiFet
 
 export const getAdminVendorServer = (id: string): Promise<AdminVendorSummary> =>
   serverApiFetch<AdminVendorSummary>(`/app/admin/vendors/${id}`);
-
-export const getTenantServer = (id: string): Promise<Tenant> => serverApiFetch<Tenant>(`/app/admin/customers/${id}`);
 
 export const getCustomerProfileServer = (): Promise<CustomerProfile> =>
   serverApiFetch<CustomerProfile>("/app/customer/profile");

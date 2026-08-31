@@ -183,6 +183,125 @@ def test_complete_unknown_check_is_404(client, make_auth_header):
 
 
 # --------------------------------------------------------------------- #
+# check -> vendor-job handoff
+# --------------------------------------------------------------------- #
+
+
+def _canned_assessment_response(site_id, site_type, verdict):
+    from solarfit.domain.constraint import CapacityResult
+    from solarfit.routers.assessments import AssessmentResponse
+
+    return AssessmentResponse(
+        site_id=site_id,
+        site_type=site_type,
+        verdict=verdict,
+        score=0.5,
+        confidence=0.6,
+        binding_constraint="gate:pending",
+        reasons=["Needs an in-person survey."],
+        limitations="",
+        capacity=CapacityResult(recommended_kwp=4.0, status="ok"),
+        boundary=BOUNDARY,
+        usable_area_m2=40.0,
+        engine_version="test",
+        constraint_pack_version="test",
+    )
+
+
+def _complete_with_canned_verdict(client, headers, monkeypatch, db_session, site_type, verdict):
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _fake_session_scope():
+        yield db_session
+
+    monkeypatch.setattr("solarfit.routers.app_checks.session_scope", _fake_session_scope)
+
+    created = client.post(
+        "/app/checks", json=_new_check_body(siteType=site_type), headers=headers
+    ).json()
+
+    monkeypatch.setattr(
+        "solarfit.routers.app_checks.orchestrate_assessment",
+        lambda check_id: _canned_assessment_response(check_id, site_type, verdict),
+    )
+
+    response = client.post(f"/app/checks/{created['id']}/complete", headers=headers)
+    assert response.status_code == 200
+    return created["id"]
+
+
+def _vendor_job_for_site(db_session, site_id):
+    import uuid
+
+    from sqlalchemy import select
+
+    from solarfit.repositories.vendors import VendorJobRow
+
+    return db_session.scalars(
+        select(VendorJobRow).where(VendorJobRow.site_id == uuid.UUID(site_id))
+    ).first()
+
+
+def test_survey_verdict_queues_an_unassigned_vendor_job(client, make_auth_header, monkeypatch, db_session):
+    headers = make_auth_header(role="customer", owner_org=None)
+    check_id = _complete_with_canned_verdict(
+        client, headers, monkeypatch, db_session, "ROOFTOP_RESIDENTIAL", "SUITABLE_SUBJECT_TO_SURVEY"
+    )
+
+    job = _vendor_job_for_site(db_session, check_id)
+    assert job is not None
+    assert job.vendor_id is None
+    assert job.status == "queued"
+    assert job.payout_inr > 0
+    assert job.estimated_capacity_kwp == 4.0
+
+
+def test_non_survey_verdict_does_not_queue_a_vendor_job(client, make_auth_header, monkeypatch, db_session):
+    headers = make_auth_header(role="customer", owner_org=None)
+    check_id = _complete_with_canned_verdict(
+        client, headers, monkeypatch, db_session, "ROOFTOP_RESIDENTIAL", "SUITABLE"
+    )
+
+    assert _vendor_job_for_site(db_session, check_id) is None
+
+
+def test_survey_job_requirements_include_usn_for_billing_linked_site_type(
+    client, make_auth_header, monkeypatch, db_session
+):
+    headers = make_auth_header(role="customer", owner_org=None)
+    check_id = _complete_with_canned_verdict(
+        client, headers, monkeypatch, db_session, "ROOFTOP_RESIDENTIAL", "SUITABLE_SUBJECT_TO_SURVEY"
+    )
+
+    job = _vendor_job_for_site(db_session, check_id)
+    assert job.requirements == [
+        "Capture boundary polygon",
+        "Upload panorama photo",
+        "Confirm USN via bill OCR",
+        "Note shading obstructions",
+    ]
+
+
+def test_survey_job_requirements_omit_usn_for_non_billing_linked_site_type(
+    client, make_auth_header, monkeypatch, db_session
+):
+    # ROOFTOP_GOVT is the one RoofSiteType not in BILLING_LINKED_SITE_TYPES
+    # (only ROOFTOP_RESIDENTIAL/ROOFTOP_CI are — USN-05).
+    headers = make_auth_header(role="customer", owner_org=None)
+    check_id = _complete_with_canned_verdict(
+        client, headers, monkeypatch, db_session, "ROOFTOP_GOVT", "SUITABLE_SUBJECT_TO_SURVEY"
+    )
+
+    job = _vendor_job_for_site(db_session, check_id)
+    assert job.requirements == [
+        "Capture boundary polygon",
+        "Upload panorama photo",
+        "Note shading obstructions",
+    ]
+
+
+# --------------------------------------------------------------------- #
 # profile
 # --------------------------------------------------------------------- #
 

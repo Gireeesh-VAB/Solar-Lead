@@ -28,6 +28,7 @@ random verdict with a genuine run.
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -36,11 +37,12 @@ from sqlalchemy.orm import Session
 
 from solarfit.auth_users import AuthenticatedUser, current_user
 from solarfit.db import get_session, session_scope
-from solarfit.domain.site import RoofSiteType
+from solarfit.domain.site import BILLING_LINKED_SITE_TYPES, RoofSiteType
 from solarfit.providers import solar_api
 from solarfit.repositories import assessments as assessments_repo
 from solarfit.repositories import sites as repo
 from solarfit.repositories import users as users_repo
+from solarfit.repositories import vendors as vendors_repo
 from solarfit.routers.app_sites import SiteOut, _CamelModel, _site_out
 from solarfit.routers.assessments import SiteNotFoundError, orchestrate_assessment
 from solarfit.routers.sites import SiteCreate, create_site_core
@@ -50,9 +52,32 @@ router = APIRouter(prefix="/app", tags=["app-checks"])
 _DEFAULT_JURISDICTION = "IN-TG"  # same rationale as app_sites.py's own constant — no jurisdiction field on this form either
 _INDIVIDUAL_OWNER_ORG_PREFIX = "individual:"
 
+# A verdict of SUITABLE_SUBJECT_TO_SURVEY means the engine couldn't be
+# confident from imagery alone — this is the one point where a completed
+# check hands off to a vendor for an in-person survey. Requirements mirror
+# the vendor portal's own field-capture steps (boundary/panorama/USN/
+# shading); USN only applies to billing-linked site types, same condition
+# app_usn.py's routes gate on.
+_SURVEY_VERDICT = "SUITABLE_SUBJECT_TO_SURVEY"
+_BOUNDARY_REQ = "Capture boundary polygon"
+_USN_REQ = "Confirm USN via bill OCR"
+_PANORAMA_REQ = "Upload panorama photo"
+_SHADING_REQ = "Note shading obstructions"
+_SURVEY_DEADLINE_DAYS = 3
+_MIN_SURVEY_PAYOUT_INR = 800
+_PAYOUT_PER_KWP_INR = 350
+
 
 def _individual_owner_org(user: AuthenticatedUser) -> str:
     return f"{_INDIVIDUAL_OWNER_ORG_PREFIX}{user.id}"
+
+
+def _survey_requirements(site_type: str) -> list[str]:
+    requirements = [_BOUNDARY_REQ, _PANORAMA_REQ]
+    if site_type in BILLING_LINKED_SITE_TYPES:
+        requirements.append(_USN_REQ)
+    requirements.append(_SHADING_REQ)
+    return requirements
 
 
 # --------------------------------------------------------------------- #
@@ -155,9 +180,15 @@ def complete_check(
     user: Annotated[AuthenticatedUser, Depends(current_user)],
 ) -> SiteOut:
     """Runs the real engine (routers/assessments.py::orchestrate_assessment,
-    unchanged) and persists the result — never a fabricated verdict."""
+    unchanged) and persists the result — never a fabricated verdict.
+
+    A SUITABLE_SUBJECT_TO_SURVEY verdict also queues an unassigned vendor
+    job in the same transaction as the assessment save (repositories/
+    vendors.py::create_job()) — this is the only path that populates
+    vendor_jobs today, closing the "no frontend flow assigns a vendor to a
+    site" gap that repository's own docstring used to flag."""
     owner_org = _individual_owner_org(user)
-    site, _row = _owned_check_or_404(session, check_id, owner_org)
+    site, row = _owned_check_or_404(session, check_id, owner_org)
 
     try:
         response = orchestrate_assessment(check_id)
@@ -166,6 +197,22 @@ def complete_check(
 
     with session_scope() as assessment_session:
         assessments_repo.save_assessment(assessment_session, owner_org=owner_org, **response.model_dump())
+
+        if response.verdict == _SURVEY_VERDICT:
+            vendors_repo.create_job(
+                assessment_session,
+                site_id=check_id,
+                district=row.district or "Unassigned",
+                state=row.state or "Unassigned",
+                requirements=_survey_requirements(site.site_type),
+                payout_inr=max(
+                    _MIN_SURVEY_PAYOUT_INR,
+                    round((response.capacity.recommended_kwp or 3) * _PAYOUT_PER_KWP_INR),
+                ),
+                estimated_capacity_kwp=response.capacity.recommended_kwp,
+                deadline=datetime.now(UTC) + timedelta(days=_SURVEY_DEADLINE_DAYS),
+            )
+
         assessment_session.commit()
 
     updated_row = session.get(repo.SiteRow, uuid.UUID(check_id))
