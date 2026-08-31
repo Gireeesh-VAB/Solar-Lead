@@ -1,12 +1,12 @@
-API_DIR := apps/api
+API_DIR := backend
 
 .PHONY: up down migrate test run worker lint
 
 up:
-	docker compose -f infra/docker-compose.yml up -d
+	docker compose -f backend/infra/docker-compose.yml up -d
 
 down:
-	docker compose -f infra/docker-compose.yml down
+	docker compose -f backend/infra/docker-compose.yml down
 
 migrate:
 	cd $(API_DIR) && uv run alembic upgrade head
