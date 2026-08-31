@@ -15,13 +15,13 @@ function daysAgo(days: number): string {
   return new Date(Date.now() - days * 86400000).toISOString();
 }
 
-const BOUNDARY_REQ = "Capture boundary polygon";
-const USN_REQ = "Confirm USN via bill OCR";
-const PANORAMA_REQ = "Upload panorama photo";
-const SHADING_REQ = "Note shading obstructions";
+export const BOUNDARY_REQ = "Capture boundary polygon";
+export const USN_REQ = "Confirm USN via bill OCR";
+export const PANORAMA_REQ = "Upload panorama photo";
+export const SHADING_REQ = "Note shading obstructions";
 const ACCESS_REQ = "Confirm site access with owner";
 
-function requirementsFor(siteType: string): string[] {
+export function requirementsFor(siteType: string): string[] {
   const base = [BOUNDARY_REQ, PANORAMA_REQ];
   if (siteType === "ROOFTOP_RESIDENTIAL" || siteType === "ROOFTOP_CI") base.push(USN_REQ);
   base.push(SHADING_REQ);

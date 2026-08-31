@@ -4,13 +4,13 @@ import { AdminReportsClient } from "./AdminReportsClient";
 
 export const metadata: Metadata = {
   title: "Reports",
-  description: "Platform-wide usage, revenue, and cache-savings summary.",
+  description: "Platform-wide assessment cache-savings summary.",
 };
 
 export default function AdminReportsPage() {
   return (
     <div className="space-y-6">
-      <PageHeader title="Reports" description="Usage, revenue, and cache-savings summary across all tenants." />
+      <PageHeader title="Reports" description="Assessment cache-savings summary across the platform." />
       <AdminReportsClient />
     </div>
   );

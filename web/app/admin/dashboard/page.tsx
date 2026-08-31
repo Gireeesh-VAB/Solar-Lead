@@ -4,7 +4,7 @@ import { AdminDashboardClient } from "./AdminDashboardClient";
 
 export const metadata: Metadata = {
   title: "Admin dashboard",
-  description: "Platform health, exceptions, and activity across all tenants and vendors.",
+  description: "Platform health, exceptions, and vendor activity across the whole platform.",
 };
 
 export default function AdminDashboardPage() {

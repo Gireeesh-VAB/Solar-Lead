@@ -4,13 +4,13 @@ import { AssessmentsListClient } from "./AssessmentsListClient";
 
 export const metadata: Metadata = {
   title: "Assessments",
-  description: "All site fitness assessments across every tenant on the platform.",
+  description: "All site fitness assessments across the platform.",
 };
 
 export default function AdminAssessmentsPage() {
   return (
     <div className="space-y-6">
-      <PageHeader title="Assessments" description="Every fitness assessment run across all tenants." />
+      <PageHeader title="Assessments" description="Every fitness assessment run on the platform." />
       <AssessmentsListClient />
     </div>
   );

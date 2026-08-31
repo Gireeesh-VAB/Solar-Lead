@@ -23,8 +23,8 @@ import {
   MOCK_JURISDICTIONS,
   MOCK_MODEL_VERSIONS,
 } from "@/lib/fixtures/misc";
-import { MOCK_VENDOR_JOBS, MOCK_VENDOR_PAYOUTS, MOCK_VENDOR_PROFILE } from "@/lib/fixtures/vendor";
-import { MOCK_ADMIN_VENDORS, MOCK_AUDIT_LOG, MOCK_PLATFORM_HEALTH, MOCK_TENANTS } from "@/lib/fixtures/admin";
+import { MOCK_VENDOR_JOBS, MOCK_VENDOR_PAYOUTS, MOCK_VENDOR_PROFILE, requirementsFor } from "@/lib/fixtures/vendor";
+import { MOCK_ADMIN_VENDORS, MOCK_AUDIT_LOG, MOCK_PLATFORM_HEALTH } from "@/lib/fixtures/admin";
 import { MOCK_CHECKS, MOCK_CUSTOMER, type CustomerProfile } from "@/lib/fixtures/customer";
 import type {
   AdminVendorSummary,
@@ -42,8 +42,6 @@ import type {
   PlatformHealthMetric,
   Site,
   SiteType,
-  Tenant,
-  TenantTier,
   Verdict,
   VendorJob,
   VendorProfile,
@@ -72,7 +70,6 @@ const modelStore: ModelVersionProposal[] = MOCK_MODEL_VERSIONS.map((m) => ({ ...
 const vendorJobsStore: VendorJob[] = MOCK_VENDOR_JOBS.map((j) => ({ ...j }));
 const vendorPayoutsStore: PayoutEntry[] = MOCK_VENDOR_PAYOUTS.map((p) => ({ ...p }));
 const vendorProfileStore: VendorProfile = { ...MOCK_VENDOR_PROFILE };
-const tenantsStore: Tenant[] = MOCK_TENANTS.map((t) => ({ ...t }));
 const adminVendorsStore: AdminVendorSummary[] = MOCK_ADMIN_VENDORS.map((v) => ({ ...v }));
 const auditLogStore: AuditLogEntry[] = MOCK_AUDIT_LOG.map((a) => ({ ...a }));
 const platformHealthStore: PlatformHealthMetric = {
@@ -320,6 +317,20 @@ export async function submitVendorJob(jobId: string): Promise<VendorJob> {
   return delay(job);
 }
 
+export async function uploadPanoramaPhoto(jobId: string, dataUrl: string): Promise<VendorJob> {
+  const job = vendorJobsStore.find((j) => j.id === jobId);
+  if (!job) throw new ApiError(`Job ${jobId} not found`, 404);
+  job.panoramaPhotoDataUrl = dataUrl;
+  return delay(job);
+}
+
+export async function saveShadingNotes(jobId: string, notes: string): Promise<VendorJob> {
+  const job = vendorJobsStore.find((j) => j.id === jobId);
+  if (!job) throw new ApiError(`Job ${jobId} not found`, 404);
+  job.shadingNotes = notes;
+  return delay(job);
+}
+
 export async function getVendorProfile(): Promise<VendorProfile> {
   return delay(vendorProfileStore);
 }
@@ -371,50 +382,6 @@ export async function disputeSubmission(id: string, reason: string): Promise<Ven
 // -----------------------------------------------------------------------------
 // Super admin portal
 // -----------------------------------------------------------------------------
-
-export interface TenantListParams {
-  q?: string;
-  tier?: string;
-  status?: string;
-}
-
-export async function listTenants(params: TenantListParams = {}): Promise<Tenant[]> {
-  let items = tenantsStore;
-  if (params.q) {
-    const q = params.q.toLowerCase();
-    items = items.filter((t) => t.name.toLowerCase().includes(q) || t.id.toLowerCase().includes(q) || t.billingContactEmail.toLowerCase().includes(q));
-  }
-  if (params.tier) items = items.filter((t) => t.tier === params.tier);
-  if (params.status) items = items.filter((t) => t.status === params.status);
-  return delay(items);
-}
-
-export async function getTenant(id: string): Promise<Tenant> {
-  const tenant = tenantsStore.find((t) => t.id === id);
-  if (!tenant) throw new ApiError(`Tenant ${id} not found`, 404);
-  return delay(tenant);
-}
-
-export async function updateTenantTier(id: string, tier: TenantTier): Promise<Tenant> {
-  const tenant = tenantsStore.find((t) => t.id === id);
-  if (!tenant) throw new ApiError(`Tenant ${id} not found`, 404);
-  tenant.tier = tier;
-  return delay(tenant);
-}
-
-export async function suspendTenant(id: string): Promise<Tenant> {
-  const tenant = tenantsStore.find((t) => t.id === id);
-  if (!tenant) throw new ApiError(`Tenant ${id} not found`, 404);
-  tenant.status = "suspended";
-  return delay(tenant);
-}
-
-export async function reinstateTenant(id: string): Promise<Tenant> {
-  const tenant = tenantsStore.find((t) => t.id === id);
-  if (!tenant) throw new ApiError(`Tenant ${id} not found`, 404);
-  tenant.status = "active";
-  return delay(tenant);
-}
 
 export interface AdminVendorListParams {
   q?: string;
@@ -658,11 +625,39 @@ function generateCheckAssessment(check: Site): Assessment {
   };
 }
 
+// A check whose verdict comes back "subject to survey" can't be booked with
+// confidence from imagery alone — it needs a vendor on-site to confirm the
+// roof, capture the boundary, and note anything the imagery missed. This is
+// the customer-check -> vendor-job handoff: the trigger point where a
+// generated lead actually reaches a vendor's queue.
+function createVendorJobFromCheck(check: Site): VendorJob {
+  return {
+    id: `JOB-${check.id}`,
+    siteId: check.id,
+    siteName: check.name,
+    siteType: check.siteType,
+    district: check.district || "Unassigned",
+    state: check.state || "Unassigned",
+    deadline: new Date(Date.now() + 3 * 86400000).toISOString(),
+    payoutInr: Math.max(800, Math.round((check.latestAssessment?.capacityKwp ?? 3) * 350)),
+    status: "queued",
+    assignedAt: new Date().toISOString(),
+    requirements: requirementsFor(check.siteType),
+    distanceKm: Number((5 + Math.random() * 25).toFixed(1)),
+    estimatedCapacityKwp: check.latestAssessment?.capacityKwp,
+  };
+}
+
 export async function completeCheck(checkId: string): Promise<Site> {
   const check = checksStore.find((c) => c.id === checkId);
   if (!check) throw new ApiError(`Check ${checkId} not found`, 404);
   check.latestAssessment = generateCheckAssessment(check);
   check.updatedAt = new Date().toISOString();
+
+  if (check.latestAssessment.verdict === "SUITABLE_SUBJECT_TO_SURVEY") {
+    vendorJobsStore.unshift(createVendorJobFromCheck(check));
+  }
+
   return delay(check);
 }
 

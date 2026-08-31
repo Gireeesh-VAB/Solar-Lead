@@ -8,11 +8,9 @@ import type {
   AuditLogListParams,
   NewCheckInput,
   SiteListParams,
-  TenantListParams,
   VendorJobListParams,
 } from "@/lib/api/client";
 import type { CustomerProfile } from "@/lib/fixtures/customer";
-import type { TenantTier } from "@/lib/types";
 
 export function useSites(params: SiteListParams = {}) {
   return useQuery({
@@ -132,6 +130,28 @@ export function useVendorJob(jobId: string) {
   });
 }
 
+export function useUploadPanoramaPhoto(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (dataUrl: string) => api.uploadPanoramaPhoto(jobId, dataUrl),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendor-job", jobId] });
+      qc.invalidateQueries({ queryKey: ["vendor-jobs"] });
+    },
+  });
+}
+
+export function useSaveShadingNotes(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (notes: string) => api.saveShadingNotes(jobId, notes),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendor-job", jobId] });
+      qc.invalidateQueries({ queryKey: ["vendor-jobs"] });
+    },
+  });
+}
+
 export function useVendorJobAction(jobId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -187,37 +207,6 @@ export function useDisputeSubmission(id: string) {
 // -----------------------------------------------------------------------------
 // Super admin portal
 // -----------------------------------------------------------------------------
-
-export function useTenants(params: TenantListParams = {}) {
-  return useQuery({ queryKey: ["tenants", params], queryFn: () => api.listTenants(params) });
-}
-
-export function useTenant(id: string) {
-  return useQuery({ queryKey: ["tenant", id], queryFn: () => api.getTenant(id) });
-}
-
-export function useUpdateTenantTier(id: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (tier: TenantTier) => api.updateTenantTier(id, tier),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tenant", id] });
-      qc.invalidateQueries({ queryKey: ["tenants"] });
-    },
-  });
-}
-
-export function useTenantStatusAction(id: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (action: "suspend" | "reinstate") =>
-      action === "suspend" ? api.suspendTenant(id) : api.reinstateTenant(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tenant", id] });
-      qc.invalidateQueries({ queryKey: ["tenants"] });
-    },
-  });
-}
 
 export function useAdminVendors(params: AdminVendorListParams = {}) {
   return useQuery({ queryKey: ["admin-vendors", params], queryFn: () => api.listAdminVendors(params) });
