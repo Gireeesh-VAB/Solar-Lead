@@ -1,0 +1,7 @@
+# CON-08 worked example — Andhra Pradesh override of the national
+# net-metering export ratio. Only the keys a jurisdiction actually
+# overrides need to appear here; everything else stays on rooftop_v1.
+version: "in_ap_v1"
+
+net_metering_cap:
+  max_export_ratio_of_sanctioned_load: 0.8

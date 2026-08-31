@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Rooftop Backend Implementation Plan</title>
+<style>
+  :root{
+    --navy:#132d4d; --navy2:#1a3f68; --blue:#2f5f96; --blue-light:#eef4fb;
+    --ink:#1f2937; --muted:#5b6b7c; --line:#d9e2ec; --bg:#ffffff;
+    --green:#1f7a4d; --green-bg:#eaf6ef; --orange:#b5590c; --orange-bg:#fdf1e4;
+    --code-bg:#f1f4f7;
+    --p1:#2f5f96; --p2:#1f7a4d; --p3:#7a4dbf; --p4:#b5590c;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);}
+  body{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:14px;line-height:1.6;}
+  .page{max-width:980px;margin:0 auto;padding:50px 60px;}
+  .kicker{color:var(--blue);letter-spacing:2px;font-size:11.5px;font-weight:700;text-transform:uppercase;}
+  h1{color:var(--navy);font-size:32px;margin:10px 0 6px 0;}
+  .sub{color:var(--muted);font-size:15px;margin:0 0 28px 0;}
+  h2{color:var(--navy);font-size:21px;border-bottom:2px solid var(--navy2);padding-bottom:8px;margin-top:46px;}
+  h3{font-size:16px;margin-top:0;}
+  p{margin:12px 0;}
+  b{color:var(--navy);}
+  code, pre{font-family:"SF Mono",Consolas,Menlo,monospace;}
+  .inline-code{background:var(--code-bg);border:1px solid var(--line);border-radius:3px;padding:1px 6px;font-size:12px;}
+  table{width:100%;border-collapse:collapse;margin:16px 0 22px 0;font-size:12.8px;}
+  th{background:var(--navy);color:#fff;text-align:left;padding:9px 12px;font-size:11.5px;}
+  td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  tr:nth-child(even) td{background:#fbfcfd;}
+  .glance td:first-child{font-weight:700;color:var(--navy2);white-space:nowrap;}
+
+  .person{border:1px solid var(--line);border-radius:10px;margin:22px 0 40px 0;overflow:hidden;box-shadow:0 1px 3px rgba(19,45,77,0.06);}
+  .person-head{padding:18px 24px;color:#fff;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;}
+  .p1 .person-head{background:linear-gradient(135deg,var(--p1),#1a3f68);}
+  .p2 .person-head{background:linear-gradient(135deg,var(--p2),#155c3a);}
+  .p3 .person-head{background:linear-gradient(135deg,var(--p3),#5c3691);}
+  .p4 .person-head{background:linear-gradient(135deg,var(--p4),#8c4409);}
+  .person-head .num{font-size:26px;font-weight:800;opacity:0.85;}
+  .person-head .title{font-size:19px;font-weight:700;}
+  .person-body{padding:22px 26px;}
+  .covers{background:var(--blue-light);border-left:4px solid var(--blue);border-radius:4px;padding:14px 18px;font-size:13px;margin-bottom:18px;}
+  .covers b{display:block;margin-bottom:4px;}
+  .tasks{margin:0;padding-left:22px;}
+  .tasks li{margin-bottom:9px;}
+  .done-when{background:var(--green-bg);border-left:4px solid var(--green);border-radius:4px;padding:12px 18px;font-size:13px;margin-top:16px;}
+  .done-when b{color:var(--navy);}
+
+  .callout{border-radius:4px;padding:14px 20px;margin:18px 0;font-size:13px;}
+  .callout.orange{background:var(--orange-bg);border-left:4px solid var(--orange);color:#4a2c0c;}
+  .callout b{display:block;margin-bottom:4px;}
+
+  .badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:0.3px;padding:2px 9px;border-radius:10px;color:#fff;}
+  .badge.p1{background:var(--p1);} .badge.p2{background:var(--p2);} .badge.p3{background:var(--p3);} .badge.p4{background:var(--p4);}
+
+  ul{padding-left:22px;} li{margin-bottom:6px;}
+  .footerline{text-align:right;color:var(--muted);font-size:10.5px;margin-top:40px;border-top:1px solid var(--line);padding-top:10px;}
+  hr.sep{border:none;border-top:1px solid var(--line);margin:40px 0;}
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="kicker">Solar Site Fitness &amp; Capacity Engine — Rooftop Scope</div>
+<h1>Backend Implementation Plan</h1>
+<div class="sub">Python/FastAPI · Rooftop-only (floating/water-body work on hold) · Four-person parallel build, sized to equal effort</div>
+
+<h2>Rooftop-Only Requirement Scope</h2>
+<p><b>In scope:</b> <span class="inline-code">SITE-01..07</span>, <span class="inline-code">GEO-01,02,04,05,06,07,08,09</span> (drop <span class="inline-code">GEO-03</span>), <span class="inline-code">AREA-01..06</span>, <span class="inline-code">CON-01,02,03,04,05,07,08,09</span> (drop <span class="inline-code">CON-06</span>), <span class="inline-code">CAP-01..06</span>, <span class="inline-code">GEN-01..06</span>, <span class="inline-code">FIT-01..07</span>, <span class="inline-code">API-01..09</span>, <span class="inline-code">CAL-01..05</span>, <span class="inline-code">CFG-01..05</span>, <span class="inline-code">VIS-01..06</span>, <span class="inline-code">VIZ-01..05</span>, <span class="inline-code">ML-01..05</span>, <span class="inline-code">CACHE-01..05</span>, <span class="inline-code">USN-01..06</span>, <span class="inline-code">OBS-01..09</span> <span class="badge" style="background:#7a4dbf;">v1.2</span>, <span class="inline-code">SHADE-01..05</span> <span class="badge" style="background:#7a4dbf;">v1.2</span>.</p>
+<p><b>Dropped for now:</b> <span class="inline-code">GEO-03</span> (WATER_INDEX/Sentinel-2), <span class="inline-code">CON-06</span> (floating pack), the entire §13 Sentinel-2 pipeline, and the floating-specific row in the §16 testing table.</p>
+<div class="callout orange"><b>New in v1.2 — §9.16 Obstacle Detection &amp; §9.17 Shading Analysis</b>
+Obstacle detection (<span class="inline-code">OBS</span>) reuses <span class="inline-code">VIS-01</span>'s crop and <span class="inline-code">VIS-02</span>'s vision-LLM call — same image, same request, extended structured-output schema — and is the one stage in the pipeline that <b>auto-applies</b> to a customer-visible number: a detection at/above a confidence threshold auto-unions into exclusions and recomputes usable area, versioned and reversible via the same <span class="inline-code">SITE-05</span> mechanism as any other boundary change (never silent, unlike every other v1.1 addition's advisory-only discipline). Shading analysis (<span class="inline-code">SHADE</span>) extracts sunshine/shading data already present in the Solar API response Person 1 fetches for <span class="inline-code">GEO-04</span> — no new external call — and threads it through as a generation derate (Person 2) and a fitness sub-score (Person 4).</div>
+
+<h2>At a Glance</h2>
+<table class="glance">
+<tr><th>Person</th><th>Document sections owned</th><th>Tasks</th><th>Files</th></tr>
+<tr><td><span class="badge p1">P1</span> Site &amp; Geometry</td><td>§9.1 Site Model, §9.2 Geometry Providers, §9.3 Usable Area, the bulk-import/export/auth slice of §9.8 Interface, plus the extraction half of §9.17 Shading (<span class="inline-code">SHADE-01</span>)</td><td>16</td><td><span class="inline-code">domain/site.py</span>, <span class="inline-code">providers/{base,manual,solar_api,imported}.py</span>, <span class="inline-code">repositories/sites.py</span>, <span class="inline-code">engine/area.py</span>, <span class="inline-code">routers/{sites,imports}.py</span></td></tr>
+<tr><td><span class="badge p2">P2</span> Rules Engine</td><td>§9.4 Constraints, §9.5 Capacity Resolver, §9.6 Generation, §9.10 Configuration, plus the derate half of §9.17 Shading (<span class="inline-code">SHADE-03</span>)</td><td>14</td><td><span class="inline-code">packages/config-packs/</span>, <span class="inline-code">packs/{universal,rooftop,jurisdictions}.py</span>, <span class="inline-code">engine/{resolver,generation}.py</span>, <span class="inline-code">providers/weather.py</span></td></tr>
+<tr><td><span class="badge p3">P3</span> AI Pipeline &amp; Cache</td><td>§9.11 Vision Refinement, §9.12 3D Visualization, §9.14 Result Cache, plus §9.16 Obstacle Detection in full (<span class="inline-code">OBS-01..09</span>) <span class="badge" style="background:#7a4dbf;">v1.2</span></td><td>17</td><td><span class="inline-code">providers/vision.py</span>, <span class="inline-code">engine/panorama.py</span>, <span class="inline-code">engine/obstacles.py</span> <span class="badge" style="background:#7a4dbf;">new</span>, <span class="inline-code">repositories/analysis_cache.py</span>, <span class="inline-code">workers/*.py</span></td></tr>
+<tr><td><span class="badge p4">P4</span> Scoring, USN &amp; API</td><td>§9.7 Fitness Scoring, §9.13 ML Suitability Model, §9.15 USN Capture, §9.9 Calibration, the core-assessment slice of §9.8 Interface, plus the scoring half of §9.17 Shading (<span class="inline-code">SHADE-04</span>)</td><td>13</td><td><span class="inline-code">engine/{fitness,ml_score}.py</span>, <span class="inline-code">providers/usn_ocr.py</span>, <span class="inline-code">repositories/calibration.py</span>, <span class="inline-code">routers/assessments.py</span></td></tr>
+</table>
+
+<h2>Day 0 — Shared Foundation</h2>
+<p>All four people, together, ~2–3 days, before splitting off:</p>
+<ol>
+<li>Repo scaffold per §11's tree, rooftop-only subset.</li>
+<li>FastAPI skeleton (<span class="inline-code">main.py</span>), PostgreSQL 16 + PostGIS 3.4 via Docker Compose, Alembic initialized.</li>
+<li>Core Pydantic contracts in <span class="inline-code">domain/</span>, written and frozen <b>together</b>: <span class="inline-code">Ceiling</span>, <span class="inline-code">Gate</span>, <span class="inline-code">Constraint</span> protocol, <span class="inline-code">Site</span>, <span class="inline-code">ShadingEstimate</span>, <span class="inline-code">AnalysisResult</span>, <span class="inline-code">VisionRefinement</span>, <span class="inline-code">Obstacle</span>, <span class="inline-code">PanoramaResult</span>, <span class="inline-code">MLScore</span>, <span class="inline-code">CacheEntry</span>, <span class="inline-code">UsnCapture</span>. Every person below codes against these from day one — this is what makes four-way parallel work possible at all.</li>
+<li>Secrets/config scaffold: Google Maps + Solar API keys, Weather API key, <span class="inline-code">openai</span> API key, Redis connection, object-storage bucket.</li>
+<li>Celery + Redis worker skeleton running a no-op task.</li>
+<li>CI running the geometry/projection unit tests from §16.</li>
+</ol>
+
+<hr class="sep">
+
+<div class="person p1">
+  <div class="person-head"><span class="num">1</span><span class="title">Site &amp; Geometry</span></div>
+  <div class="person-body">
+    <div class="covers"><b>Covers, per the document</b>
+    §9.1 (<span class="inline-code">SITE-01..07</span>) — "Store a site with type discriminator, name, owner organisation, jurisdiction, centroid, boundary polygon and exclusion multipolygon," validated per-type against a registered JSON Schema, versioned rather than overwritten. §9.2 (<span class="inline-code">GEO-01,02,04,05,06,07,08,09</span>) — the geometry-provider chain: <span class="inline-code">MANUAL_POLYGON</span>, <span class="inline-code">SOLAR_API</span> ("retrieve building insights where covered... handle absent, BASE-tier and sparse responses without failure"), <span class="inline-code">IMPORTED</span>, <span class="inline-code">FIELD_MEASURED</span>, plus every geometry-rejection and confidence rule. §9.3 (<span class="inline-code">AREA-01..06</span>) — usable-area math, explicitly "never planar area on EPSG:4326." Also the bulk-import/export/auth portion of §9.8 (<span class="inline-code">API-06..09</span>), a direct extension of this person's own <span class="inline-code">IMPORTED</span> provider and <span class="inline-code">SITE-07</span> duplicate-detection work. New in v1.2: §9.17's extraction half (<span class="inline-code">SHADE-01</span>) — the same Solar API response already fetched for <span class="inline-code">GEO-04</span> carries per-segment sunshine/shading data; pull it out into <span class="inline-code">Site.shading</span>, no new call.</div>
+    <ol class="tasks">
+      <li>Alembic migration: <span class="inline-code">sites</span> table (id, site_type, name, owner_org, jurisdiction, centroid, boundary, exclusions, geometry_source, imagery_date, imagery_quality, geometry_confidence, created_at) plus <span class="inline-code">site_versions</span> history table (<span class="inline-code">SITE-05</span>).</li>
+      <li>JSON Schema files per rooftop type; USN field group appears only in the residential/CI schemas (<span class="inline-code">SITE-02</span> — shape agreed with Person 4, see Dependency Matrix).</li>
+      <li><span class="inline-code">domain/site.py</span>: <span class="inline-code">Site</span> model + type registry for the three rooftop types (<span class="inline-code">SITE-01</span>, <span class="inline-code">SITE-03</span>).</li>
+      <li><span class="inline-code">repositories/sites.py</span>: CRUD plus version-on-boundary-change, never overwrite (<span class="inline-code">SITE-05</span>).</li>
+      <li><span class="inline-code">providers/base.py</span>: <span class="inline-code">GeometryProvider</span> protocol + provider-precedence registry (<span class="inline-code">GEO-01</span>).</li>
+      <li><span class="inline-code">providers/manual.py</span>: operator-drawn boundary + exclusions from GeoJSON (<span class="inline-code">GEO-02</span>).</li>
+      <li><span class="inline-code">providers/solar_api.py</span>: Google Geocoding → Google Solar API <span class="inline-code">buildingInsights:findClosest</span>; parse into the internal <span class="inline-code">Boundary</span> shape; record (not raise on) absent/BASE-tier/sparse responses (<span class="inline-code">GEO-04</span>).</li>
+      <li><span class="inline-code">providers/solar_api.py</span>: <span class="inline-code">extract_shading_estimate()</span> — pull sunshine-hours/shading-quantile fields from the same response into <span class="inline-code">ShadingEstimate(source="solar_api")</span>; non-Solar-API geometry sources leave it <span class="inline-code">source="unavailable"</span> (<span class="inline-code">SHADE-01</span>) <span class="badge" style="background:#7a4dbf;">v1.2</span>.</li>
+      <li><span class="inline-code">providers/imported.py</span>: GeoJSON/shapefile upload with CRS detection (<span class="inline-code">GEO-05</span>).</li>
+      <li>Geometry validation: self-intersection, vertex-count, distance-from-centroid, area-plausibility checks (<span class="inline-code">GEO-07</span>); exclusion-containment check (<span class="inline-code">GEO-08</span>).</li>
+      <li>Geometry confidence function from source/recency/vertex-count/area-plausibility (<span class="inline-code">GEO-09</span>).</li>
+      <li><span class="inline-code">engine/area.py</span>: geography-cast area (<span class="inline-code">AREA-01</span>), unioned exclusions (<span class="inline-code">AREA-02</span>), projected-CRS negative-buffer setback (<span class="inline-code">AREA-03</span>), usable-area formula (<span class="inline-code">AREA-04</span>), config-pack utilisation factor — <b>reads Person 2's config loader</b> (<span class="inline-code">AREA-05</span>), clamp-to-zero (<span class="inline-code">AREA-06</span>).</li>
+      <li><span class="inline-code">routers/sites.py</span>: create/get/list endpoints, tenant-scoped.</li>
+      <li><span class="inline-code">routers/imports.py</span>: bulk CSV/GeoJSON/shapefile import with per-row error report (<span class="inline-code">API-07</span>); duplicate detection on create/import (<span class="inline-code">SITE-07</span>).</li>
+      <li>API-key auth dependency + per-tenant rate limiting (<span class="inline-code">API-06</span>).</li>
+      <li>Export (CSV/GeoJSON/PDF, <span class="inline-code">API-08</span>) + assessment-completion webhook emitter (<span class="inline-code">API-09</span>).</li>
+    </ol>
+    <div class="done-when"><b>Done when:</b> an address can be POSTed, geocoded, resolved via the Solar API, stored with a versioned boundary, returns a computed usable area, and carries a <span class="inline-code">ShadingEstimate</span> (real or explicit <span class="inline-code">"unavailable"</span>) — fully testable alone.</div>
+  </div>
+</div>
+
+<div class="person p2">
+  <div class="person-head"><span class="num">2</span><span class="title">Rules Engine</span></div>
+  <div class="person-body">
+    <div class="covers"><b>Covers, per the document</b>
+    §9.4 (<span class="inline-code">CON-01,02,03,04,05,07,08,09</span>) — the constraint interface ("returning a capacity ceiling in kWp, a reason, a confidence delta and a status"), the rooftop and universal packs, jurisdiction overrides, and the gates-vs-ceilings distinction. §9.5 (<span class="inline-code">CAP-01..06</span>) — the capacity resolver, "the minimum of all evaluable ceilings," explicitly forbidden from carrying site-type conditionals (§17). §9.6 (<span class="inline-code">GEN-01..06</span>) — the generation estimator, yield "never a single national or state constant." §9.10 (<span class="inline-code">CFG-01..05</span>) — "every coefficient in a versioned parameter pack," reproducibility of any historical assessment. New in v1.2: §9.17's derate half (<span class="inline-code">SHADE-03</span>) — Person 1's <span class="inline-code">Site.shading</span> multiplies <span class="inline-code">GEN-01</span>'s performance ratio; also owns the new <span class="inline-code">auto_apply_confidence_threshold</span> config value Person 3's obstacle detection reads.</div>
+    <ol class="tasks">
+      <li>YAML parameter-pack schema + loader — every coefficient lives here, none hard-coded (<span class="inline-code">CFG-01</span>). <b>Ship a minimal working version by end of Day 1</b> — Person 1 and Person 3 both read from it almost immediately.</li>
+      <li><span class="inline-code">packs/universal.py</span> — usable-area ceiling (consumes Person 1's <span class="inline-code">AREA</span> output) and evacuation-headroom ceiling (nearest-substation PostGIS query, §14).</li>
+      <li><span class="inline-code">packs/universal.py</span> — minimum-viable-size gate (<span class="inline-code">CON-07</span>).</li>
+      <li><span class="inline-code">packs/rooftop.py</span> — net-metering cap + consumption-offset ceiling (<span class="inline-code">CON-05</span>).</li>
+      <li><span class="inline-code">packs/rooftop.py</span> — transformer-headroom ceiling + structural gate (stub for now) (<span class="inline-code">CON-05</span>).</li>
+      <li><span class="inline-code">packs/rooftop.py</span> — subsidy-tier cap, built against a stub <span class="inline-code">usn: str | None</span> until Person 4 delivers the real field (<span class="inline-code">CON-05</span>).</li>
+      <li><span class="inline-code">packs/jurisdictions/in_ap.py</span> — one state-override example, no engine-code change required (<span class="inline-code">CON-08</span>).</li>
+      <li>Pack resolution by site_type + jurisdiction (<span class="inline-code">CON-02</span>); order-independence test — shuffle evaluation order, assert identical results (<span class="inline-code">CON-09</span>); <span class="inline-code">INSUFFICIENT_DATA</span> on unevaluable constraints, never a default (<span class="inline-code">CON-04</span>); gates never enter the capacity minimum (<span class="inline-code">CON-03</span>).</li>
+      <li><span class="inline-code">engine/resolver.py</span>: <span class="inline-code">resolve_capacity()</span> per §12 — min-of-ceilings, binding constraint, max-technical (physical-only), headroom, full ceiling list, "DC" unit basis (<span class="inline-code">CAP-01..06</span>); property tests.</li>
+      <li><span class="inline-code">providers/weather.py</span>: typed client (irradiance, temperature, cloud cover by lat/lng).</li>
+      <li><span class="inline-code">engine/generation.py</span>: fast estimate (<span class="inline-code">GEN-01</span>), district/grid-cell yield refined by weather (<span class="inline-code">GEN-02</span>), site-type performance adjustment (<span class="inline-code">GEN-03</span>), detailed estimate (<span class="inline-code">GEN-04</span>, Should), method recorded on every result (<span class="inline-code">GEN-05</span>), P50/P90 (<span class="inline-code">GEN-06</span>, Should).</li>
+      <li><span class="inline-code">engine/generation.py</span>: shading derate — multiply the performance ratio by <span class="inline-code">(1 - shading_score * shading_derate_factor)</span> when <span class="inline-code">site.shading.source == "solar_api"</span>; no derate (and a note in the <span class="inline-code">GEN-05</span> method record) when unavailable (<span class="inline-code">SHADE-03</span>) <span class="badge" style="background:#7a4dbf;">v1.2</span>.</li>
+      <li><span class="inline-code">CFG</span> plumbing: version stamping (<span class="inline-code">CFG-02</span>), reproducibility test (<span class="inline-code">CFG-03</span>), bulk recompute after a pack change, retaining prior results (<span class="inline-code">CFG-04</span>).</li>
+      <li>Tenant-scoped pack overrides (<span class="inline-code">CFG-05</span>, Should).</li>
+      <li><span class="inline-code">rooftop_v1.yaml</span>: add real values for <span class="inline-code">auto_apply_confidence_threshold</span> (Person 3's <span class="inline-code">OBS-04</span>) and <span class="inline-code">shading_derate_factor</span> (this person's own <span class="inline-code">SHADE-03</span>) alongside the existing coefficients.</li>
+    </ol>
+    <div class="done-when"><b>Done when:</b> given a boundary + <span class="inline-code">usable_area_m2</span> fixture (no dependency on Person 1's real code), the constraint pack evaluates, the resolver returns capacity + binding constraint + headroom, and generation returns a kWh figure correctly derated when shading data is present — independently unit-tested.</div>
+  </div>
+</div>
+
+<div class="person p3">
+  <div class="person-head"><span class="num">3</span><span class="title">AI Pipeline &amp; Cache</span></div>
+  <div class="person-body">
+    <div class="covers"><b>Covers, per the document</b>
+    §9.11 Vision Refinement (<span class="inline-code">VIS-01..06</span>) — "crop the source imagery to the provider-derived boundary... send the crop to a vision-LLM for a refinement pass... inference-time only, explicitly no fine-tuning." §9.12 3D Visualization (<span class="inline-code">VIZ-01..05</span>) — "generate a 3D panoramic model of the site... from the confirmed boundary plus available elevation/imagery data." §9.14 Result Cache (<span class="inline-code">CACHE-01..05</span>) — "a site already analysed at a given location... is never re-processed," keyed on rounded lat/long, cache hits always recorded as such. New in v1.2: §9.16 Obstacle Detection (<span class="inline-code">OBS-01..09</span>) — folds into the <b>same</b> vision-LLM call as <span class="inline-code">VIS-02</span> (never a second crop, never a second call), but is the one stage in the whole pipeline that auto-applies to a customer-visible number: a detection at/above the configured confidence threshold auto-unions into exclusions and triggers <span class="inline-code">AREA-04</span> recomputation, versioned via <span class="inline-code">SITE-05</span> and independently reversible — never silent, unlike everything else this person owns.</div>
+    <ol class="tasks">
+      <li>Confirm the Day-0 Celery/Redis skeleton runs a real task end to end.</li>
+      <li>Alembic migration: <span class="inline-code">site_analysis_cache</span> table per §14 (<span class="inline-code">lat_rounded</span>, <span class="inline-code">lng_rounded</span>, <span class="inline-code">boundary</span>, <span class="inline-code">vision_refinement jsonb</span>, <span class="inline-code">weather_snapshot jsonb</span>, <span class="inline-code">panorama_url</span>, <span class="inline-code">ml_suitability_score</span>, <span class="inline-code">ml_model_version</span>, <span class="inline-code">created_at</span>, <span class="inline-code">last_reused_at</span>), unique index on <span class="inline-code">(lat_rounded, lng_rounded)</span> (<span class="inline-code">CACHE-01</span>).</li>
+      <li><span class="inline-code">repositories/analysis_cache.py</span>: <span class="inline-code">round_latlng()</span> reading precision from Person 2's config-pack loader; <span class="inline-code">find_by_key()</span> / <span class="inline-code">create()</span> / <span class="inline-code">mark_reused()</span>.</li>
+      <li><span class="inline-code">get_or_create_analysis()</span> cache-hit path — instant return, <span class="inline-code">cache_hit=true</span>, <span class="inline-code">reused_from_analysis_id</span> (<span class="inline-code">CACHE-02</span>, <span class="inline-code">CACHE-05</span>).</li>
+      <li><span class="inline-code">get_or_create_analysis()</span> cache-miss path — trigger the full pipeline once, store the result, same table/key regardless of site type (<span class="inline-code">CACHE-03</span>).</li>
+      <li>Admin "force refresh" endpoint bypassing the cache for a known-stale entry, never automatic (<span class="inline-code">CACHE-04</span>).</li>
+      <li><span class="inline-code">providers/vision.py</span> — crop source imagery to the boundary before any downstream use. <b>Day 2 decision:</b> imagery is the real Google Solar API Data Layers <span class="inline-code">rgbUrl</span> (a georeferenced GeoTIFF), not a plain map screenshot — cropping uses the image's own embedded geotransform via <span class="inline-code">rasterio</span>/GDAL, which also sets up <span class="inline-code">VIZ-01</span>'s elevation source (<span class="inline-code">dsmUrl</span>) to reuse the same fetch machinery (<span class="inline-code">VIS-01</span>) <span class="badge" style="background:#7a4dbf;">done</span>.</li>
+      <li><span class="inline-code">providers/vision.py</span> — GPT-4 Vision call with a structured-output prompt, parse into <span class="inline-code">VisionRefinement</span>, store as an annotation, never overwrite Person 1's boundary (<span class="inline-code">VIS-02</span>, <span class="inline-code">VIS-03</span>) <span class="badge" style="background:#7a4dbf;">done</span>. Scoping note: the model returns obstruction notes + confidence, not a precise re-drawn boundary polygon — <span class="inline-code">corrected_boundary</span> stays <span class="inline-code">null</span> until pixel-to-geo correction is worth building; honest per <span class="inline-code">VIS-03</span>'s advisory-only discipline, not a shortcut.</li>
+      <li><span class="inline-code">providers/vision.py</span> — failure/low-confidence → <span class="inline-code">insufficient_data</span> (threshold: new config-pack value <span class="inline-code">vision_min_confidence</span>), pipeline continues unblocked; wrapped as Celery task <span class="inline-code">solarfit.vision.refine</span> in <span class="inline-code">workers/celery_app.py</span>; <span class="inline-code">retain_imagery</span> flag defaulted <span class="inline-code">False</span> with a licensing-review TODO (<span class="inline-code">VIS-04</span>, <span class="inline-code">VIS-05</span>, <span class="inline-code">VIS-06</span>) <span class="badge" style="background:#7a4dbf;">done</span>.</li>
+      <li><span class="inline-code">providers/vision.py</span> — extend the <b>same</b> structured-output schema from <span class="inline-code">VIS-02</span> with an <span class="inline-code">obstacles: list[Obstacle]</span> field (type/bounding_polygon/confidence per detection: water_tank, hvac_unit, chimney, existing_solar_panel, vent, antenna, other) (<span class="inline-code">OBS-01</span>, <span class="inline-code">OBS-02</span>) <span class="badge" style="background:#7a4dbf;">v1.2</span>.</li>
+      <li><span class="inline-code">providers/vision.py</span> — validate each obstacle's <span class="inline-code">bounding_polygon</span> against Person 1's <span class="inline-code">GEO-07</span>/<span class="inline-code">GEO-08</span> rules; drop invalid ones with a recorded reason, never pass through (<span class="inline-code">OBS-03</span>) <span class="badge" style="background:#7a4dbf;">v1.2</span>.</li>
+      <li><span class="inline-code">engine/obstacles.py</span> <span class="badge" style="background:#7a4dbf;">new file</span> — obstacles at/above <span class="inline-code">config_pack.get_auto_apply_confidence_threshold()</span> union into exclusions, call Person 1's <span class="inline-code">repositories.sites.new_boundary_version()</span> (<span class="inline-code">source="obstacle_detection"</span>), then Person 2's <span class="inline-code">engine.area.compute_usable_area_m2()</span> again — fully auditable, never silent (<span class="inline-code">OBS-04</span>) <span class="badge" style="background:#7a4dbf;">v1.2</span>.</li>
+      <li><span class="inline-code">engine/obstacles.py</span> — below-threshold obstacles stay advisory-only, same discipline as <span class="inline-code">VIS-03</span> (<span class="inline-code">Obstacle.applied</span> stays <span class="inline-code">False</span>) (<span class="inline-code">OBS-05</span>) <span class="badge" style="background:#7a4dbf;">v1.2</span>.</li>
+      <li><span class="inline-code">engine/obstacles.py</span> — admin-reject path for an auto-applied obstacle: supersede the exclusion (<span class="inline-code">SITE-05</span> history retained, never deleted), recompute usable area back (<span class="inline-code">OBS-06</span>) <span class="badge" style="background:#7a4dbf;">v1.2</span>.</li>
+      <li><span class="inline-code">engine/panorama.py</span> — mesh construction from boundary + elevation via <span class="inline-code">trimesh</span>/<span class="inline-code">Open3D</span> (<span class="inline-code">VIZ-01</span>).</li>
+      <li><span class="inline-code">engine/panorama.py</span> — render via <span class="inline-code">pyrender</span>, upload to object storage, persist only the URL + version; explicit <span class="inline-code">not_generated</span> on insufficient data (<span class="inline-code">VIZ-02</span>, <span class="inline-code">VIZ-03</span>).</li>
+      <li><span class="inline-code">engine/panorama.py</span> — regenerate only on boundary-version change or explicit refresh; Celery task chained after <span class="inline-code">VIS</span> (<span class="inline-code">VIZ-04</span>, <span class="inline-code">VIZ-05</span>).</li>
+      <li>Wire the full chain inside <span class="inline-code">get_or_create_analysis()</span>: <span class="inline-code">geometry → vision.refine (+ obstacle detect) → obstacles.apply_or_flag → weather.fetch → panorama.generate → ml.score → cache.store</span>.</li>
+    </ol>
+    <div class="done-when"><b>Done when:</b> given a stub boundary + test-image fixture (mocked OpenAI/Weather clients), a pipeline run produces a stored vision annotation, a structured obstacle list, and a panorama URL (or explicit <span class="inline-code">not_generated</span>); a high-confidence obstacle auto-applies to exclusions and is reversible by an admin; a second call at the same rounded lat/long returns instantly with zero external calls.</div>
+  </div>
+</div>
+
+<div class="person p4">
+  <div class="person-head"><span class="num">4</span><span class="title">Scoring, USN &amp; Assessment API</span></div>
+  <div class="person-body">
+    <div class="covers"><b>Covers, per the document</b>
+    §9.7 Fitness Scoring (<span class="inline-code">FIT-01..07</span>) — the deterministic, reproducible verdict; "never return a verdict or capacity without confidence and binding constraint." §9.13 ML Suitability Model (<span class="inline-code">ML-01..05</span>) — explicitly "additive... never in place of the deterministic FIT-0x verdict." §9.15 USN Capture (<span class="inline-code">USN-01..06</span>) — the three converging input paths, scoped to <span class="inline-code">ROOFTOP_RESIDENTIAL</span>/<span class="inline-code">ROOFTOP_CI</span> only. §9.9 Calibration (<span class="inline-code">CAL-01..05</span>) — the variance-tracking loop feeding both <span class="inline-code">FIT</span> confidence and future <span class="inline-code">ML</span> retraining. Plus the core-assessment slice of §9.8 Interface (<span class="inline-code">API-01..05</span>) — the single response shape tying every other person's output together. New in v1.2: §9.17's scoring half (<span class="inline-code">SHADE-04</span>) — <span class="inline-code">site.shading.shading_score</span> becomes one of <span class="inline-code">FIT-01</span>'s weighted components.</div>
+    <ol class="tasks">
+      <li><span class="inline-code">engine/fitness.py</span> — weighted-component scorer from the config pack; verdict enum (<span class="inline-code">FIT-01</span>, <span class="inline-code">FIT-02</span>).</li>
+      <li><span class="inline-code">engine/fitness.py</span> — shading sub-component from <span class="inline-code">site.shading.shading_score</span>; return <span class="inline-code">INSUFFICIENT_DATA</span> for that sub-component specifically (never guess) when <span class="inline-code">source == "unavailable"</span> (<span class="inline-code">SHADE-04</span>) <span class="badge" style="background:#7a4dbf;">v1.2</span>.</li>
+      <li><span class="inline-code">engine/fitness.py</span> — <span class="inline-code">INSUFFICIENT_DATA</span> precedence over any computed score; confidence from geometry source/recency/constraint completeness/gate resolution/calibration state (<span class="inline-code">FIT-03</span>, <span class="inline-code">FIT-04</span>).</li>
+      <li><span class="inline-code">engine/fitness.py</span> — human-readable reason list; verdict/capacity always ship with confidence + binding constraint, and this stays authoritative over the ML score; pre-feasibility limitations statement on every result (<span class="inline-code">FIT-05</span>, <span class="inline-code">FIT-06</span>, <span class="inline-code">FIT-07</span>).</li>
+      <li><span class="inline-code">providers/usn_ocr.py</span> — manual-entry path, validated string field (<span class="inline-code">USN-01</span>).</li>
+      <li><span class="inline-code">providers/usn_ocr.py</span> — bill-OCR path: managed OCR/Document-AI call, field-locator/regex extraction, confirm-before-store (<span class="inline-code">USN-02</span>).</li>
+      <li><span class="inline-code">providers/usn_ocr.py</span> — payment-proof-OCR path, same discipline; converge all three into one <span class="inline-code">usn</span> + <span class="inline-code">usn_source</span> field; encrypted-at-rest storage with a retention window, hard-excluded from ML/vision training (<span class="inline-code">USN-03</span>, <span class="inline-code">USN-04</span>, <span class="inline-code">USN-06</span>).</li>
+      <li><span class="inline-code">repositories/calibration.py</span> — variance computation between remote/measured usable area on field-survey submission, labelled-pair storage (<span class="inline-code">CAL-01</span>); flag-and-supersede on variance threshold (<span class="inline-code">CAL-02</span>).</li>
+      <li><span class="inline-code">repositories/calibration.py</span> — utilisation-factor recompute job surfaced for approval (coordinate the config value with Person 2); variance-distribution report; feed calibration state into <span class="inline-code">FIT-04</span> and the ML retraining set (<span class="inline-code">CAL-03</span>, <span class="inline-code">CAL-04</span>, <span class="inline-code">CAL-05</span>).</li>
+      <li><span class="inline-code">engine/ml_score.py</span> — offline training script (scikit-learn/XGBoost) over accumulated <span class="inline-code">GEO</span>/<span class="inline-code">AREA</span>/<span class="inline-code">VIS</span>/weather features with <span class="inline-code">FIT</span>/<span class="inline-code">CAL</span> as labels (<span class="inline-code">ML-01</span>).</li>
+      <li><span class="inline-code">engine/ml_score.py</span> — versioned inference serving, candidate-model approval gate, <span class="inline-code">INSUFFICIENT_DATA</span> path (<span class="inline-code">ML-02</span>, <span class="inline-code">ML-03</span>, <span class="inline-code">ML-04</span>, <span class="inline-code">ML-05</span>).</li>
+      <li><span class="inline-code">routers/assessments.py</span> — orchestration endpoint combining Person 1/2/3's outputs into the single response shape, with <span class="inline-code">vision_refinement</span>/<span class="inline-code">panorama_url</span>/<span class="inline-code">ml_suitability_score</span>/<span class="inline-code">cache_hit</span> as optional additive fields; synchronous cache-hit path (<span class="inline-code">API-01</span>, <span class="inline-code">API-02</span>).</li>
+      <li><span class="inline-code">routers/assessments.py</span> — async batch submission with pollable status; engine/pack version stamped on every response; versioned API path (<span class="inline-code">API-03</span>, <span class="inline-code">API-04</span>, <span class="inline-code">API-05</span>).</li>
+    </ol>
+    <div class="done-when"><b>Done when:</b> given stub <span class="inline-code">Ceiling</span>-list/<span class="inline-code">CAP</span>-result fixtures from Person 2 and a stub cache-result fixture from Person 3, <span class="inline-code">FIT</span> and <span class="inline-code">ML</span> produce a verdict + score independently and testably, including the shading sub-component; USN round-trips through all three input paths in isolation. The orchestration endpoint is deliberately built last against real implementations, at the checkpoints below.</div>
+  </div>
+</div>
+
+<h2>Dependency &amp; Collaboration Matrix</h2>
+<p>Every cross-person dependency in the project, in one place — who needs what, from whom, by when.</p>
+<table>
+<tr><th>From → To</th><th>What's handed over</th><th>Interface / artifact</th><th>Needed by</th></tr>
+<tr><td><b>Shared → everyone</b></td><td>The frozen domain contracts</td><td><span class="inline-code">Ceiling</span>, <span class="inline-code">Gate</span>, <span class="inline-code">Site</span>, <span class="inline-code">AnalysisResult</span>, <span class="inline-code">VisionRefinement</span>, <span class="inline-code">PanoramaResult</span>, <span class="inline-code">MLScore</span>, <span class="inline-code">CacheEntry</span>, <span class="inline-code">UsnCapture</span></td><td>Day 0, before anyone splits off</td></tr>
+<tr><td><span class="badge p2">P2</span> → <span class="badge p1">P1</span></td><td>Config-pack loader + utilisation-factor value</td><td><span class="inline-code">config_pack.get("utilisation_factor", site_type)</span></td><td>Early — P1's <span class="inline-code">AREA-05</span> (task 11)</td></tr>
+<tr><td><span class="badge p2">P2</span> → <span class="badge p3">P3</span></td><td>Config-pack loader + <span class="inline-code">cache_precision</span> value</td><td><span class="inline-code">config_pack.get("cache_precision")</span></td><td>Early — P3's <span class="inline-code">round_latlng()</span> (task 3)</td></tr>
+<tr><td><span class="badge p1">P1</span> → <span class="badge p2">P2</span></td><td>Confirmed <span class="inline-code">Boundary</span> + <span class="inline-code">usable_area_m2</span></td><td><span class="inline-code">Constraint.evaluate(site, usable_area_m2, params)</span></td><td>Checkpoint 1 (stub fixture until then)</td></tr>
+<tr><td><span class="badge p1">P1</span> ↔ <span class="badge p4">P4</span></td><td>USN field-group shape in the JSON Schema</td><td><span class="inline-code">usn</span> / <span class="inline-code">usn_source</span> fields on the residential/CI schema</td><td>Day 0/1 — agree before either implements it</td></tr>
+<tr><td><span class="badge p1">P1</span> → <span class="badge p3">P3</span></td><td>Confirmed post-<span class="inline-code">AREA</span> <span class="inline-code">Boundary</span> + imagery reference</td><td>Input to <span class="inline-code">VIS-01</span>'s crop step and <span class="inline-code">VIZ-01</span>'s mesh construction</td><td>Checkpoint 2 (stub boundary fixture until then)</td></tr>
+<tr><td><span class="badge p1">P1</span> → <span class="badge p4">P4</span></td><td><span class="inline-code">Site</span> record (site_type, geometry_confidence, imagery_date/quality)</td><td>Feeds <span class="inline-code">FIT-04</span> confidence and <span class="inline-code">FIT-07</span> completeness</td><td>Checkpoint 1</td></tr>
+<tr><td><span class="badge p2">P2</span> → <span class="badge p4">P4</span></td><td><span class="inline-code">CapacityResult</span> (binding constraint, ceilings, headroom) + generation kWh</td><td>Feeds <span class="inline-code">FIT-01</span> scorer and <span class="inline-code">FIT-05</span> reason list</td><td>Checkpoint 1 (stub fixture until then)</td></tr>
+<tr><td><span class="badge p4">P4</span> → <span class="badge p2">P2</span></td><td>Real <span class="inline-code">usn</span> value</td><td>Replaces P2's stub <span class="inline-code">usn</span> field in <span class="inline-code">CON-05</span>'s subsidy-tier cap</td><td>Checkpoint 2</td></tr>
+<tr><td><span class="badge p3">P3</span> → <span class="badge p4">P4</span></td><td><span class="inline-code">VisionRefinement</span>, <span class="inline-code">PanoramaResult</span>, <span class="inline-code">MLScore</span>-storage slot in the cache</td><td>Attached to the <span class="inline-code">API-01</span> response; optionally informs <span class="inline-code">FIT-04</span> confidence</td><td>Checkpoint 2</td></tr>
+<tr><td><span class="badge p3">P3</span> → <span class="badge p4">P4</span></td><td>Accumulated <span class="inline-code">vision_refinement</span>/<span class="inline-code">weather_snapshot</span> data in <span class="inline-code">site_analysis_cache</span></td><td>Feature source for <span class="inline-code">ML-01</span>'s offline training set</td><td>Ongoing, post-Checkpoint 2 (needs volume)</td></tr>
+<tr><td><span class="badge p4">P4</span> → <span class="badge p3">P3</span></td><td>None required in reverse</td><td>—</td><td>—</td></tr>
+<tr><td><span class="badge p1">P1</span>, <span class="badge p2">P2</span>, <span class="badge p3">P3</span> → <span class="badge p4">P4</span></td><td>All of the above, combined</td><td><span class="inline-code">routers/assessments.py</span> calls into every other person's module</td><td>Checkpoint 1 (rules-only) and Checkpoint 2 (full pipeline)</td></tr>
+<tr><td><span class="badge p3">P3</span> → <span class="badge p1">P1</span> <span class="badge" style="background:#7a4dbf;">v1.2</span></td><td>Auto-applied obstacle → new exclusions version</td><td><span class="inline-code">repositories.sites.new_boundary_version(source="obstacle_detection")</span> — reuses <span class="inline-code">SITE-05</span>, no new mechanism</td><td>Checkpoint 3 (obstacle detection)</td></tr>
+<tr><td><span class="badge p3">P3</span> → <span class="badge p2">P2</span> <span class="badge" style="background:#7a4dbf;">v1.2</span></td><td>Recompute trigger after an exclusions change</td><td><span class="inline-code">engine.area.compute_usable_area_m2()</span> called again — already a pure function, no new interface</td><td>Checkpoint 3</td></tr>
+<tr><td><span class="badge p2">P2</span> → <span class="badge p3">P3</span> <span class="badge" style="background:#7a4dbf;">v1.2</span></td><td>Config-pack loader + <span class="inline-code">auto_apply_confidence_threshold</span> value</td><td><span class="inline-code">config_pack.get_auto_apply_confidence_threshold()</span></td><td>Early — P3's <span class="inline-code">engine/obstacles.py</span></td></tr>
+<tr><td><span class="badge p1">P1</span> → <span class="badge p2">P2</span> / <span class="badge p4">P4</span> <span class="badge" style="background:#7a4dbf;">v1.2</span></td><td><span class="inline-code">Site.shading</span> (real or <span class="inline-code">"unavailable"</span>)</td><td>Consumed by <span class="inline-code">GEN-01</span>'s derate (<span class="inline-code">SHADE-03</span>) and <span class="inline-code">FIT-01</span>'s sub-score (<span class="inline-code">SHADE-04</span>) — already on the frozen contract, both must handle <span class="inline-code">"unavailable"</span> as <span class="inline-code">INSUFFICIENT_DATA</span></td><td>Checkpoint 1</td></tr>
+</table>
+<div class="callout orange"><b>How to read this without getting blocked</b>
+Every "Needed by Checkpoint 1/2" row is something the receiving person builds against a <b>stub matching the Day-0 contract first</b>, then swaps for the real implementation at the checkpoint. Only the two "Early" rows (Person 2's config-pack loader) are a genuine day-two blocker if Person 2 falls behind — flag that risk to the team specifically, since it's the one dependency that isn't stub-able the same way.</div>
+
+<h2>Integration Checkpoints</h2>
+<ul>
+<li><b>Checkpoint 1:</b> synchronous, rules-only rooftop assessment end-to-end — address in, Solar-API boundary out, usable area computed, constraints resolved, capacity + generation estimated (shading-derated when available), deterministic <span class="inline-code">FIT</span> verdict returned (shading sub-score included). Requires Persons 1, 2, and 4's <span class="inline-code">FIT</span>+<span class="inline-code">API-01..05</span> (no <span class="inline-code">VIS</span>/<span class="inline-code">VIZ</span>/<span class="inline-code">ML</span>/<span class="inline-code">CACHE</span>/<span class="inline-code">USN</span>/<span class="inline-code">OBS</span> yet).</li>
+<li><b>Checkpoint 2:</b> the same flow now runs through <span class="inline-code">VIS</span> refinement, produces a <span class="inline-code">VIZ</span> panorama, checks/writes the <span class="inline-code">CACHE</span>, adds the additive <span class="inline-code">ML</span> score, and captures USN for billing-linked types. A second request at the same rounded lat/long returns instantly with <span class="inline-code">cache_hit=true</span> and zero external calls.</li>
+<li><b>Checkpoint 3</b> <span class="badge" style="background:#7a4dbf;">v1.2</span>: the same <span class="inline-code">VIS</span> call now also returns obstacles; a high-confidence one auto-applies to exclusions (new <span class="inline-code">SITE-05</span> version, <span class="inline-code">source="obstacle_detection"</span>) and <span class="inline-code">AREA-04</span>/usable area recompute automatically; an admin can reject it and the site's usable area returns to its prior value with full history retained. A low-confidence obstacle stays advisory-only, visible but unapplied.</li>
+</ul>
+
+<h2>Verification</h2>
+<ul>
+<li>Run the §16 testing-table rows relevant to rooftop scope; drop the water-index row.</li>
+<li>Manually exercise Checkpoint 1, then Checkpoint 2, then Checkpoint 3, against one real address with known Google Solar API coverage.</li>
+<li>Confirm §17's non-negotiables hold at integration: no planar-4326 area bug, <span class="inline-code">FIT</span> never overridden by <span class="inline-code">ML</span>, every cache hit recorded as such, USN absent from non-billing-linked site types, and (v1.2) every auto-applied obstacle is versioned/reversible — never silent, never below the <span class="inline-code">OBS-04</span> threshold.</li>
+</ul>
+
+<div class="footerline">Solar Site Fitness &amp; Capacity Engine — Rooftop Backend Implementation Plan · aligned to document v1.2</div>
+
+</div>
+</body>
+</html>

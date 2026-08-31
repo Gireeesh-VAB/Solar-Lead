@@ -11,7 +11,7 @@ Python/FastAPI backend, rooftop-only scope (`ROOFTOP_GOVT` / `ROOFTOP_RESIDENTIA
 Requires [uv](https://docs.astral.sh/uv/) and Docker.
 
 ```bash
-make up        # Postgres+PostGIS and Redis, via infra/docker-compose.yml
+make up        # Postgres+PostGIS and Redis, via backend/infra/docker-compose.yml
 make migrate   # alembic upgrade head
 make test      # the two real tests that exist on Day 0 (geometry, projection)
 make run       # FastAPI dev server — GET /health should return {"status": "ok"}
@@ -19,7 +19,7 @@ make worker    # Celery worker — dispatch solarfit.workers.celery_app.ping to 
 ```
 
 No `make` on your machine? Run the underlying commands directly — see the `Makefile`,
-they're one line each (`cd apps/api && uv run ...`).
+they're one line each (`cd backend && uv run ...`).
 
 Copy `.env.example` to `.env` and fill in real API keys before you need `providers/solar_api.py`,
 `providers/vision.py`, `providers/weather.py`, or `providers/usn_ocr.py` — the scaffold boots
@@ -27,13 +27,13 @@ fine with an empty `.env` for everything else.
 
 ## Where everything lives
 
-- `apps/api/src/solarfit/domain/` — the frozen shared contracts (`Site`, `ShadingEstimate`,
+- `backend/src/solarfit/domain/` — the frozen shared contracts (`Site`, `ShadingEstimate`,
   `Ceiling`, `Gate`, `CapacityResult`, `AnalysisResult`, `VisionRefinement`, `Obstacle`,
   `PanoramaResult`, `MLScore`). Don't change these without the whole team agreeing — everyone's
   code imports from here.
-- `apps/api/src/solarfit/packs/config_pack.py` — the parameter-pack loader. Real coefficients
-  live in `packages/config-packs/rooftop_v1.yaml` (currently placeholder values).
-- `db/migrations/` — Alembic. `0001_enable_postgis.py` is the only shared migration; your table(s)
+- `backend/src/solarfit/packs/config_pack.py` — the parameter-pack loader. Real coefficients
+  live in `backend/packages/config-packs/rooftop_v1.yaml` (currently placeholder values).
+- `backend/db/migrations/` — Alembic. `0001_enable_postgis.py` is the only shared migration; your table(s)
   are your own next migration.
 - Every other file under `engine/`, `providers/`, `packs/`, `repositories/`, `routers/` that
   isn't listed above is a **stub** with a docstring naming its owner and the exact requirement
@@ -62,7 +62,7 @@ explicit `"unavailable"` one for non-Solar-API geometry sources).
 §9.4 Constraints, §9.5 Capacity Resolver, §9.6 Generation, §9.10 Configuration, plus the
 generation-derate half of §9.17 Shading Analysis (`SHADE-03`).
 
-Files: `packages/config-packs/rooftop_v1.yaml` (tune the placeholder values),
+Files: `backend/packages/config-packs/rooftop_v1.yaml` (tune the placeholder values),
 `packs/{universal,rooftop,jurisdictions}.py`, `engine/{resolver,generation}.py`,
 `providers/weather.py`.
 
