@@ -6,12 +6,21 @@ packages/config-packs/*.yaml per CFG-01 — see packs/config_pack.py.
 """
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# solar-fitness/.env, resolved relative to this file rather than the
+# process's current working directory — pydantic-settings' default
+# env_file=".env" only finds it if the process happens to be started
+# from the repo root, which isn't the convention here (README says
+# `cd apps/api && uv run ...`). Same fix as packs/config_pack.py's
+# _DEFAULT_PACKS_DIR.
+_ENV_FILE = Path(__file__).resolve().parents[4] / ".env"
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
 
     database_url: str = "postgresql+psycopg://solarfit:solarfit@localhost:5432/solarfit"
     redis_url: str = "redis://localhost:6379/0"
