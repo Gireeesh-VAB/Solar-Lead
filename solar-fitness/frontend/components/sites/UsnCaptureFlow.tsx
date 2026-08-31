@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CheckCircle2, Camera, FileText, Keyboard, ShieldCheck } from "lucide-react";
 import { Button, Card, Badge } from "@/components/ui/Primitives";
-import { useOcrExtraction, useSubmitUsn } from "@/lib/query/hooks";
+import { useCaptureManualUsn, useConfirmUsn, useExtractUsn } from "@/lib/query/hooks";
 import type { Site } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -12,34 +12,47 @@ type Method = "manual" | "bill" | "payment_proof";
 export function UsnCaptureFlow({ site, mobile = false }: { site: Site; mobile?: boolean }) {
   const [method, setMethod] = useState<Method>("manual");
   const [manualValue, setManualValue] = useState(site.usn ?? "");
-  const [extracted, setExtracted] = useState<{ extractedUsn: string; confidence: number; sourceLabel: string } | null>(null);
+  const [editableValue, setEditableValue] = useState("");
   const [confirmed, setConfirmed] = useState(false);
-  const ocr = useOcrExtraction();
-  const submit = useSubmitUsn(site.id);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  async function runOcr(kind: "bill" | "payment_proof") {
+  const captureManual = useCaptureManualUsn(site.id);
+  const extract = useExtractUsn(site.id);
+  const confirm = useConfirmUsn(site.id);
+
+  function pickFile(kind: "bill" | "payment_proof") {
     setMethod(kind);
-    setExtracted(null);
-    setConfirmed(false);
-    const result = await ocr.mutateAsync(kind);
-    setExtracted(result);
+    fileInputRef.current?.click();
   }
 
-  const valueToConfirm = method === "manual" ? manualValue : extracted?.extractedUsn ?? "";
+  async function onFileSelected(kind: "bill" | "payment_proof", file: File) {
+    const preview = await extract.mutateAsync({ kind, file });
+    setEditableValue(preview.usn ?? "");
+  }
+
+  const valueToConfirm = method === "manual" ? manualValue : editableValue;
+  const confirming = captureManual.isPending || confirm.isPending;
+  const finalUsn = captureManual.data?.usn ?? confirm.data?.usn ?? site.usn;
 
   async function handleConfirm() {
     if (!valueToConfirm) return;
-    await submit.mutateAsync({ usn: valueToConfirm, method: method === "manual" ? "manual" : `${method}_ocr` as const });
+    if (method === "manual") {
+      await captureManual.mutateAsync(valueToConfirm);
+    } else if (extract.data) {
+      await confirm.mutateAsync({ uploadId: extract.data.uploadId, confirmedUsn: valueToConfirm });
+    } else {
+      return;
+    }
     setConfirmed(true);
   }
 
-  if (submit.isSuccess || confirmed || site.usnStatus === "confirmed") {
+  if (confirmed || site.usnStatus === "confirmed") {
     return (
       <Card className="flex items-start gap-3 p-4">
         <ShieldCheck size={20} strokeWidth={1.75} className="mt-0.5 text-blue" aria-hidden="true" />
         <div>
           <p className="font-medium text-ink">USN confirmed</p>
-          <p className="mt-1 font-mono tabular text-sm text-ink-soft">{submit.data?.usn ?? site.usn}</p>
+          <p className="mt-1 font-mono tabular text-sm text-ink-soft">{finalUsn}</p>
         </div>
       </Card>
     );
@@ -47,10 +60,22 @@ export function UsnCaptureFlow({ site, mobile = false }: { site: Site; mobile?: 
 
   return (
     <div className={cn("space-y-4", mobile && "max-w-md")}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) void onFileSelected(method === "payment_proof" ? "payment_proof" : "bill", file);
+        }}
+      />
       <div className={cn("grid gap-2", mobile ? "grid-cols-1" : "grid-cols-3")}>
         <MethodButton icon={Keyboard} label="Manual entry" active={method === "manual"} onClick={() => setMethod("manual")} mobile={mobile} />
-        <MethodButton icon={FileText} label="Electricity bill OCR" active={method === "bill"} onClick={() => runOcr("bill")} mobile={mobile} />
-        <MethodButton icon={Camera} label="Payment proof OCR" active={method === "payment_proof"} onClick={() => runOcr("payment_proof")} mobile={mobile} />
+        <MethodButton icon={FileText} label="Electricity bill OCR" active={method === "bill"} onClick={() => pickFile("bill")} mobile={mobile} />
+        <MethodButton icon={Camera} label="Payment proof OCR" active={method === "payment_proof"} onClick={() => pickFile("payment_proof")} mobile={mobile} />
       </div>
 
       <Card className="p-4">
@@ -67,15 +92,30 @@ export function UsnCaptureFlow({ site, mobile = false }: { site: Site; mobile?: 
               className="w-full rounded-[var(--radius-app)] border border-line bg-paper px-3 py-3 font-mono tabular text-base text-ink outline-none focus:border-blue"
             />
           </div>
-        ) : ocr.isPending ? (
+        ) : extract.isPending ? (
           <p className="text-sm text-ink-soft">Running OCR extraction…</p>
-        ) : extracted ? (
+        ) : extract.data ? (
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Extracted from {extracted.sourceLabel}</p>
-            <p className="mt-1 font-mono tabular text-lg text-ink">{extracted.extractedUsn}</p>
-            <Badge tone={extracted.confidence > 0.85 ? "blue" : "amber"} className="mt-2">
-              OCR confidence {Math.round(extracted.confidence * 100)}%
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
+              Extracted from {method === "bill" ? "electricity bill" : "payment proof"}
+            </p>
+            <Badge tone={extract.data.extractionStatus === "extracted" ? "blue" : "amber"} className="mt-2">
+              {extract.data.extractionStatus === "extracted"
+                ? "USN found"
+                : extract.data.extractionStatus === "not_found"
+                  ? "No USN detected — enter or correct below"
+                  : "Extraction failed — enter or correct below"}
             </Badge>
+            <label htmlFor="usn-extracted" className="mt-3 mb-1 block text-sm font-medium text-ink">
+              USN
+            </label>
+            <input
+              id="usn-extracted"
+              value={editableValue}
+              onChange={(e) => setEditableValue(e.target.value)}
+              placeholder="USN123456789"
+              className="w-full rounded-[var(--radius-app)] border border-line bg-paper px-3 py-3 font-mono tabular text-base text-ink outline-none focus:border-blue"
+            />
             <p className="mt-3 text-sm text-ink-soft">Confirm this value before it is stored against the site record.</p>
           </div>
         ) : (
@@ -83,8 +123,8 @@ export function UsnCaptureFlow({ site, mobile = false }: { site: Site; mobile?: 
         )}
       </Card>
 
-      <Button onClick={handleConfirm} disabled={!valueToConfirm || submit.isPending} className={cn(mobile && "w-full")}>
-        <CheckCircle2 size={15} strokeWidth={1.75} /> {submit.isPending ? "Confirming…" : "Confirm & store USN"}
+      <Button onClick={handleConfirm} disabled={!valueToConfirm || confirming} className={cn(mobile && "w-full")}>
+        <CheckCircle2 size={15} strokeWidth={1.75} /> {confirming ? "Confirming…" : "Confirm & store USN"}
       </Button>
     </div>
   );

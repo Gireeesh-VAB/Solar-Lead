@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getTenant } from "@/lib/api/client";
+import { getTenantServer as getTenant } from "@/lib/api/serverFetch";
 import { PageHeader } from "@/components/ui/Primitives";
 import { TenantDetailClient } from "./TenantDetailClient";
 

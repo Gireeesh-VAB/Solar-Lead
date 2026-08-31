@@ -236,6 +236,40 @@ def reject_utilisation_factor_proposal(proposal_id: str, rejected_by: str) -> di
         }
 
 
+def list_utilisation_factor_proposals() -> list[dict]:
+    """Closes a real gap found during a frontend/backend sync audit:
+    approve/reject existed with no way to list what's waiting for
+    review. Newest first. Same "closest honest field" mapping this
+    module's router already documents for the single-item action
+    responses: the frontend imagines a per-jurisdiction remote-vs-
+    measured variance record; UtilisationFactorProposal tracks a
+    per-site-type utilisation-factor correction instead — site_type
+    maps into the jurisdiction slot, never a fabricated jurisdiction."""
+    with session_scope() as session:
+        stmt = select(UtilisationFactorProposal).order_by(UtilisationFactorProposal.created_at.desc())
+        rows = list(session.scalars(stmt))
+        return [
+            {
+                "id": p.id,
+                "jurisdiction": p.site_type,
+                "metric": "utilisation_factor",
+                "remote_value": p.current_factor,
+                "measured_value": p.proposed_factor,
+                "variance_pct": (
+                    (p.proposed_factor - p.current_factor) / p.current_factor * 100.0
+                    if p.current_factor
+                    else 0.0
+                ),
+                "sample_size": p.sample_count,
+                "proposed_adjustment": f"utilisation_factor {p.current_factor:.3f} -> {p.proposed_factor:.3f}",
+                "status": p.status,
+                "proposed_at": p.created_at,
+                "proposed_by": "system:calibration",
+            }
+            for p in rows
+        ]
+
+
 def get_variance_distribution(
     site_type: str | None = None,
     region: str | None = None,

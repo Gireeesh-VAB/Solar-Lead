@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
-import { getVendorJob } from "@/lib/api/client";
+import { getVendorJobServer as getVendorJob } from "@/lib/api/serverFetch";
 import { Card, PageHeader } from "@/components/ui/Primitives";
 import { formatDate } from "@/lib/utils";
 import { DisputeAction } from "./DisputeAction";

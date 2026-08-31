@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { FileText, ShieldCheck, ShieldAlert, ShieldQuestion, Wallet } from "lucide-react";
-import { getVendorProfile } from "@/lib/api/client";
+import { getVendorProfileServer as getVendorProfile } from "@/lib/api/serverFetch";
 import { Card, PageHeader } from "@/components/ui/Primitives";
 import { formatDate } from "@/lib/utils";
 
@@ -16,7 +16,11 @@ const VERIFICATION_STYLE = {
 } as const;
 
 export default async function VendorProfilePage() {
-  const profile = await getVendorProfile();
+  // Falls through to a blank render rather than crashing on an
+  // unauthenticated SSR pass — the layout's client-side AuthGuard redirects
+  // to /login a moment after hydration in that case.
+  const profile = await getVendorProfile().catch(() => null);
+  if (!profile) return null;
   const verification = VERIFICATION_STYLE[profile.verificationStatus];
 
   return (

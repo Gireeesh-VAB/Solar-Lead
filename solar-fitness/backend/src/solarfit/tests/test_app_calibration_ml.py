@@ -112,6 +112,54 @@ def test_approve_calibration_proposal_requires_admin_role(
 
 
 # ---------------------------------------------------------------------------
+# List endpoints — closes the "approve/reject with no way to list" gap
+# ---------------------------------------------------------------------------
+
+
+def test_list_calibration_proposals_requires_admin_role(client, calibration_ml_session_factory, make_auth_header):
+    response = client.get("/app/admin/calibration-proposals", headers=make_auth_header(role="customer"))
+    assert response.status_code == 403
+
+
+def test_list_calibration_proposals_returns_camelcase(client, calibration_ml_session_factory, make_auth_header):
+    proposal_id = _make_proposal(calibration_ml_session_factory)
+    headers = make_auth_header(role="admin")
+
+    response = client.get("/app/admin/calibration-proposals", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["id"] == proposal_id
+    assert body[0]["jurisdiction"] == "ROOFTOP_RESIDENTIAL"  # documented closest-honest-field mapping
+    assert body[0]["status"] == "proposed"
+    assert body[0]["sampleSize"] == 25
+    assert "proposedAt" in body[0]
+
+
+def test_list_model_versions_requires_admin_role(client, calibration_ml_session_factory, make_auth_header):
+    response = client.get("/app/admin/model-versions", headers=make_auth_header(role="customer"))
+    assert response.status_code == 403
+
+
+def test_list_model_versions_returns_camelcase(
+    client, calibration_ml_session_factory, fake_object_storage, make_auth_header
+):
+    version_id = _make_model_version(calibration_ml_session_factory, fake_object_storage)
+    headers = make_auth_header(role="admin")
+
+    response = client.get("/app/admin/model-versions", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["id"] == version_id
+    assert body[0]["status"] == "proposed"
+    assert isinstance(body[0]["metrics"], list)
+    assert "proposedAt" in body[0]
+
+
+# ---------------------------------------------------------------------------
 # Calibration proposals
 # ---------------------------------------------------------------------------
 

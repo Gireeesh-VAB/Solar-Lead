@@ -81,3 +81,73 @@ def list_assessments(
     if owner_org is not None:
         stmt = stmt.where(AssessmentRow.owner_org == owner_org)
     return list(session.scalars(stmt))
+
+
+def get_latest_by_site(session: Session, site_id: str) -> AssessmentRow | None:
+    """Closes a real gap found during a frontend/backend sync audit:
+    Site.latestAssessment, PortfolioSummary.totalCapacityKwp/
+    verdictBreakdown, and CompositeSite.aggregateCapacityKwp were all
+    stubbed to None/0 with a "once the assessments table lands" TODO —
+    it landed with omkar's merge, this is the lookup that unblocks all
+    four."""
+    stmt = (
+        select(AssessmentRow)
+        .where(AssessmentRow.site_id == site_id)
+        .order_by(AssessmentRow.created_at.desc())
+        .limit(1)
+    )
+    return session.scalars(stmt).first()
+
+
+def confidence_label(score: float | None, confidence: float) -> str:
+    """Same bucketing routers/app_assessments.py's own _confidence_label
+    already established (N/A when there's no score, High >= 0.7,
+    Medium >= 0.4, else Low) — shared here so every /app/* surface that
+    renders a persisted assessment (site detail, portfolio, composites,
+    checks) applies the identical rule rather than three near-copies
+    drifting apart."""
+    if score is None:
+        return "N/A"
+    if confidence >= 0.7:
+        return "High"
+    if confidence >= 0.4:
+        return "Medium"
+    return "Low"
+
+
+def binding_constraint_dict(row: AssessmentRow) -> dict:
+    """Same synthesis routers/app_assessments.py's own
+    _binding_constraint_out already established: look the binding
+    constraint's name up in the stored ceiling list for its real
+    reason/kind; gate failures and "insufficient_data:..." sentinels
+    aren't in that list, so fall back to the first matching reason
+    string rather than crashing on a lookup miss."""
+    name = row.binding_constraint
+    for ceiling in (row.capacity or {}).get("ceilings", []):
+        if ceiling.get("constraint") == name:
+            return {"name": name, "reason": ceiling.get("reason", ""), "kind": ceiling.get("kind", "physical")}
+    detail = next((r for r in row.reasons if name.split(":")[-1] in r), row.reasons[0] if row.reasons else "")
+    return {"name": name, "reason": detail, "kind": "physical"}
+
+
+def to_frontend_assessment_dict(row: AssessmentRow) -> dict:
+    """The nested Assessment shape lib/types.ts's Site.latestAssessment
+    (and CompositeSite/PortfolioSummary's capacity aggregates) expect —
+    distinct from AppAssessmentResponse in routers/app_assessments.py,
+    which is the FLAT shape for POST /app/assessments/{id}'s own
+    response. Same underlying row, two different frontend contracts."""
+    return {
+        "id": row.id,
+        "site_id": row.site_id,
+        "verdict": row.verdict,
+        "capacity_kwp": (row.capacity or {}).get("recommended_kwp") or 0.0,
+        "confidence": confidence_label(row.score, row.confidence),
+        "binding_constraint": binding_constraint_dict(row),
+        "reasons": row.reasons,
+        "ceiling_ledger": [],
+        "panorama_url": row.panorama_url,
+        "ml_suitability_score": row.ml_suitability_score,
+        "cache": {"cache_hit": row.cache_hit},
+        "assessed_at": row.created_at.isoformat(),
+        "model_version": row.engine_version,
+    }

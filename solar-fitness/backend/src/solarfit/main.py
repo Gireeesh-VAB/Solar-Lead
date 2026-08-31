@@ -11,9 +11,11 @@ from solarfit.routers import (
     app_admin_customers,
     app_admin_engine,
     app_admin_platform,
+    app_admin_vendors,
     app_assessments,
     app_auth,
     app_calibration_ml,
+    app_checks,
     app_imports,
     app_jurisdictions,
     app_sites,
@@ -49,10 +51,12 @@ app.include_router(app_admin_platform.router)
 app.include_router(app_admin_engine.router)
 app.include_router(app_vendor.router)
 app.include_router(app_admin_customers.router)
+app.include_router(app_admin_vendors.router)
 app.include_router(app_jurisdictions.router)
 app.include_router(app_calibration_ml.router)
 app.include_router(app_usn.router)
 app.include_router(app_assessments.router)
+app.include_router(app_checks.router)
 
 
 @app.get("/health")

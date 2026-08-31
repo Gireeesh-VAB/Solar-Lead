@@ -85,15 +85,25 @@ export function useJurisdictions() {
   return useQuery({ queryKey: ["jurisdictions"], queryFn: api.listJurisdictions });
 }
 
-export function useOcrExtraction() {
-  return useMutation({ mutationFn: (kind: "bill" | "payment_proof") => api.runOcrExtraction(kind) });
-}
-
-export function useSubmitUsn(siteId: string) {
+export function useCaptureManualUsn(siteId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { usn: string; method: "manual" | "bill_ocr" | "payment_proof_ocr" }) =>
-      api.submitUsn(siteId, input.usn, input.method),
+    mutationFn: (usn: string) => api.captureManualUsn(siteId, usn),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["site", siteId] }),
+  });
+}
+
+export function useExtractUsn(siteId: string) {
+  return useMutation({
+    mutationFn: (input: { kind: "bill" | "payment_proof"; file: File }) =>
+      input.kind === "bill" ? api.extractUsnFromBill(siteId, input.file) : api.extractUsnFromPaymentProof(siteId, input.file),
+  });
+}
+
+export function useConfirmUsn(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { uploadId: string; confirmedUsn: string }) => api.confirmUsn(siteId, input.uploadId, input.confirmedUsn),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["site", siteId] }),
   });
 }

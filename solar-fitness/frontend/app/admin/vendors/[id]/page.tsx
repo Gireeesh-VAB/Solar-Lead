@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getAdminVendor } from "@/lib/api/client";
+import { getAdminVendorServer as getAdminVendor } from "@/lib/api/serverFetch";
 import { PageHeader } from "@/components/ui/Primitives";
 import { VendorDetailClient } from "./VendorDetailClient";
 

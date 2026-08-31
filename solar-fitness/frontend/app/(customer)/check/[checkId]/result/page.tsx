@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Loader2, MapPin } from "lucide-react";
-import { getCheck } from "@/lib/api/client";
+import { getCheckServer as getCheck } from "@/lib/api/serverFetch";
 import { VERDICT_EXPLAINER } from "@/lib/fixtures/customer";
 import { VerdictChip } from "@/components/ui/VerdictChip";
 import { ConfidenceMeter } from "@/components/ui/ConfidenceMeter";

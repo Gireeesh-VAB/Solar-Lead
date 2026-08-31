@@ -6,6 +6,9 @@ import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/Primitives";
+import { signup } from "@/lib/api/auth";
+import { ApiError } from "@/lib/api/fetchClient";
+import { ROLE_LANDING, type PortalRole } from "@/lib/auth/session";
 
 const schema = z.object({
   name: z.string().min(2, "Enter your name."),
@@ -18,6 +21,7 @@ type FormValues = z.infer<typeof schema>;
 export function SignupForm() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -27,10 +31,16 @@ export function SignupForm() {
     defaultValues: { name: "", email: "", phone: "", password: "" },
   });
 
-  const onSubmit = handleSubmit(async () => {
+  const onSubmit = handleSubmit(async (values) => {
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 500));
-    router.push("/home");
+    setFormError(null);
+    try {
+      const session = await signup(values);
+      router.push(ROLE_LANDING[session.role as PortalRole] ?? "/home");
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      setSubmitting(false);
+    }
   });
 
   return (
@@ -111,12 +121,14 @@ export function SignupForm() {
           </p>
         )}
       </div>
+      {formError && (
+        <p role="alert" className="text-sm" style={{ color: "var(--bad)" }}>
+          {formError}
+        </p>
+      )}
       <Button type="submit" className="w-full" disabled={submitting}>
         {submitting ? "Creating your account…" : "Create account"}
       </Button>
-      <p className="text-center text-xs text-ink-faint">
-        Demo build — this creates a mock account and signs you in against sample data.
-      </p>
     </form>
   );
 }

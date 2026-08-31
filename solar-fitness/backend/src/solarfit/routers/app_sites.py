@@ -6,16 +6,13 @@ duplicating their logic) behind response models that match lib/types.ts
 field-for-field. Every route requires current_user() and is scoped to
 the caller's own owner_org.
 
-Real, documented gaps in this pass, not silently guessed at:
-  - Site.latestAssessment and CompositeSite.aggregateCapacityKwp need
-    the `assessments` table, which is omkar's stream and doesn't exist
-    yet — both return None/0 with a clear comment at the exact line
-    that needs updating once his migration lands.
-  - PortfolioSummary.activeJobs needs keerthana's `vendor_jobs` table,
-    same situation — returns 0 until then.
-  - getSiteHistory's "assessment" HistoryEvent kind is the same
-    dependency — the union query below is written to be extended with
-    one more branch, not restructured, once the table exists.
+Site.latestAssessment, PortfolioSummary.totalCapacityKwp/verdictBreakdown/
+activeJobs, CompositeSite.aggregateCapacityKwp, and getSiteHistory's
+"assessment" event kind all originally shipped as documented 0/None
+placeholders waiting on omkar's `assessments` table and keerthana's
+`vendor_jobs` table — both landed via merge, and this file was updated
+to read them for real (see repositories/assessments.py::get_latest_by_site/
+to_frontend_assessment_dict, repositories/vendors.py::count_active_jobs_for_sites).
 """
 
 from __future__ import annotations
@@ -32,10 +29,13 @@ from sqlalchemy.orm import Session
 from solarfit.auth_users import AuthenticatedUser, current_user
 from solarfit.db import get_session
 from solarfit.domain.site import RoofSiteType, Site
-from solarfit.providers import solar_api
+from solarfit.providers import manual, solar_api
+from solarfit.providers.validation import GeometryRejected
+from solarfit.repositories import assessments as assessments_repo
 from solarfit.repositories import calibration as calibration_repo
 from solarfit.repositories import sites as repo
 from solarfit.repositories import usn_uploads as usn_uploads_repo
+from solarfit.repositories import vendors as vendors_repo
 from solarfit.routers.sites import SiteCreate, create_site_core
 
 router = APIRouter(prefix="/app", tags=["app-sites"])
@@ -62,6 +62,50 @@ class GeoPointOut(_CamelModel):
     lng: float
 
 
+class BindingConstraintOut(_CamelModel):
+    name: str
+    reason: str
+    kind: str
+
+
+class CacheProvenanceOut(_CamelModel):
+    cache_hit: bool
+
+
+class AssessmentOut(_CamelModel):
+    id: str
+    site_id: str
+    verdict: str
+    capacity_kwp: float
+    confidence: str
+    binding_constraint: BindingConstraintOut | None
+    reasons: list[str]
+    ceiling_ledger: list[dict] = []
+    panorama_url: str | None = None
+    ml_suitability_score: float | None = None
+    cache: CacheProvenanceOut
+    assessed_at: str
+    model_version: str
+
+
+def _assessment_out(row) -> AssessmentOut:
+    data = assessments_repo.to_frontend_assessment_dict(row)
+    return AssessmentOut(
+        id=data["id"],
+        site_id=data["site_id"],
+        verdict=data["verdict"],
+        capacity_kwp=data["capacity_kwp"],
+        confidence=data["confidence"],
+        binding_constraint=BindingConstraintOut(**data["binding_constraint"]) if data["binding_constraint"] else None,
+        reasons=data["reasons"],
+        panorama_url=data["panorama_url"],
+        ml_suitability_score=data["ml_suitability_score"],
+        cache=CacheProvenanceOut(**data["cache"]),
+        assessed_at=data["assessed_at"],
+        model_version=data["model_version"],
+    )
+
+
 class SiteOut(_CamelModel):
     id: str
     name: str
@@ -73,7 +117,7 @@ class SiteOut(_CamelModel):
     boundary: list[GeoPointOut] | None = None
     created_at: str
     updated_at: str
-    latest_assessment: dict | None = None
+    latest_assessment: AssessmentOut | None = None
     usn_status: str
     usn: str | None = None
     tags: list[str]
@@ -134,6 +178,10 @@ class CompositeSiteCreate(_CamelModel):
     member_site_ids: list[str] = Field(min_length=1)
 
 
+class SaveBoundaryRequest(_CamelModel):
+    points: list[GeoPointOut] = Field(min_length=3)
+
+
 # --------------------------------------------------------------------- #
 # helpers
 # --------------------------------------------------------------------- #
@@ -150,8 +198,9 @@ def _boundary_points(site: Site) -> list[GeoPointOut] | None:
     return [GeoPointOut(lat=c[1], lng=c[0]) for c in coords]
 
 
-def _site_out(site: Site, row: repo.SiteRow) -> SiteOut:
+def _site_out(session: Session, site: Site, row: repo.SiteRow) -> SiteOut:
     lng, lat = site.centroid["coordinates"]
+    latest = assessments_repo.get_latest_by_site(session, site.id)
     return SiteOut(
         id=site.id,
         name=site.name,
@@ -163,13 +212,21 @@ def _site_out(site: Site, row: repo.SiteRow) -> SiteOut:
         boundary=_boundary_points(site),
         created_at=site.created_at.isoformat(),
         updated_at=row.updated_at.isoformat(),
-        # TODO(omkar): once the `assessments` table lands, look up this
-        # site's most recent row from it here instead of None.
-        latest_assessment=None,
+        latest_assessment=_assessment_out(latest) if latest else None,
         usn_status="confirmed" if site.usn else "not_started",
         usn=site.usn.usn if site.usn else None,
         tags=row.tags or [],
     )
+
+
+def _polygon_from_points(points: list[GeoPointOut]) -> dict:
+    """Inverse of _boundary_points() above — closes the ring back up
+    (repeats the first point as the last) the way GeoJSON requires and
+    _boundary_points() itself strips off when reading."""
+    coords = [[p.lng, p.lat] for p in points]
+    if coords[0] != coords[-1]:
+        coords.append(coords[0])
+    return {"type": "Polygon", "coordinates": [coords]}
 
 
 def _owned_row_or_404(session: Session, site_id: str, owner_org: str) -> tuple[Site, repo.SiteRow]:
@@ -203,9 +260,8 @@ def list_sites(
 ) -> SiteListOut:
     """Mirrors the mock client's listSites() filtering/pagination exactly
     (lib/api/client.ts) so the frontend's site-inventory page needs no
-    changes to consume this for real. `verdict` always yields an empty
-    match today — every site's latestAssessment is None until omkar's
-    `assessments` table lands, which is the honest answer, not a bug."""
+    changes to consume this for real. `verdict` filters against the real
+    latest assessment now that the `assessments` table exists."""
     if not user.owner_org:
         return SiteListOut(items=[], total=0)
 
@@ -213,7 +269,7 @@ def list_sites(
     items = []
     for s in sites:
         row = session.get(repo.SiteRow, uuid.UUID(s.id))
-        items.append(_site_out(s, row))
+        items.append(_site_out(session, s, row))
 
     if q:
         needle = q.lower()
@@ -231,7 +287,7 @@ def list_sites(
     if state:
         items = [o for o in items if o.state == state]
     if verdict:
-        items = [o for o in items if o.latest_assessment and o.latest_assessment.get("verdict") == verdict]
+        items = [o for o in items if o.latest_assessment and o.latest_assessment.verdict == verdict]
 
     total = len(items)
     size = page_size or total or 1
@@ -247,19 +303,22 @@ def get_portfolio_summary(
     sites = repo.list_sites(session, owner_org=user.owner_org) if user.owner_org else []
 
     site_type_breakdown: dict[str, int] = {}
+    total_capacity_kwp = 0.0
+    verdict_breakdown: dict[str, int] = {}
     for s in sites:
         site_type_breakdown[s.site_type] = site_type_breakdown.get(s.site_type, 0) + 1
+        latest = assessments_repo.get_latest_by_site(session, s.id)
+        if latest is not None:
+            total_capacity_kwp += (latest.capacity or {}).get("recommended_kwp") or 0.0
+            verdict_breakdown[latest.verdict] = verdict_breakdown.get(latest.verdict, 0) + 1
+
+    active_jobs = vendors_repo.count_active_jobs_for_sites(session, [s.id for s in sites])
 
     return PortfolioSummaryOut(
         total_sites=len(sites),
-        # TODO(omkar): sum each site's latest assessment.capacityKwp once
-        # the `assessments` table exists — 0 is honest, not wrong, today.
-        total_capacity_kwp=0.0,
-        # TODO(omkar): tally verdicts from `assessments` the same way.
-        verdict_breakdown={},
-        # TODO(keerthana): count this owner_org's sites' vendor_jobs not
-        # yet `submitted` once the `vendor_jobs` table exists.
-        active_jobs=0,
+        total_capacity_kwp=total_capacity_kwp,
+        verdict_breakdown=verdict_breakdown,
+        active_jobs=active_jobs,
         site_type_breakdown=site_type_breakdown,
     )
 
@@ -272,7 +331,7 @@ def list_composites(
     if not user.owner_org:
         return []
     rows = repo.list_composite_sites(session, owner_org=user.owner_org)
-    return [_composite_out(r) for r in rows]
+    return [_composite_out(session, r) for r in rows]
 
 
 @router.post("/composites", response_model=CompositeSiteOut, status_code=status.HTTP_201_CREATED)
@@ -295,18 +354,21 @@ def create_composite(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
-    return _composite_out(row)
+    return _composite_out(session, row)
 
 
-def _composite_out(row: repo.CompositeSiteRow) -> CompositeSiteOut:
+def _composite_out(session: Session, row: repo.CompositeSiteRow) -> CompositeSiteOut:
+    aggregate_capacity_kwp = 0.0
+    for member_id in row.member_site_ids:
+        latest = assessments_repo.get_latest_by_site(session, member_id)
+        if latest is not None:
+            aggregate_capacity_kwp += (latest.capacity or {}).get("recommended_kwp") or 0.0
     return CompositeSiteOut(
         id=str(row.id),
         name=row.name,
         feeder_or_dt=row.feeder_or_dt,
         member_site_ids=row.member_site_ids,
-        # TODO(omkar): sum each member's latest assessment.capacityKwp
-        # once the `assessments` table exists.
-        aggregate_capacity_kwp=0.0,
+        aggregate_capacity_kwp=aggregate_capacity_kwp,
         created_at=row.created_at.isoformat(),
     )
 
@@ -344,7 +406,7 @@ def create_site(
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
 
     row = session.get(repo.SiteRow, uuid.UUID(site.id))
-    return _site_out(site, row)
+    return _site_out(session, site, row)
 
 
 @router.get("/sites/{site_id}", response_model=SiteOut)
@@ -354,7 +416,40 @@ def get_site(
     user: Annotated[AuthenticatedUser, Depends(current_user)],
 ) -> SiteOut:
     site, row = _owned_row_or_404(session, site_id, user.owner_org or "")
-    return _site_out(site, row)
+    return _site_out(session, site, row)
+
+
+@router.put("/sites/{site_id}/boundary", response_model=SiteOut)
+def save_boundary(
+    site_id: str,
+    payload: SaveBoundaryRequest,
+    session: Annotated[Session, Depends(get_session)],
+    user: Annotated[AuthenticatedUser, Depends(current_user)],
+) -> SiteOut:
+    """Closes a real gap found during a frontend/backend sync audit:
+    lib/api/client.ts's saveBoundary(siteId, points) had no matching
+    route. GEO-07/08 validated the same way create_site_core validates a
+    boundary at creation time (manual.resolve_manual), then persisted as
+    a new SITE-05 version via repositories/sites.py::new_geometry_version()
+    — never an overwrite, same discipline as every other geometry change."""
+    site, _row = _owned_row_or_404(session, site_id, user.owner_org or "")
+
+    boundary_geojson = _polygon_from_points(payload.points)
+    try:
+        validated = manual.resolve_manual(site, {"boundary": boundary_geojson})
+    except GeometryRejected as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+
+    updated_site = repo.new_geometry_version(
+        session,
+        site_id,
+        boundary=validated,
+        actor=user.email,
+        source="manual_edit",
+        geometry_source="manual_polygon",
+    )
+    updated_row = session.get(repo.SiteRow, uuid.UUID(site_id))
+    return _site_out(session, updated_site, updated_row)
 
 
 @router.get("/sites/{site_id}/history", response_model=list[HistoryEventOut])
@@ -364,9 +459,7 @@ def get_site_history(
     user: Annotated[AuthenticatedUser, Depends(current_user)],
 ) -> list[HistoryEventOut]:
     """Unions across every table that already records something that
-    happened to this site — no new generic event table. Extend with one
-    more branch (reading the `assessments` table) once omkar's stream
-    lands; don't restructure this function to do it."""
+    happened to this site — no new generic event table."""
     _site, _row = _owned_row_or_404(session, site_id, user.owner_org or "")
 
     events: list[HistoryEventOut] = []
@@ -418,6 +511,21 @@ def get_site_history(
                 timestamp=c.created_at.isoformat(),
                 kind="field_survey",
                 summary=f"Field survey recorded {c.measured_area_m2:.1f} m² usable area",
+            )
+        )
+
+    assessment_rows = session.scalars(
+        select(assessments_repo.AssessmentRow).where(assessments_repo.AssessmentRow.site_id == site_id)
+    )
+    for a in assessment_rows:
+        events.append(
+            HistoryEventOut(
+                id=a.id,
+                site_id=site_id,
+                actor="system:assessment",
+                timestamp=a.created_at.isoformat(),
+                kind="assessment",
+                summary=f"Assessment run — verdict {a.verdict}",
             )
         )
 
