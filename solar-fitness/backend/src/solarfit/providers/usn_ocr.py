@@ -27,13 +27,10 @@ Design notes (flagged, not silent):
     So extract_from_bill()/extract_from_payment_proof() DO have a
     persistence side effect (the evidence row + object-storage upload);
     only the confirmed *value* waits for a separate step.
-  - Persisting the confirmed usn onto Site.usn is the caller's job, via
-    repositories.sites.update_usn() (real as of the spec-compliance
-    audit's Phase 3 fix — sites.py now has a usn/usn_source column pair
-    and this function). Still not called from anywhere here: the HTTP
-    route that would call confirm_and_finalize() + update_usn() together
-    (POST /app/sites/{id}/usn/confirm) is out of this module's and this
-    fix's scope — see routers/app_sites.py's build plan.
+  - Persisting the confirmed usn onto Site.usn is the caller's job —
+    routers/app_usn.py's /confirm route calls confirm_and_finalize()
+    then repositories.sites.update_usn(), rather than this module
+    reaching into Person 1's file itself.
   - No jurisdiction-specific USN format spec exists anywhere in the
     source material — _validate_usn_format() is a placeholder length/
     charset check, not a real format rule. Override once one is known.
@@ -211,10 +208,10 @@ def confirm_and_finalize(upload_id: str, confirmed_usn: str, confirmed_by: str) 
     """USN-02/03's confirm-before-store step. Validates the (possibly
     operator-corrected) value and marks the evidence row confirmed.
     Persisting the result onto Site.usn is the caller's job, via
-    repositories.sites.update_usn() (real now — see module docstring).
-    confirmed_by is accepted now for the audit trail even though nothing
-    persists it beyond the evidence
-    row's status change yet."""
+    repositories.sites.update_usn() (now implemented — see
+    routers/app_usn.py's /confirm route, the one caller). confirmed_by
+    is accepted now for the audit trail even though nothing persists it
+    beyond the evidence row's status change yet."""
     del confirmed_by  # accepted for the audit-trail API shape; not yet persisted anywhere
 
     validated = _validate_usn_format(confirmed_usn)

@@ -187,6 +187,55 @@ def propose_utilisation_factor_update(site_type: str) -> dict | None:
         }
 
 
+def approve_utilisation_factor_proposal(proposal_id: str, approved_by: str) -> dict:
+    """Admin approval step for CAL-03's proposal — mirrors
+    repositories/ml_models.py::approve_version(). Does NOT write
+    packages/config-packs/*.yaml directly; CAL-03 stays propose-only,
+    approving here only flips the record's status for visibility/audit.
+    Raises ValueError on an unknown id or a proposal that isn't
+    currently "proposed" (can't re-approve/re-reject a decided one)."""
+    with session_scope() as session:
+        proposal = session.get(UtilisationFactorProposal, proposal_id)
+        if proposal is None:
+            raise ValueError(f"No utilisation_factor_proposals row for id={proposal_id}")
+        if proposal.status != "proposed":
+            raise ValueError(f"Proposal {proposal_id} is already {proposal.status}")
+
+        proposal.status = "approved"
+        proposal.reviewed_at = datetime.now(UTC)
+        proposal.reviewed_by = approved_by
+        session.commit()
+
+        return {
+            "proposal_id": proposal.id,
+            "site_type": proposal.site_type,
+            "status": proposal.status,
+            "reviewed_by": proposal.reviewed_by,
+        }
+
+
+def reject_utilisation_factor_proposal(proposal_id: str, rejected_by: str) -> dict:
+    """Counterpart to approve_utilisation_factor_proposal() above."""
+    with session_scope() as session:
+        proposal = session.get(UtilisationFactorProposal, proposal_id)
+        if proposal is None:
+            raise ValueError(f"No utilisation_factor_proposals row for id={proposal_id}")
+        if proposal.status != "proposed":
+            raise ValueError(f"Proposal {proposal_id} is already {proposal.status}")
+
+        proposal.status = "rejected"
+        proposal.reviewed_at = datetime.now(UTC)
+        proposal.reviewed_by = rejected_by
+        session.commit()
+
+        return {
+            "proposal_id": proposal.id,
+            "site_type": proposal.site_type,
+            "status": proposal.status,
+            "reviewed_by": proposal.reviewed_by,
+        }
+
+
 def get_variance_distribution(
     site_type: str | None = None,
     region: str | None = None,

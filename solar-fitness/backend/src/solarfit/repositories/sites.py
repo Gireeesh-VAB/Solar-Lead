@@ -143,11 +143,15 @@ class SiteRow(Base):
     state: Mapped[str | None] = mapped_column(String(255), nullable=True)
     tags: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
 
-    # USN-01..04 — the three capture paths (manual/bill OCR/payment-proof
-    # OCR) all converge on this one usn + usn_source pair. Scoped at the
-    # schema-validation layer (SITE-02, domain/schemas.py) to
-    # BILLING_LINKED_SITE_TYPES only; this column exists on every row
-    # regardless of site_type, same as address/district/state above.
+    # USN-01..06 (karthik + omkar, independently added and reconciled on
+    # merge — both sides landed the identical columns) — the three
+    # capture paths (manual/bill OCR/payment-proof OCR) all converge on
+    # this one usn + usn_source pair. Scoped at the schema-validation
+    # layer (SITE-02, domain/schemas.py) to BILLING_LINKED_SITE_TYPES
+    # only; this column exists on every row regardless of site_type,
+    # same as address/district/state above. The confirmed value only,
+    # not the USN-06 evidence trail (see repositories/usn_uploads.py for
+    # that).
     usn: Mapped[str | None] = mapped_column(String(64), nullable=True)
     usn_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
