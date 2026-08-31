@@ -36,17 +36,17 @@ jobs:
           version: "latest"
 
       - name: Sync dependencies
-        working-directory: apps/api
+        working-directory: backend
         run: uv sync --all-extras --dev
 
       - name: Lint
-        working-directory: apps/api
+        working-directory: backend
         run: uv run ruff check .
 
       - name: Run migrations
-        working-directory: apps/api
+        working-directory: backend
         run: uv run alembic upgrade head
 
       - name: Run tests
-        working-directory: apps/api
+        working-directory: backend
         run: uv run pytest

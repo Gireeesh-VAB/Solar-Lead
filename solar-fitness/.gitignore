@@ -9,5 +9,5 @@ __pycache__/
 dist/
 build/
 .DS_Store
-db/migrations/versions/__pycache__/
-infra/docker-compose.override.yml
+backend/db/migrations/versions/__pycache__/
+backend/infra/docker-compose.override.yml
