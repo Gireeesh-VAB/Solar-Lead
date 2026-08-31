@@ -6,8 +6,15 @@ that table doesn't exist (Person 1's repositories/sites.py is still a
 stub) — site_id is a plain indexed string for now; add the FK in a later
 migration once sites exists.
 
+Re-chained after merging karthik's branch: this used to revise
+9e903dd3f06b directly (both this and karthik's site_analysis_cache
+migration were independently numbered "0002" off the same parent,
+creating two Alembic heads) — now revises a9fdffad41ca instead, so the
+migration history is linear: site_analysis_cache -> usn_ocr_uploads ->
+calibration_tables -> ml_tables.
+
 Revision ID: c1a9f0e4b7d2
-Revises: 9e903dd3f06b
+Revises: a9fdffad41ca
 Create Date: 2026-08-26 18:40:00.000000
 
 """
@@ -20,7 +27,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "c1a9f0e4b7d2"
-down_revision: Union[str, Sequence[str], None] = "9e903dd3f06b"
+down_revision: Union[str, Sequence[str], None] = "a9fdffad41ca"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
