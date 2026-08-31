@@ -94,3 +94,24 @@ reference_irradiance_w_m2: 600
 # reading can't swing the yield implausibly far from the reference value.
 weather_refinement_multiplier_bounds: [0.7, 1.3]
 
+# VIS-04 — below this self-reported confidence, a vision-refinement
+# response is treated as insufficient_data rather than trusted.
+# Placeholder. Read by Person 3's providers/vision.py.
+vision_min_confidence: 0.3
+
+# OBS-03/GEO-07 — an obstacle's geodesic area (m^2) must be at least this
+# large to be plausible; smaller is treated as noise, not a real
+# detection. Placeholder. Read by Person 3's providers/vision.py.
+min_obstacle_area_m2: 0.25
+
+# OBS-03/GEO-07 — an obstacle's area, as a fraction of its boundary's own
+# area, above which it's implausibly large to be a real obstacle rather
+# than a mis-detected boundary. Placeholder. Read by Person 3's
+# providers/vision.py.
+max_obstacle_area_fraction_of_boundary: 0.5
+
+# VIZ-01 — points per side of the elevation grid sampled from the DSM
+# crop before triangulation; higher = finer mesh, more triangles.
+# Placeholder. Read by Person 3's engine/panorama.py.
+panorama_grid_resolution: 24
+

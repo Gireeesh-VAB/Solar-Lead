@@ -17,10 +17,11 @@ versioned SITE-05 mechanism as any other boundary change, so it's still
 fully auditable and reversible (OBS-06), never a silent overwrite.
 """
 
+import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from solarfit.domain.constraint import CapacityResult
 
@@ -40,6 +41,7 @@ class Obstacle(BaseModel):
     the same vision-LLM call used for VisionRefinement (OBS-01 — never a
     second crop, never a second call)."""
 
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))  # stable handle for OBS-06 rejection
     type: ObstacleType
     bounding_polygon: dict  # GeoJSON Polygon, validated per OBS-03 (GEO-07/08 rules)
     confidence: float

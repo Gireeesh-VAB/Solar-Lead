@@ -152,6 +152,30 @@ def get_subsidy_tier_cap(tier: str, *, pack: str = "rooftop_v1") -> float | None
     return caps.get(tier)
 
 
+def get_vision_min_confidence(*, pack: str = "rooftop_v1") -> float:
+    """VIS-04. Below this self-reported confidence, treat a vision
+    refinement as insufficient_data rather than trusting it."""
+    return float(load_pack(pack)["vision_min_confidence"])
+
+
+def get_min_obstacle_area_m2(*, pack: str = "rooftop_v1") -> float:
+    """OBS-03/GEO-07. An obstacle's geodesic area must be at least this
+    large (m^2) to be plausible."""
+    return float(load_pack(pack)["min_obstacle_area_m2"])
+
+
+def get_max_obstacle_area_fraction_of_boundary(*, pack: str = "rooftop_v1") -> float:
+    """OBS-03/GEO-07. Above this fraction of the boundary's own area, an
+    obstacle is implausibly large to be real."""
+    return float(load_pack(pack)["max_obstacle_area_fraction_of_boundary"])
+
+
+def get_panorama_grid_resolution(*, pack: str = "rooftop_v1") -> int:
+    """VIZ-01. Points per side of the elevation grid sampled from the DSM
+    crop before triangulation."""
+    return int(load_pack(pack)["panorama_grid_resolution"])
+
+
 def pack_version(*, pack: str = "rooftop_v1") -> str:
     """CFG-02. Stamped on every stored result alongside the constraint
     pack version."""
