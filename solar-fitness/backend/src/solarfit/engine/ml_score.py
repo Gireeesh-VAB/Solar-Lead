@@ -353,6 +353,14 @@ def approve_model_version(version_id: str, approved_by: str) -> dict:
         return {"version_id": row.id, "version": row.version, "status": row.status}
 
 
+def reject_model_version(version_id: str, rejected_by: str) -> dict:
+    """Counterpart to approve_model_version() above."""
+    with session_scope() as session:
+        row = ml_models_repo.reject_version(session, version_id, rejected_by)
+        session.commit()
+        return {"version_id": row.id, "version": row.version, "status": row.status}
+
+
 def score_with_ml_model(
     boundary: dict, refinement: dict | None, weather: dict | None, params: dict | None = None
 ) -> MLScore:

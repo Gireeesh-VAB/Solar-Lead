@@ -65,7 +65,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
 from solarfit.db import Base
-from solarfit.domain.site import ShadingEstimate, Site
+from solarfit.domain.site import ShadingEstimate, Site, UsnCapture
 from solarfit.providers import validation
 
 __all__ = [
@@ -78,6 +78,7 @@ __all__ = [
     "new_geometry_version",
     "record_field_measurement",
     "restore_version",
+    "update_usn",
     "versions",
 ]
 
@@ -125,6 +126,13 @@ class SiteRow(Base):
     # boundary. JSONB rather than columns because ShadingEstimate is a
     # frozen contract Person 1 does not own the evolution of alone.
     shading: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    # USN-01..06 (Person 4/omkar) — added in a follow-up migration per
+    # this file's own note above ("Person 4 adds it in their own
+    # migration"). The confirmed value only, not the USN-06 evidence
+    # trail (see repositories/usn_uploads.py for that).
+    usn: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    usn_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     current_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
@@ -230,7 +238,7 @@ def _to_domain(row: SiteRow) -> Site:
         imagery_quality=row.imagery_quality,
         geometry_confidence=row.geometry_confidence,
         shading=ShadingEstimate(**row.shading) if row.shading else None,
-        usn=None,  # USN-01..06 is Person 4's; see the migration's note.
+        usn=UsnCapture(usn=row.usn, usn_source=row.usn_source) if row.usn is not None else None,
         created_at=row.created_at,
     )
 
@@ -319,6 +327,23 @@ def list_sites(
     if owner_org is not None:
         stmt = stmt.where(SiteRow.owner_org == owner_org)
     return [_to_domain(row) for row in session.scalars(stmt)]
+
+
+def update_usn(session: Session, site_id: str | uuid.UUID, *, usn: str, usn_source: str) -> Site:
+    """USN-04. Persists the confirmed usn onto the Site directly — a
+    plain column update, NOT a SITE-05 version (usn isn't geometry, so
+    it has no place in the boundary-history append-only log). Called by
+    providers/usn_ocr.py::confirm_and_finalize()'s caller once the
+    operator has confirmed a (possibly corrected) value."""
+    row = session.get(SiteRow, uuid.UUID(str(site_id)))
+    if row is None:
+        raise LookupError(f"site {site_id} not found")
+
+    row.usn = usn
+    row.usn_source = usn_source
+    row.updated_at = _now()
+    session.flush()
+    return _to_domain(row)
 
 
 # --------------------------------------------------------------------- #
