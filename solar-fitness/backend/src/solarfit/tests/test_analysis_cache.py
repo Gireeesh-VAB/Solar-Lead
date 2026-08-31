@@ -112,23 +112,38 @@ def test_get_or_create_analysis_cache_hit_makes_zero_downstream_calls(clean_key)
     ml.assert_not_called()
 
 
-class _FakeRefinement:
-    """Mimics VisionRefinement closely enough for the mocked pipeline:
-    a real .obstacles list attribute (get_or_create_analysis reads/
-    reassigns it around the OBS-04/05 apply_or_flag() call) plus
-    .model_dump() reflecting whatever .obstacles currently holds."""
+class _ImmediateAsyncResult:
+    """Fakes the Celery AsyncResult get_or_create_analysis() gets back
+    from .delay() — .get(timeout=...) just returns the value immediately,
+    since these tests mock .delay() itself rather than running a real
+    worker/broker."""
 
-    def __init__(self):
-        self.confidence = 0.5
-        self.obstruction_notes: list[str] = []
-        self.obstacles: list = []
+    def __init__(self, value):
+        self._value = value
 
-    def model_dump(self):
-        return {
-            "confidence": self.confidence,
-            "obstruction_notes": self.obstruction_notes,
-            "obstacles": self.obstacles,
-        }
+    def get(self, timeout=None):
+        return self._value
+
+
+# Plain dicts, matching what refine_vision_task/generate_panorama_task
+# actually return (each ends in a .model_dump() call — see
+# workers/celery_app.py) — not VisionRefinement/PanoramaResult objects,
+# since that's the real task boundary shape get_or_create_analysis()
+# receives from .get().
+_FAKE_REFINEMENT_DICT = {
+    "corrected_boundary": None,
+    "obstruction_notes": [],
+    "obstacles": [],
+    "confidence": 0.5,
+    "status": "ok",
+}
+_FAKE_PANORAMA_DICT = {
+    "url": "https://example.com/p2.glb",
+    "status": "ok",
+    "reason": None,
+    "generated_at": None,
+    "version": None,
+}
 
 
 def test_get_or_create_analysis_cache_miss_calls_the_full_pipeline_once(clean_key):
@@ -136,17 +151,14 @@ def test_get_or_create_analysis_cache_miss_calls_the_full_pipeline_once(clean_ke
 
     with (
         patch("solarfit.providers.solar_api.resolve_via_solar_api", return_value=BOUNDARY) as geo,
-        patch("solarfit.providers.vision.fetch_rgb_imagery", return_value=b"fake-geotiff-bytes") as fetch_img,
-        patch("solarfit.providers.vision.crop_to_boundary", return_value=b"fake-png-bytes") as crop,
         patch(
-            "solarfit.providers.vision.refine_with_vision_model",
-            return_value=_FakeRefinement(),
+            "solarfit.workers.celery_app.refine_vision_task.delay",
+            return_value=_ImmediateAsyncResult(_FAKE_REFINEMENT_DICT),
         ) as vis,
-        patch("solarfit.engine.obstacles.apply_or_flag", return_value=[]) as obs,
         patch("solarfit.providers.weather.fetch_weather", return_value={"cloud_cover": 20}) as weather,
         patch(
-            "solarfit.engine.panorama.generate_panorama",
-            return_value=type("P", (), {"url": "https://example.com/p2.glb"})(),
+            "solarfit.workers.celery_app.generate_panorama_task.delay",
+            return_value=_ImmediateAsyncResult(_FAKE_PANORAMA_DICT),
         ) as viz,
         patch(
             "solarfit.engine.ml_score.score_with_ml_model",
@@ -157,19 +169,14 @@ def test_get_or_create_analysis_cache_miss_calls_the_full_pipeline_once(clean_ke
 
     assert result.cache_hit is False  # CACHE-03: pipeline ran exactly once, on the miss
     geo.assert_called_once()
-    fetch_img.assert_called_once()
-    crop.assert_called_once()
-    vis.assert_called_once()
-    obs.assert_called_once()
-    synthetic_site = obs.call_args[0][0]
-    assert synthetic_site.boundary == BOUNDARY  # the synthetic Site carries the resolved boundary
-    # Item 3: placeholder identity fields must be an unmistakable poison
-    # marker, never a plausible-looking value like "unknown".
-    assert synthetic_site.owner_org == "SYNTHETIC_CACHE_SITE_NOT_REAL_DATA"
-    assert synthetic_site.jurisdiction == "SYNTHETIC_CACHE_SITE_NOT_REAL_DATA"
+    vis.assert_called_once_with(lat, lng, BOUNDARY)  # VIS-05: dispatched, not called inline
     weather.assert_called_once()
-    viz.assert_called_once()
+    viz.assert_called_once()  # VIZ-05: dispatched, not called inline
     ml.assert_called_once()
+    # Obstacle classification/apply is no longer done here (moved to
+    # orchestrate_assessment(), which has a real site to apply against) —
+    # the raw detection just passes through untouched.
+    assert result.vision_refinement.obstacles == []
 
 
 def test_get_or_create_analysis_cache_miss_runs_the_real_solar_api_provider(clean_key):
@@ -190,14 +197,14 @@ def test_get_or_create_analysis_cache_miss_runs_the_real_solar_api_provider(clea
             "solarfit.providers.solar_api.resolve_for_location",
             return_value=SolarApiResult(status="ok", boundary=BOUNDARY),
         ) as resolve_location,
-        patch("solarfit.providers.vision.fetch_rgb_imagery", return_value=b"fake-geotiff-bytes"),
-        patch("solarfit.providers.vision.crop_to_boundary", return_value=b"fake-png-bytes"),
-        patch("solarfit.providers.vision.refine_with_vision_model", return_value=_FakeRefinement()),
-        patch("solarfit.engine.obstacles.apply_or_flag", return_value=[]),
+        patch(
+            "solarfit.workers.celery_app.refine_vision_task.delay",
+            return_value=_ImmediateAsyncResult(_FAKE_REFINEMENT_DICT),
+        ),
         patch("solarfit.providers.weather.fetch_weather", return_value={"cloud_cover": 20}),
         patch(
-            "solarfit.engine.panorama.generate_panorama",
-            return_value=type("P", (), {"url": None})(),
+            "solarfit.workers.celery_app.generate_panorama_task.delay",
+            return_value=_ImmediateAsyncResult({**_FAKE_PANORAMA_DICT, "url": None}),
         ),
         patch(
             "solarfit.engine.ml_score.score_with_ml_model",
@@ -235,12 +242,15 @@ def test_get_or_create_analysis_recovers_from_concurrent_insert_race(clean_key):
             side_effect=IntegrityError("INSERT", {}, Exception("duplicate key value")),
         ),
         patch("solarfit.providers.solar_api.resolve_via_solar_api", return_value=BOUNDARY),
-        patch("solarfit.providers.vision.fetch_rgb_imagery", return_value=b"fake-geotiff-bytes"),
-        patch("solarfit.providers.vision.crop_to_boundary", return_value=b"fake-png-bytes"),
-        patch("solarfit.providers.vision.refine_with_vision_model", return_value=_FakeRefinement()),
-        patch("solarfit.engine.obstacles.apply_or_flag", return_value=[]),
+        patch(
+            "solarfit.workers.celery_app.refine_vision_task.delay",
+            return_value=_ImmediateAsyncResult(_FAKE_REFINEMENT_DICT),
+        ),
         patch("solarfit.providers.weather.fetch_weather", return_value={}),
-        patch("solarfit.engine.panorama.generate_panorama", return_value=type("P", (), {"url": None})()),
+        patch(
+            "solarfit.workers.celery_app.generate_panorama_task.delay",
+            return_value=_ImmediateAsyncResult({**_FAKE_PANORAMA_DICT, "url": None}),
+        ),
         patch(
             "solarfit.engine.ml_score.score_with_ml_model",
             return_value=type("M", (), {"score": None, "model_version": None})(),

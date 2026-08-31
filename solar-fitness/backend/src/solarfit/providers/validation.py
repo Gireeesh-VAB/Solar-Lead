@@ -25,27 +25,14 @@ from shapely.geometry.base import BaseGeometry
 
 from solarfit.domain.site import GeometrySource
 from solarfit.engine.projection import to_metric
+from solarfit.packs import config_pack
 
 __all__ = [
-    "MAX_CENTROID_DISTANCE_M",
-    "MAX_PLAUSIBLE_AREA_M2",
-    "MIN_PLAUSIBLE_AREA_M2",
     "GeometryRejected",
     "geometry_confidence",
     "validate_boundary",
     "validate_exclusion",
 ]
-
-# GEO-07 plausibility envelope. A rooftop smaller than a parking space or
-# larger than a stadium is a units error or a mis-traced neighbourhood,
-# not a roof. Deliberately wide — this rejects nonsense, it does not
-# second-guess a genuinely large industrial roof.
-MIN_PLAUSIBLE_AREA_M2 = 5.0
-MAX_PLAUSIBLE_AREA_M2 = 500_000.0
-
-# GEO-07 — a boundary this far from the site's own centroid means the
-# geocode and the trace disagree about which building we are looking at.
-MAX_CENTROID_DISTANCE_M = 500.0
 
 MIN_VERTICES = 3
 
@@ -90,18 +77,21 @@ def validate_boundary(boundary: dict, *, centroid: dict | None = None) -> BaseGe
 
     metric, epsg = to_metric(geom)
     area = metric.area
-    if area < MIN_PLAUSIBLE_AREA_M2:
+    min_area = config_pack.get_min_plausible_boundary_area_m2()
+    max_area = config_pack.get_max_plausible_boundary_area_m2()
+    if area < min_area:
         raise GeometryRejected(f"boundary area {area:.1f} m² is implausibly small")
-    if area > MAX_PLAUSIBLE_AREA_M2:
+    if area > max_area:
         raise GeometryRejected(f"boundary area {area:.1f} m² is implausibly large")
 
     if centroid:
         centre_metric, _ = to_metric(shape(centroid), epsg=epsg)
         distance = metric.centroid.distance(centre_metric)
-        if distance > MAX_CENTROID_DISTANCE_M:
+        max_distance = config_pack.get_max_centroid_distance_m()
+        if distance > max_distance:
             raise GeometryRejected(
                 f"boundary centre is {distance:.0f} m from the site centroid "
-                f"(limit {MAX_CENTROID_DISTANCE_M:.0f} m) — likely the wrong building"
+                f"(limit {max_distance:.0f} m) — likely the wrong building"
             )
 
     return geom
@@ -192,6 +182,24 @@ def geometry_confidence(
             score -= 0.10
         elif vertices >= 8:
             score += 0.05
+
+        # Area plausibility (GEO-09's fourth input — validate_boundary
+        # only ever uses the plausibility envelope as a hard reject, never
+        # as a graded signal). A trace that only barely cleared GEO-07's
+        # thresholds is still less trustworthy than one comfortably
+        # inside them, even though both passed.
+        try:
+            metric, _ = to_metric(geom)
+            area = metric.area
+        except (ValueError, TypeError):
+            area = None
+        if area is not None and area > 0:
+            min_area = config_pack.get_min_plausible_boundary_area_m2()
+            max_area = config_pack.get_max_plausible_boundary_area_m2()
+            near_lower_bound = area < min_area * 2
+            near_upper_bound = area > max_area / 2
+            if near_lower_bound or near_upper_bound:
+                score -= 0.05
 
     return round(min(1.0, max(0.0, score)), 3)
 

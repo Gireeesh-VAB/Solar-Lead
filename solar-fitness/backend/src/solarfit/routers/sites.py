@@ -111,13 +111,27 @@ def _read(session: Session, site: Site, *, note: str | None = None) -> SiteRead:
 # --------------------------------------------------------------------- #
 
 
-@router.post("", response_model=SiteRead, status_code=status.HTTP_201_CREATED)
-def create_site(
+def create_site_core(
     payload: SiteCreate,
-    session: Annotated[Session, Depends(get_session)],
-    owner_org: Annotated[str, Depends(current_org)],
-) -> SiteRead:
-    """SITE-01 + GEO-02. Create a site, optionally with a drawn boundary.
+    session: Session,
+    owner_org: str,
+    *,
+    address: str | None = None,
+    district: str | None = None,
+    state: str | None = None,
+    tags: list[str] | None = None,
+) -> tuple[Site, str | None]:
+    """The real work behind SITE-01 + GEO-02 — geometry resolution,
+    GEO-07/08 validation, SITE-02 schema check, persistence. Pulled out
+    of create_site() below so routers/app_sites.py's frontend-shaped
+    POST /app/sites can share it rather than duplicate it — same
+    behavior either way, this function's return value is the only
+    thing that changed, callers just get (site, resolution_note)
+    directly instead of it being folded into a SiteRead.
+
+    address/district/state/tags (karthik addition) are keyword-only and
+    optional — the existing POST /sites caller below never passes them,
+    unaffected; routers/app_sites.py's frontend-shaped create does.
 
     The boundary goes through GEO-07/08 validation before it is stored —
     a rejected trace is a 422, never a silently repaired polygon.
@@ -188,6 +202,20 @@ def create_site(
             detail="a site needs a centroid or a boundary to derive one from",
         )
 
+    # SITE-07 — probable-duplicate detection, previously wired into bulk
+    # import only (routers/imports.py::find_nearby_site); single-site
+    # creation never ran this check at all. A hit doesn't block creation
+    # here (there's no on_duplicate choice on this endpoint the way bulk
+    # import has one) — it surfaces as a note, same "flag, don't guess"
+    # discipline as every other resolution_note on this path.
+    from solarfit.routers.imports import find_nearby_site
+
+    duplicate = find_nearby_site(session, centroid, owner_org)
+    if duplicate is not None:
+        existing_site_id, distance_m = duplicate
+        duplicate_note = f"possible duplicate: existing site {existing_site_id} is {distance_m:.0f} m away"
+        resolution_note = f"{resolution_note}; {duplicate_note}" if resolution_note else duplicate_note
+
     confidence = (
         validation.geometry_confidence(
             source=geometry_source, imagery_date=imagery_date, boundary=boundary
@@ -234,8 +262,27 @@ def create_site(
         imagery_date=imagery_date,
         geometry_confidence=confidence,
         shading=shading,
+        address=address,
+        district=district,
+        state=state,
+        tags=tags,
+        usn=payload.usn,
+        usn_source=payload.usn_source,
         actor=owner_org,
     )
+    return site, resolution_note
+
+
+@router.post("", response_model=SiteRead, status_code=status.HTTP_201_CREATED)
+def create_site(
+    payload: SiteCreate,
+    session: Annotated[Session, Depends(get_session)],
+    owner_org: Annotated[str, Depends(current_org)],
+) -> SiteRead:
+    """SITE-01 + GEO-02. Create a site, optionally with a drawn boundary.
+    Thin wrapper over create_site_core() — see that function for the
+    actual logic."""
+    site, resolution_note = create_site_core(payload, session, owner_org)
     return _read(session, site, note=resolution_note)
 
 

@@ -214,27 +214,28 @@ def force_refresh(lat: float, lng: float, params: dict | None = None) -> None:
 def get_or_create_analysis(lat: float, lng: float, site_type: str, params: dict[str, Any] | None = None) -> AnalysisResult:
     """CACHE-02/03. See §12.1 for the reference shape this mirrors.
 
-    Day 1: the cache-hit path is fully real. Day 2: the VIS leg of the
-    cache-miss path is fully real too (fetch real Data Layers imagery,
-    crop, refine). Day 4: the OBS leg is wired in too — see the
-    synthetic-Site note below. GEO/weather/VIZ/ML are still stub-only
-    elsewhere in the codebase (owned by Person 1/2/4) — imported lazily
-    below so this module doesn't hard-fail at import time while they're
-    still stubs; each currently raises NotImplementedError, which is
-    expected until each is built out. Tests exercise this path with
-    those calls mocked.
+    VIS-05/VIZ-05: vision refinement and panorama generation run through
+    the real Celery worker (refine_vision_task/generate_panorama_task),
+    dispatched via .delay().get(timeout=...) rather than called inline —
+    this endpoint's own contract stays synchronous (the caller still gets
+    a full result back), but execution actually goes through the
+    worker/queue infrastructure those tasks exist for.
 
-    Synthetic Site note (Day 4/6): this cache is deliberately
-    site-independent (CACHE-01/03 — keyed on rounded lat/long, never on
-    site_id), so no real Site record exists at this point in the
-    pipeline. engine.obstacles.apply_or_flag() needs a Site, so one is
-    built inline here with a synthetic id and placeholder
-    name/owner_org/jurisdiction — apply_or_flag() only ever reads
-    .id/.boundary/.exclusions, so those placeholders are inert, never
-    persisted anywhere as real site data. The placeholder values are a
-    deliberately unmistakable poison marker (not "unknown"), so any
-    future code that starts reading these fields off a site built here
-    fails loudly/visibly rather than quietly trusting fake data.
+    Obstacle detection's raw output (OBS-01/02) rides along inside
+    refine_vision_task's structured-output call, same as before — but
+    OBS-03 validation and OBS-04/05's threshold split/auto-apply are
+    deliberately NOT done here any more (see history for the removed
+    synthetic-Site version of this). This cache is site-independent by
+    design (CACHE-01/03 — keyed on rounded lat/long, shared across every
+    tenant/site), while auto-applying an obstacle is inherently
+    site-specific (it writes one SITE-05 version onto one real site's
+    exclusions). Handing engine.obstacles.apply_or_flag() a fake,
+    non-persisted site id here silently broke OBS-04 — every write threw
+    (invalid UUID) and was swallowed by that function's own
+    "degrade to advisory on DB failure" handling, so auto-apply never
+    actually fired. Obstacle classification/persistence now happens in
+    routers/assessments.py::orchestrate_assessment(), which has the real
+    site and dispatches apply_obstacles_task with its real id.
     """
     params = params or {}
     lat_r, lng_r = round_latlng(lat, lng, precision=params.get("cache_precision"))
@@ -244,30 +245,24 @@ def get_or_create_analysis(lat: float, lng: float, site_type: str, params: dict[
         mark_reused(cached.reused_from_analysis_id)
         return cached
 
-    # Lazy imports: solar_api/panorama/ml_score are still stub-only
-    # elsewhere in the codebase (owned by Person 1/2/4). Importing here,
-    # not at module load time, means this file stays importable/testable
-    # today even though calling those specific functions for real still
-    # raises NotImplementedError until each is built out.
     from solarfit.engine.ml_score import score_with_ml_model
-    from solarfit.engine.obstacles import apply_or_flag
-    from solarfit.engine.panorama import generate_panorama
+    from solarfit.packs.config_pack import get_async_task_timeout_s
     from solarfit.providers.solar_api import resolve_via_solar_api
-    from solarfit.providers.vision import (
-        crop_to_boundary,
-        fetch_rgb_imagery,
-        refine_with_vision_model,
-    )
     from solarfit.providers.weather import fetch_weather
+    from solarfit.workers.celery_app import generate_panorama_task, refine_vision_task
+
+    timeout_s = get_async_task_timeout_s()
 
     # resolve_via_solar_api() only ever reads site.centroid on this code
     # path (no params["address"] is ever passed here) — this cache is
     # site-independent (CACHE-01/03), so there is no real Site yet to
     # hand it. A caller-supplied params["site"] is honoured when present
     # (e.g. a future caller that already has a real Site), otherwise a
-    # minimal synthetic one is built from (lat, lng) alone, same
-    # unmistakable-poison-marker discipline as the synthetic Site built
-    # a few lines below for apply_or_flag().
+    # minimal synthetic one is built from (lat, lng) alone — an
+    # unmistakable poison marker for its identity fields, never "unknown",
+    # so any future code that starts reading them off this object fails
+    # loudly rather than quietly trusting fake data. resolve_via_solar_api
+    # only ever reads .centroid here, so the poisoned fields are inert.
     geo_lookup_site = params.get("site") or Site(
         id=f"cache:{lat_r}:{lng_r}",
         site_type=site_type,
@@ -278,36 +273,16 @@ def get_or_create_analysis(lat: float, lng: float, site_type: str, params: dict[
         created_at=datetime.now(UTC),
     )
     boundary = resolve_via_solar_api(site=geo_lookup_site, params=params)  # GEO
-    imagery = fetch_rgb_imagery(lat, lng)  # real Solar API Data Layers RGB fetch (Day 2)
-    cropped = crop_to_boundary(imagery, boundary)  # real rasterio/GDAL crop (Day 2)
-    refinement = refine_with_vision_model(cropped, boundary)  # VIS, real (Day 2); OBS extends this Day 3
 
-    # This Site exists only to satisfy apply_or_flag()'s signature — no
-    # real Site record exists at this point in the cache-only pipeline
-    # (CACHE-01/03: keyed on lat/long, never on site_id). apply_or_flag()
-    # only ever reads .id/.boundary/.exclusions, so name/owner_org/
-    # jurisdiction are never real values a future caller should trust.
-    # Deliberately NOT "unknown" — an unmistakable poison marker instead,
-    # so if a future change ever reads one of these fields, the garbage
-    # value is obvious in logs/output rather than silently plausible.
-    # (A __getattribute__-raising guard was considered and rejected: it
-    # risks breaking Pydantic's own repr/model_dump/pytest's failure
-    # introspection for a problem that doesn't exist in the code today.)
-    synthetic_site = Site(
-        id=f"cache:{lat_r}:{lng_r}",
-        site_type=site_type,
-        name=_SYNTHETIC_PLACEHOLDER,
-        owner_org=_SYNTHETIC_PLACEHOLDER,
-        jurisdiction=_SYNTHETIC_PLACEHOLDER,
-        centroid=shapely_mapping(shapely_shape(boundary).centroid),
-        boundary=boundary,
-        created_at=datetime.now(UTC),
-    )
-    refinement.obstacles = apply_or_flag(synthetic_site, refinement.obstacles)  # OBS-04/05, real (Day 4)
+    # VIS-05/OBS-01/OBS-02 — real Celery dispatch, never inline.
+    refinement_dict = refine_vision_task.delay(lat, lng, boundary).get(timeout=timeout_s)
 
     weather = fetch_weather(lat=lat, lng=lng)
-    panorama = generate_panorama(boundary=boundary, weather=weather, params=params)  # VIZ
-    refinement_dict = refinement.model_dump() if hasattr(refinement, "model_dump") else refinement
+
+    # VIZ-05 — real Celery dispatch, never inline.
+    panorama_dict = generate_panorama_task.delay(boundary, weather, params).get(timeout=timeout_s)
+    panorama = PanoramaResult(**panorama_dict)
+
     ml_score = score_with_ml_model(boundary=boundary, refinement=refinement_dict, weather=weather, params=params)  # ML
 
     try:

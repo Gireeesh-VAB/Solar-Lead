@@ -89,6 +89,25 @@ def get_vision_min_confidence(*, pack: str = "rooftop_v1") -> float:
     return float(load_pack(pack)["vision_min_confidence"])
 
 
+def get_max_centroid_distance_m(*, pack: str = "rooftop_v1") -> float:
+    """GEO-07. A boundary this far from the site's own centroid means the
+    geocode and the trace disagree about which building this is."""
+    return float(load_pack(pack)["max_centroid_distance_m"])
+
+
+def get_min_plausible_boundary_area_m2(*, pack: str = "rooftop_v1") -> float:
+    """GEO-07. Below this, a boundary is a units error or a mis-traced
+    sliver, not a roof."""
+    return float(load_pack(pack)["min_plausible_boundary_area_m2"])
+
+
+def get_max_plausible_boundary_area_m2(*, pack: str = "rooftop_v1") -> float:
+    """GEO-07. Above this, a boundary is a mis-traced neighbourhood, not
+    a roof — deliberately wide, this rejects nonsense rather than
+    second-guessing a genuinely large industrial roof."""
+    return float(load_pack(pack)["max_plausible_boundary_area_m2"])
+
+
 def get_min_obstacle_area_m2(*, pack: str = "rooftop_v1") -> float:
     """OBS-03/GEO-07. An obstacle's geodesic area must be at least this
     large (m^2) to be plausible."""
@@ -177,6 +196,16 @@ def get_subsidy_tier_cap(tier: str, *, pack: str = "rooftop_v1") -> float | None
     return caps.get(tier)
 
 
+def get_async_task_timeout_s(*, pack: str = "rooftop_v1") -> float:
+    """VIS-05/VIZ-05/OBS-07. Seconds to wait on `.get()` for a dispatched
+    Celery task (vision refinement, obstacle apply, panorama generation)
+    before giving up — these run through the real worker/queue
+    infrastructure rather than inline, but the calling endpoint is still
+    synchronous, so this bounds how long a request can block on a
+    worker that's slow or unavailable."""
+    return float(load_pack(pack)["async_task_timeout_s"])
+
+
 def pack_version(*, pack: str = "rooftop_v1") -> str:
     """CFG-02. Stamped on every stored result alongside the constraint
     pack version."""
@@ -234,6 +263,34 @@ def get_calibration_sample_count_threshold(*, pack: str = "rooftop_v1") -> int:
     """CAL-03. Minimum labelled-record count for a site_type before a
     utilisation-factor update is proposed for approval."""
     return int(load_pack(pack)["calibration_sample_count_threshold"])
+
+
+def get_utilisation_factor_proposal_bounds(*, pack: str = "rooftop_v1") -> tuple[float, float]:
+    """CAL-03. Clamp on a proposed utilisation-factor correction — a
+    single batch of field surveys shouldn't be able to propose an
+    implausible factor outside this range, whatever the raw median ratio
+    says."""
+    low, high = load_pack(pack)["utilisation_factor_proposal_bounds"]
+    return float(low), float(high)
+
+
+def get_calibration_confidence_no_data(*, pack: str = "rooftop_v1") -> float:
+    """CAL-05. Neutral confidence figure when no calibration records
+    exist yet for a site_type/geometry_source — matches engine/
+    fitness.py's own "None means neutral" treatment of this input."""
+    return float(load_pack(pack)["calibration_confidence_no_data"])
+
+
+def get_calibration_confidence_high_variance(*, pack: str = "rooftop_v1") -> float:
+    """CAL-05. Confidence figure when the mean absolute variance exceeds
+    calibration_variance_threshold."""
+    return float(load_pack(pack)["calibration_confidence_high_variance"])
+
+
+def get_calibration_confidence_validated(*, pack: str = "rooftop_v1") -> float:
+    """CAL-05. Confidence figure when calibration records exist and
+    variance is within threshold."""
+    return float(load_pack(pack)["calibration_confidence_validated"])
 
 
 def get_usn_ocr_retention_days(*, pack: str = "rooftop_v1") -> int:

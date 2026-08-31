@@ -7,7 +7,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from solarfit.config import get_settings
-from solarfit.routers import app_auth, assessments, imports, sites
+from solarfit.routers import (
+    app_admin_engine,
+    app_admin_platform,
+    app_auth,
+    app_imports,
+    app_sites,
+    assessments,
+    imports,
+    sites,
+)
 
 app = FastAPI(title="Solar Site Fitness & Capacity Engine — Rooftop API")
 
@@ -28,6 +37,10 @@ app.include_router(sites.router)
 app.include_router(imports.router)
 app.include_router(assessments.router)
 app.include_router(app_auth.router)
+app.include_router(app_sites.router)
+app.include_router(app_imports.router)
+app.include_router(app_admin_platform.router)
+app.include_router(app_admin_engine.router)
 
 
 @app.get("/health")

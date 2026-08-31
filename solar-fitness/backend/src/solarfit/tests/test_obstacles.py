@@ -82,6 +82,7 @@ def test_apply_or_flag_splits_by_confidence_threshold():
     with (
         patch("solarfit.packs.config_pack.get_auto_apply_confidence_threshold", return_value=0.85),
         patch("solarfit.engine.obstacles.session_scope", _fake_session_scope),
+        patch("solarfit.repositories.sites.applied_obstacle_ids", return_value=set()),
         patch("solarfit.repositories.sites.new_geometry_version") as new_version,
         patch("solarfit.repositories.sites.get", return_value=site),
         patch("solarfit.engine.area.compute_usable_area_m2", return_value=42.0) as recompute,
@@ -109,6 +110,7 @@ def test_apply_or_flag_calls_force_refresh_on_successful_auto_apply():
     with (
         patch("solarfit.packs.config_pack.get_auto_apply_confidence_threshold", return_value=0.85),
         patch("solarfit.engine.obstacles.session_scope", _fake_session_scope),
+        patch("solarfit.repositories.sites.applied_obstacle_ids", return_value=set()),
         patch("solarfit.repositories.sites.new_geometry_version"),
         patch("solarfit.repositories.sites.get", return_value=site),
         patch("solarfit.engine.area.compute_usable_area_m2", return_value=42.0),
@@ -126,6 +128,7 @@ def test_apply_or_flag_degrades_to_advisory_on_db_failure():
     with (
         patch("solarfit.packs.config_pack.get_auto_apply_confidence_threshold", return_value=0.85),
         patch("solarfit.engine.obstacles.session_scope", _fake_session_scope),
+        patch("solarfit.repositories.sites.applied_obstacle_ids", return_value=set()),
         patch("solarfit.repositories.sites.new_geometry_version", side_effect=RuntimeError("db down")),
         patch("solarfit.engine.area.compute_usable_area_m2") as recompute,
     ):
@@ -144,6 +147,7 @@ def test_apply_or_flag_drops_invalid_obstacles():
     with (
         patch("solarfit.packs.config_pack.get_auto_apply_confidence_threshold", return_value=0.85),
         patch("solarfit.engine.obstacles.session_scope", _fake_session_scope),
+        patch("solarfit.repositories.sites.applied_obstacle_ids", return_value=set()),
         patch("solarfit.repositories.sites.new_geometry_version"),
         patch("solarfit.repositories.sites.get", return_value=site),
         patch("solarfit.engine.area.compute_usable_area_m2", return_value=42.0),
@@ -186,6 +190,54 @@ def test_apply_or_flag_site_without_boundary_is_all_advisory():
     recompute.assert_not_called()
 
 
+def test_apply_or_flag_skips_an_already_applied_obstacle():
+    """OBS-04 idempotency: the same detection can be replayed for this
+    site (repeat assessment call, or a different site reusing the same
+    cached location) — an obstacle this site's own history already shows
+    as applied must not be unioned into exclusions a second time, but
+    still reports .applied = True in the result."""
+    site = _site()
+    above = _obstacle_within_boundary(confidence=0.95)
+
+    with (
+        patch("solarfit.packs.config_pack.get_auto_apply_confidence_threshold", return_value=0.85),
+        patch("solarfit.engine.obstacles.session_scope", _fake_session_scope),
+        patch("solarfit.repositories.sites.applied_obstacle_ids", return_value={above.id}),
+        patch("solarfit.repositories.sites.new_geometry_version") as new_version,
+        patch("solarfit.engine.area.compute_usable_area_m2") as recompute,
+        patch("solarfit.repositories.analysis_cache.force_refresh") as force_refresh,
+    ):
+        result = apply_or_flag(site, [above])
+
+    assert result[0].applied is True
+    new_version.assert_not_called()  # nothing new to persist
+    recompute.assert_not_called()
+    force_refresh.assert_not_called()
+
+
+def test_apply_or_flag_applies_only_the_new_obstacle_alongside_an_already_applied_one():
+    site = _site()
+    already = _obstacle_within_boundary(confidence=0.95, obstacle_type="chimney")
+    new_one = _obstacle_within_boundary(confidence=0.95, obstacle_type="water_tank")
+
+    with (
+        patch("solarfit.packs.config_pack.get_auto_apply_confidence_threshold", return_value=0.85),
+        patch("solarfit.engine.obstacles.session_scope", _fake_session_scope),
+        patch("solarfit.repositories.sites.applied_obstacle_ids", return_value={already.id}),
+        patch("solarfit.repositories.sites.new_geometry_version") as new_version,
+        patch("solarfit.repositories.sites.get", return_value=site),
+        patch("solarfit.engine.area.compute_usable_area_m2", return_value=42.0),
+        patch("solarfit.repositories.analysis_cache.force_refresh"),
+    ):
+        result = apply_or_flag(site, [already, new_one])
+
+    applied = {o.id: o.applied for o in result}
+    assert applied[already.id] is True
+    assert applied[new_one.id] is True
+    _, kwargs = new_version.call_args
+    assert kwargs["applied_obstacle_ids"] == [new_one.id]  # only the new one persisted
+
+
 def test_apply_or_flag_unions_with_existing_exclusions():
     existing_exclusions = {
         "type": "MultiPolygon",
@@ -199,6 +251,7 @@ def test_apply_or_flag_unions_with_existing_exclusions():
     with (
         patch("solarfit.packs.config_pack.get_auto_apply_confidence_threshold", return_value=0.85),
         patch("solarfit.engine.obstacles.session_scope", _fake_session_scope),
+        patch("solarfit.repositories.sites.applied_obstacle_ids", return_value=set()),
         patch("solarfit.repositories.sites.new_geometry_version") as new_version,
         patch("solarfit.repositories.sites.get", return_value=site),
         patch("solarfit.engine.area.compute_usable_area_m2", return_value=42.0),

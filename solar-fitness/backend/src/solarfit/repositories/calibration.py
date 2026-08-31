@@ -37,9 +37,13 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from solarfit.db import Base, session_scope
 from solarfit.packs.config_pack import (
+    get_calibration_confidence_high_variance,
+    get_calibration_confidence_no_data,
+    get_calibration_confidence_validated,
     get_calibration_sample_count_threshold,
     get_calibration_variance_threshold,
     get_utilisation_factor,
+    get_utilisation_factor_proposal_bounds,
 )
 from solarfit.repositories import analysis_cache as analysis_cache_repo
 from solarfit.repositories import sites as sites_repo
@@ -157,7 +161,8 @@ def propose_utilisation_factor_update(site_type: str) -> dict | None:
             return None
 
         current_factor = get_utilisation_factor(site_type)
-        proposed_factor = max(0.3, min(1.0, current_factor * statistics.median(ratios)))
+        low, high = get_utilisation_factor_proposal_bounds()
+        proposed_factor = max(low, min(high, current_factor * statistics.median(ratios)))
 
         proposal = UtilisationFactorProposal(
             id=str(uuid4()),
@@ -239,9 +244,9 @@ def get_calibration_confidence_adjustment(site_type: str, geometry_source: str |
         values = [r.variance_pct for r in session.scalars(stmt).all()]
 
     if not values:
-        return 0.5  # NO_DATA — neutral, not a penalty
+        return get_calibration_confidence_no_data()  # NO_DATA — neutral, not a penalty
 
     mean_abs_variance = statistics.mean(abs(v) for v in values)
     if mean_abs_variance > get_calibration_variance_threshold():
-        return 0.2  # HIGH_VARIANCE
-    return 0.9  # VALIDATED
+        return get_calibration_confidence_high_variance()
+    return get_calibration_confidence_validated()
