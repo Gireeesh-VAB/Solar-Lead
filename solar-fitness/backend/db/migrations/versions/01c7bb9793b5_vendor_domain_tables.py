@@ -19,7 +19,7 @@ the schema; the table is expected to stay empty until that gap is
 closed.
 
 Revision ID: 01c7bb9793b5
-Revises: f8a3c1d9e6b2
+Revises: e7b3c9a4f2d6
 Create Date: 2026-08-31
 
 """
@@ -30,7 +30,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "01c7bb9793b5"
-down_revision: str | Sequence[str] | None = "f8a3c1d9e6b2"
+down_revision: str | Sequence[str] | None = "e7b3c9a4f2d6"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

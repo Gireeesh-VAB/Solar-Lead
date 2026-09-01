@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getVendorJob, getSite } from "@/lib/api/client";
+import { getVendorJobServer as getVendorJob, getSiteServer as getSite } from "@/lib/api/serverFetch";
 import { PageHeader } from "@/components/ui/Primitives";
 import { CaptureTabs } from "./CaptureTabs";
 

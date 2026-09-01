@@ -30,6 +30,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+from dataclasses import dataclass
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -175,6 +176,94 @@ def _rows_from_geometry_file(
 # --------------------------------------------------------------------- #
 
 
+@dataclass
+class RowOutcome:
+    """What happened to exactly one row — the unit both the synchronous
+    endpoint below and the async path (workers/tasks_imports.py, via
+    routers/app_imports.py) fold into their own bookkeeping: ImportReport's
+    counters here, persisted import_job_rows there. Exactly one of
+    site_id/duplicate/error is meaningful, matching `status`."""
+
+    status: Literal["imported", "skipped_duplicate", "failed"]
+    row_name: str
+    site_id: str | None = None
+    duplicate: DuplicateHit | None = None
+    error: RowError | None = None
+
+
+def process_one_row(
+    session: Session,
+    row: dict[str, Any],
+    index: int,
+    *,
+    owner_org: str,
+    site_type: str,
+    jurisdiction: str,
+    on_duplicate: Literal["skip", "import"],
+) -> RowOutcome:
+    """Validate, dedupe, and create exactly one row's site — pulled out
+    of bulk_import() below so the new async import path can reuse this
+    exact logic (same validation, same SITE-07 duplicate check, same
+    savepoint discipline) instead of duplicating it. Behavior is
+    unchanged from the inline version this replaced."""
+    row_name = row.get("name") or f"Imported site {index}"
+    try:
+        if row.get("_error"):
+            raise GeometryRejected(row["_error"])
+
+        boundary = row.get("boundary")
+        centroid = row.get("centroid")
+        if boundary is None and centroid is None:
+            raise GeometryRejected("row has no geometry")
+
+        if boundary is not None:
+            if centroid is None:
+                centroid = validation.centroid_of(boundary)
+            geom = validation.validate_boundary(boundary, centroid=centroid)
+            boundary = mapping(geom)
+
+        duplicate = find_nearby_site(session, centroid, owner_org)
+        if duplicate and on_duplicate == "skip":
+            hit = DuplicateHit(
+                row=index, name=row_name, existing_site_id=duplicate[0], distance_m=round(duplicate[1], 2)
+            )
+            return RowOutcome(status="skipped_duplicate", row_name=row_name, duplicate=hit)
+
+        confidence = (
+            validation.geometry_confidence(source="imported", boundary=boundary) if boundary else None
+        )
+
+        # Savepoint per row: one bad geometry must not poison the rows
+        # around it, and the caller still gets a usable partial result.
+        with session.begin_nested():
+            site = repo.create(
+                session,
+                site_type=row.get("site_type") or site_type,
+                name=row_name,
+                owner_org=owner_org,
+                jurisdiction=row.get("jurisdiction") or jurisdiction,
+                centroid=centroid,
+                boundary=boundary,
+                geometry_source="imported" if boundary else None,
+                geometry_confidence=confidence,
+                actor=owner_org,
+            )
+
+        duplicate_hit = (
+            DuplicateHit(
+                row=index, name=row_name, existing_site_id=duplicate[0], distance_m=round(duplicate[1], 2)
+            )
+            if duplicate
+            else None
+        )
+        return RowOutcome(status="imported", row_name=row_name, site_id=site.id, duplicate=duplicate_hit)
+
+    except (GeometryRejected, ValueError, KeyError) as exc:
+        return RowOutcome(
+            status="failed", row_name=row_name, error=RowError(row=index, reason=str(exc), name=row_name)
+        )
+
+
 @router.post("", response_model=ImportReport, status_code=status.HTTP_207_MULTI_STATUS)
 async def bulk_import(
     session: Annotated[Session, Depends(get_session)],
@@ -216,72 +305,26 @@ async def bulk_import(
     )
 
     for index, row in enumerate(rows, start=1):
-        row_name = row.get("name") or f"Imported site {index}"
-        try:
-            if row.get("_error"):
-                raise GeometryRejected(row["_error"])
-
-            boundary = row.get("boundary")
-            centroid = row.get("centroid")
-            if boundary is None and centroid is None:
-                raise GeometryRejected("row has no geometry")
-
-            if boundary is not None:
-                if centroid is None:
-                    centroid = validation.centroid_of(boundary)
-                geom = validation.validate_boundary(boundary, centroid=centroid)
-                boundary = mapping(geom)
-
-            duplicate = find_nearby_site(session, centroid, owner_org)
-            if duplicate and on_duplicate == "skip":
-                report.skipped_duplicates += 1
-                report.duplicates.append(
-                    DuplicateHit(
-                        row=index,
-                        name=row_name,
-                        existing_site_id=duplicate[0],
-                        distance_m=round(duplicate[1], 2),
-                    )
-                )
-                continue
-
-            confidence = (
-                validation.geometry_confidence(source="imported", boundary=boundary)
-                if boundary
-                else None
-            )
-
-            # Savepoint per row: one bad geometry must not poison the rows
-            # around it, and the caller still gets a usable partial result.
-            with session.begin_nested():
-                site = repo.create(
-                    session,
-                    site_type=row.get("site_type") or site_type,
-                    name=row_name,
-                    owner_org=owner_org,
-                    jurisdiction=row.get("jurisdiction") or jurisdiction,
-                    centroid=centroid,
-                    boundary=boundary,
-                    geometry_source="imported" if boundary else None,
-                    geometry_confidence=confidence,
-                    actor=owner_org,
-                )
+        outcome = process_one_row(
+            session,
+            row,
+            index,
+            owner_org=owner_org,
+            site_type=site_type,
+            jurisdiction=jurisdiction,
+            on_duplicate=on_duplicate,
+        )
+        if outcome.status == "imported":
             report.imported += 1
-            report.site_ids.append(site.id)
-
-            if duplicate:
-                report.duplicates.append(
-                    DuplicateHit(
-                        row=index,
-                        name=row_name,
-                        existing_site_id=duplicate[0],
-                        distance_m=round(duplicate[1], 2),
-                    )
-                )
-
-        except (GeometryRejected, ValueError, KeyError) as exc:
+            report.site_ids.append(outcome.site_id)
+            if outcome.duplicate:
+                report.duplicates.append(outcome.duplicate)
+        elif outcome.status == "skipped_duplicate":
+            report.skipped_duplicates += 1
+            report.duplicates.append(outcome.duplicate)
+        else:
             report.failed += 1
-            report.errors.append(RowError(row=index, reason=str(exc), name=row_name))
+            report.errors.append(outcome.error)
 
     return report
 

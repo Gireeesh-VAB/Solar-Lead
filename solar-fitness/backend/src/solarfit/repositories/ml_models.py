@@ -50,6 +50,7 @@ class MLModelVersion(Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     sample_count: Mapped[int] = mapped_column(Integer)
     group_count: Mapped[int] = mapped_column(Integer)
+    changelog: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 def save_training_sample(
@@ -90,6 +91,7 @@ def save_model_version(
     artifact_storage_key: str,
     sample_count: int,
     group_count: int,
+    changelog: str | None = None,
 ) -> MLModelVersion:
     """ML-04. Always inserted with status="proposed" — never auto-active."""
     row = MLModelVersion(
@@ -105,6 +107,7 @@ def save_model_version(
         approved_at=None,
         sample_count=sample_count,
         group_count=group_count,
+        changelog=changelog,
     )
     session.add(row)
     session.flush()
@@ -114,6 +117,12 @@ def save_model_version(
 def get_approved_model_version(session: Session) -> MLModelVersion | None:
     stmt = select(MLModelVersion).where(MLModelVersion.status == "approved")
     return session.scalars(stmt).first()
+
+
+def list_model_versions(session: Session) -> list[MLModelVersion]:
+    """Newest-trained first."""
+    stmt = select(MLModelVersion).order_by(MLModelVersion.trained_at.desc())
+    return list(session.scalars(stmt))
 
 
 def approve_version(session: Session, version_id: str, approved_by: str) -> MLModelVersion:
@@ -129,6 +138,21 @@ def approve_version(session: Session, version_id: str, approved_by: str) -> MLMo
 
     target.status = "approved"
     target.approved_by = approved_by
+    target.approved_at = datetime.now(UTC)
+    session.flush()
+    return target
+
+
+def reject_version(session: Session, version_id: str, rejected_by: str) -> MLModelVersion:
+    """Counterpart to approve_version() above — for a version currently
+    "proposed" (never demotes an already-"approved" version; use
+    approve_version() on a different candidate for that)."""
+    target = session.get(MLModelVersion, version_id)
+    if target is None:
+        raise ValueError(f"No ml_model_versions row for id={version_id}")
+
+    target.status = "rejected"
+    target.approved_by = rejected_by
     target.approved_at = datetime.now(UTC)
     session.flush()
     return target

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CalendarClock, IndianRupee, ListChecks, MapPin } from "lucide-react";
-import { getVendorJob, getSite } from "@/lib/api/client";
+import { getVendorJobServer as getVendorJob, getSiteServer as getSite } from "@/lib/api/serverFetch";
 import { Card, PageHeader } from "@/components/ui/Primitives";
 import { SlaBadge } from "@/components/vendor/SlaBadge";
 import { siteTypeLabel, formatDate } from "@/lib/utils";

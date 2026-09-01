@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { listChecks } from "@/lib/api/client";
+import { listChecksServer as listChecks } from "@/lib/api/serverFetch";
 import { PageHeader } from "@/components/ui/Primitives";
 import { ChecksListClient } from "./ChecksListClient";
 
@@ -9,7 +9,9 @@ export const metadata: Metadata = {
 };
 
 export default async function ChecksPage() {
-  const checks = await listChecks();
+  // See home/page.tsx — falls back to empty rather than crashing on an
+  // unauthenticated SSR pass or a briefly unreachable backend.
+  const checks = await listChecks().catch(() => []);
   return (
     <div className="space-y-6">
       <PageHeader title="My checks" description="Every location you've checked, with its latest result." />

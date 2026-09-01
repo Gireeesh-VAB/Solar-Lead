@@ -37,6 +37,7 @@ __all__ = [
     "get_by_id",
     "list_by_owner_org",
     "touch_last_login",
+    "update_profile",
 ]
 
 
@@ -59,6 +60,11 @@ class UserRow(Base):
     billing_contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     vendor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+    # Consumer "checks" self-service profile (lib/fixtures/customer.ts's
+    # CustomerProfile) — additive, no other role uses these.
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    notify_on_complete: Mapped[bool] = mapped_column(nullable=False, default=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -113,3 +119,30 @@ def touch_last_login(session: Session, user_id: str | uuid.UUID) -> None:
     if row is not None:
         row.last_login_at = datetime.now(UTC)
         session.flush()
+
+
+def update_profile(
+    session: Session,
+    user_id: str | uuid.UUID,
+    *,
+    name: str | None = None,
+    phone: str | None = None,
+    notify_on_complete: bool | None = None,
+) -> UserRow | None:
+    """Consumer "checks" self-service profile update. Deliberately no
+    email field here — email is also the login identity (unique,
+    case-sensitive-as-stored) and a live email-change flow (collision
+    check, re-verification) is out of this pass's scope; a payload that
+    includes one is silently ignored at the router layer, not accepted
+    and not erroring."""
+    row = get_by_id(session, user_id)
+    if row is None:
+        return None
+    if name is not None:
+        row.name = name
+    if phone is not None:
+        row.phone = phone
+    if notify_on_complete is not None:
+        row.notify_on_complete = notify_on_complete
+    session.flush()
+    return row

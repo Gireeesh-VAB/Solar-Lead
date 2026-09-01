@@ -8,10 +8,10 @@ external storage plus the raw OCR text, both cleared by the purge job
 (packs/config_pack.py) has elapsed.
 
 The confirmed `usn` value itself is NOT stored here and is not subject
-to this retention window — once repositories/sites.py::update_usn()
-exists, it lives with the Site indefinitely (CON-05's subsidy-tier
-lookup needs it for the life of the site). This table is the OCR
-*evidence* trail; providers/usn_ocr.py's UsnCapture is the *value*.
+to this retention window — via repositories/sites.py::update_usn(), it
+lives with the Site indefinitely (CON-05's subsidy-tier lookup needs it
+for the life of the site). This table is the OCR *evidence* trail;
+providers/usn_ocr.py's UsnCapture is the *value*.
 
 Never queried by engine/ml_score.py or any vision-training path
 (USN-06's "hard-excluded from ML/vision training" clause) — enforced by

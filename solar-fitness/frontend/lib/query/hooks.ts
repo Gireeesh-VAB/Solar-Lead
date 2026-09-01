@@ -8,11 +8,9 @@ import type {
   AuditLogListParams,
   NewCheckInput,
   SiteListParams,
-  TenantListParams,
   VendorJobListParams,
 } from "@/lib/api/client";
 import type { CustomerProfile } from "@/lib/fixtures/customer";
-import type { TenantTier } from "@/lib/types";
 
 export function useSites(params: SiteListParams = {}) {
   return useQuery({
@@ -85,15 +83,25 @@ export function useJurisdictions() {
   return useQuery({ queryKey: ["jurisdictions"], queryFn: api.listJurisdictions });
 }
 
-export function useOcrExtraction() {
-  return useMutation({ mutationFn: (kind: "bill" | "payment_proof") => api.runOcrExtraction(kind) });
-}
-
-export function useSubmitUsn(siteId: string) {
+export function useCaptureManualUsn(siteId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { usn: string; method: "manual" | "bill_ocr" | "payment_proof_ocr" }) =>
-      api.submitUsn(siteId, input.usn, input.method),
+    mutationFn: (usn: string) => api.captureManualUsn(siteId, usn),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["site", siteId] }),
+  });
+}
+
+export function useExtractUsn(siteId: string) {
+  return useMutation({
+    mutationFn: (input: { kind: "bill" | "payment_proof"; file: File }) =>
+      input.kind === "bill" ? api.extractUsnFromBill(siteId, input.file) : api.extractUsnFromPaymentProof(siteId, input.file),
+  });
+}
+
+export function useConfirmUsn(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { uploadId: string; confirmedUsn: string }) => api.confirmUsn(siteId, input.uploadId, input.confirmedUsn),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["site", siteId] }),
   });
 }
@@ -129,6 +137,28 @@ export function useVendorJob(jobId: string) {
   return useQuery({
     queryKey: ["vendor-job", jobId],
     queryFn: () => api.getVendorJob(jobId),
+  });
+}
+
+export function useUploadPanoramaPhoto(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (dataUrl: string) => api.uploadPanoramaPhoto(jobId, dataUrl),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendor-job", jobId] });
+      qc.invalidateQueries({ queryKey: ["vendor-jobs"] });
+    },
+  });
+}
+
+export function useSaveShadingNotes(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (notes: string) => api.saveShadingNotes(jobId, notes),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendor-job", jobId] });
+      qc.invalidateQueries({ queryKey: ["vendor-jobs"] });
+    },
   });
 }
 
@@ -187,37 +217,6 @@ export function useDisputeSubmission(id: string) {
 // -----------------------------------------------------------------------------
 // Super admin portal
 // -----------------------------------------------------------------------------
-
-export function useTenants(params: TenantListParams = {}) {
-  return useQuery({ queryKey: ["tenants", params], queryFn: () => api.listTenants(params) });
-}
-
-export function useTenant(id: string) {
-  return useQuery({ queryKey: ["tenant", id], queryFn: () => api.getTenant(id) });
-}
-
-export function useUpdateTenantTier(id: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (tier: TenantTier) => api.updateTenantTier(id, tier),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tenant", id] });
-      qc.invalidateQueries({ queryKey: ["tenants"] });
-    },
-  });
-}
-
-export function useTenantStatusAction(id: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (action: "suspend" | "reinstate") =>
-      action === "suspend" ? api.suspendTenant(id) : api.reinstateTenant(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tenant", id] });
-      qc.invalidateQueries({ queryKey: ["tenants"] });
-    },
-  });
-}
 
 export function useAdminVendors(params: AdminVendorListParams = {}) {
   return useQuery({ queryKey: ["admin-vendors", params], queryFn: () => api.listAdminVendors(params) });

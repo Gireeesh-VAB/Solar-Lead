@@ -308,3 +308,48 @@ def test_calibration_confidence_validated_is_high(calibration_session_factory):
     adjustment = calibration.get_calibration_confidence_adjustment("ROOFTOP_RESIDENTIAL")
 
     assert adjustment == 0.9
+
+
+# ---------------------------------------------------------------------------
+# CAL-03 approval gate — approve_utilisation_factor_proposal / reject_...
+# ---------------------------------------------------------------------------
+
+
+def _make_proposal(session_factory) -> str:
+    _seed_records(session_factory, "ROOFTOP_RESIDENTIAL", [1.10] * 25)
+    proposal = calibration.propose_utilisation_factor_update("ROOFTOP_RESIDENTIAL")
+    return proposal["proposal_id"]
+
+
+def test_approve_utilisation_factor_proposal_flips_status(calibration_session_factory):
+    proposal_id = _make_proposal(calibration_session_factory)
+
+    result = calibration.approve_utilisation_factor_proposal(proposal_id, approved_by="admin-1")
+
+    assert result["status"] == "approved"
+    assert result["reviewed_by"] == "admin-1"
+    with calibration_session_factory() as session:
+        row = session.get(UtilisationFactorProposal, proposal_id)
+        assert row.status == "approved"
+        assert row.reviewed_at is not None
+
+
+def test_reject_utilisation_factor_proposal_flips_status(calibration_session_factory):
+    proposal_id = _make_proposal(calibration_session_factory)
+
+    result = calibration.reject_utilisation_factor_proposal(proposal_id, rejected_by="admin-1")
+
+    assert result["status"] == "rejected"
+
+
+def test_approve_unknown_proposal_raises(calibration_session_factory):
+    with pytest.raises(ValueError, match="No utilisation_factor_proposals row"):
+        calibration.approve_utilisation_factor_proposal("does-not-exist", approved_by="admin-1")
+
+
+def test_approve_already_decided_proposal_raises(calibration_session_factory):
+    proposal_id = _make_proposal(calibration_session_factory)
+    calibration.approve_utilisation_factor_proposal(proposal_id, approved_by="admin-1")
+
+    with pytest.raises(ValueError, match="already approved"):
+        calibration.approve_utilisation_factor_proposal(proposal_id, approved_by="admin-2")

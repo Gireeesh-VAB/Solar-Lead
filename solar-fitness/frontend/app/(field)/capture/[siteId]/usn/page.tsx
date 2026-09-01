@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getSite } from "@/lib/api/client";
+import { getSiteServer as getSite } from "@/lib/api/serverFetch";
 import { UsnCaptureFlow } from "@/components/sites/UsnCaptureFlow";
 
 export async function generateMetadata({ params }: { params: Promise<{ siteId: string }> }): Promise<Metadata> {

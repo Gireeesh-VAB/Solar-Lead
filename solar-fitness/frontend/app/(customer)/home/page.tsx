@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, SunMedium } from "lucide-react";
-import { listChecks } from "@/lib/api/client";
+import { listChecksServer as listChecks } from "@/lib/api/serverFetch";
 import { Button } from "@/components/ui/Primitives";
 import { CheckCard } from "../_components/CheckCard";
 
@@ -11,7 +11,11 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  const checks = await listChecks();
+  // Falls back to an empty list rather than crashing when there's no valid
+  // session yet (e.g. an unauthenticated SSR pass before the client-side
+  // AuthGuard in the layout redirects to /login) or the backend is briefly
+  // unreachable.
+  const checks = await listChecks().catch(() => []);
   const recent = checks.slice(0, 3);
 
   return (

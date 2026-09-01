@@ -198,8 +198,61 @@ def test_usn_on_a_government_site_is_rejected_by_the_endpoint(client):
 
 
 def test_usn_on_a_residential_site_is_accepted_by_the_endpoint(client):
-    r = client.post("/sites", json=_payload(usn="1234567890"), headers=HEADERS)
+    r = client.post("/sites", json=_payload(usn="1234567890", usn_source="manual"), headers=HEADERS)
     assert r.status_code == 201
+    # Regression: SITE-02 validated usn/usn_source but repositories/
+    # sites.py never actually stored either — a validated value was
+    # silently discarded on every write. Assert the round trip, not just
+    # that the request was accepted.
+    body = r.json()["site"]
+    assert body["usn"]["usn"] == "1234567890"
+    assert body["usn"]["usn_source"] == "manual"
+
+    fetched = client.get(f"/sites/{body['id']}", headers=HEADERS).json()["site"]
+    assert fetched["usn"]["usn"] == "1234567890"
+    assert fetched["usn"]["usn_source"] == "manual"
+
+
+# --------------------------------------------------------------------- #
+# SITE-07 — probable-duplicate detection at single-site creation
+# --------------------------------------------------------------------- #
+
+
+def test_creating_a_site_near_an_existing_one_flags_a_possible_duplicate(client):
+    """Regression: SITE-07's duplicate check was wired into bulk import
+    only — a single POST /sites right on top of an existing site never
+    ran it at all."""
+    first = client.post("/sites", json=_payload(name="First roof"), headers=HEADERS).json()["site"]
+
+    # ~10m away — well inside imports.py's 15m DUPLICATE_RADIUS_M, same tenant.
+    nearby = client.post(
+        "/sites", json=_payload(name="Second roof", boundary=_poly(dlon=0.0001)), headers=HEADERS
+    )
+    assert nearby.status_code == 201
+    note = nearby.json()["resolution_note"]
+    assert note is not None
+    assert "possible duplicate" in note
+    assert first["id"] in note
+
+
+def test_creating_a_site_far_from_others_has_no_duplicate_note(client):
+    far = client.post("/sites", json=_payload(name="Solo roof"), headers=HEADERS)
+    assert far.status_code == 201
+    assert far.json()["resolution_note"] is None
+
+
+def test_creating_a_site_near_another_tenants_site_is_not_flagged(client):
+    """A duplicate check is only meaningful within one tenant — another
+    org's site nearby isn't this caller's duplicate, and surfacing it
+    would itself be a cross-tenant data leak."""
+    client.post("/sites", json=_payload(name="Alpha roof"), headers=HEADERS)
+
+    other_org = {"X-Owner-Org": f"org-beta-{uuid4().hex[:8]}"}
+    response = client.post(
+        "/sites", json=_payload(name="Beta roof", boundary=_poly(dlon=0.0001)), headers=other_org
+    )
+    assert response.status_code == 201
+    assert response.json()["resolution_note"] is None
 
 
 def test_government_site_without_usn_is_fine(client):

@@ -24,9 +24,15 @@ config.set_main_option("sqlalchemy.url", get_settings().database_url)
 # Every model attaches to solarfit.db.Base — autogenerate compares
 # against this metadata. Import model modules here so they register on
 # Base.metadata before autogenerate runs.
-from solarfit.repositories import calibration, ml_models, usn_uploads  # noqa: F401
+from solarfit.repositories import (  # noqa: F401
+    audit,
+    calibration,
+    import_jobs,
+    ml_models,
+    usn_uploads,
+)
 from solarfit.repositories import (
-    sites as _sites,  # noqa: F401  (registers SiteRow/SiteVersionRow)
+    sites as _sites,  # noqa: F401  (registers SiteRow/SiteVersionRow/CompositeSiteRow)
 )
 from solarfit.repositories import (
     users as _users,  # noqa: F401  (registers UserRow)

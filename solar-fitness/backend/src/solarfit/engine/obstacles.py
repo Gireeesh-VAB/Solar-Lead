@@ -99,6 +99,21 @@ def apply_or_flag(site: Site, obstacles: list[Obstacle]) -> list[Obstacle]:
     to_apply = [o for o in valid if o.confidence >= threshold]
     to_flag = [o for o in valid if o.confidence < threshold]
 
+    # Idempotency: the same cached vision detection (site_analysis_cache)
+    # can be handed to this function again — on a repeat assessment call
+    # for this site, or a different site reusing the same cached location
+    # (CACHE-01/03) — so anything already reflected in this site's own
+    # exclusions must be skipped here, never unioned in a second time.
+    # Already-applied ones still report .applied = True below; they're
+    # just not re-persisted.
+    already_applied: set[str] = set()
+    if to_apply:
+        from solarfit.repositories.sites import applied_obstacle_ids
+
+        with session_scope() as session:
+            already_applied = applied_obstacle_ids(session, site.id)
+        to_apply = [o for o in to_apply if o.id not in already_applied]
+
     if to_apply:
         geoms = [shape(o.bounding_polygon) for o in to_apply]
         if site.exclusions:
@@ -146,6 +161,13 @@ def apply_or_flag(site: Site, obstacles: list[Obstacle]) -> list[Obstacle]:
 
     for obstacle in to_flag:
         obstacle.applied = False
+
+    # Already-applied ones (filtered out of to_apply above, never
+    # re-persisted) are genuinely applied — reflect that in the result
+    # even though this call didn't write anything new for them.
+    for obstacle in valid:
+        if obstacle.id in already_applied:
+            obstacle.applied = True
 
     return valid
 

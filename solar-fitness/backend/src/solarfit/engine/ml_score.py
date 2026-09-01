@@ -353,6 +353,38 @@ def approve_model_version(version_id: str, approved_by: str) -> dict:
         return {"version_id": row.id, "version": row.version, "status": row.status}
 
 
+def reject_model_version(version_id: str, rejected_by: str) -> dict:
+    """Counterpart to approve_model_version() above."""
+    with session_scope() as session:
+        row = ml_models_repo.reject_version(session, version_id, rejected_by)
+        session.commit()
+        return {"version_id": row.id, "version": row.version, "status": row.status}
+
+
+def list_model_versions() -> list[dict]:
+    """Closes a real gap found during a frontend/backend sync audit:
+    approve/reject existed with no way to list what's waiting for
+    review. Newest-trained first. MLModelVersion has no model_name or
+    proposed_by column — there's only ever one model type in this
+    system (trained by the one offline job, never a person), so those
+    are an honest constant/placeholder rather than fabricated variety."""
+    with session_scope() as session:
+        rows = ml_models_repo.list_model_versions(session)
+        return [
+            {
+                "id": row.id,
+                "model_name": "capacity-suitability-model",
+                "version": row.version,
+                "status": row.status,
+                "metrics": [{"label": k, "value": str(v)} for k, v in (row.metrics or {}).items()],
+                "proposed_at": row.trained_at,
+                "proposed_by": "system:offline-training",
+                "changelog": row.changelog or "",
+            }
+            for row in rows
+        ]
+
+
 def score_with_ml_model(
     boundary: dict, refinement: dict | None, weather: dict | None, params: dict | None = None
 ) -> MLScore:

@@ -239,6 +239,50 @@ def test_approve_unknown_version_raises(ml_session_factory):
         ml_score.approve_model_version("does-not-exist", approved_by="reviewer-1")
 
 
+def test_reject_model_version_flips_status(ml_session_factory, fake_object_storage):
+    _seed_samples(ml_session_factory, n_groups=20)
+    result = ml_score.train()
+
+    rejection = ml_score.reject_model_version(result["version_id"], rejected_by="reviewer-1")
+
+    assert rejection["status"] == "rejected"
+    with ml_session_factory() as session:
+        row = session.get(MLModelVersion, result["version_id"])
+        assert row.status == "rejected"
+        assert row.approved_by == "reviewer-1"
+
+
+def test_reject_unknown_version_raises(ml_session_factory):
+    with pytest.raises(ValueError, match="No ml_model_versions row"):
+        ml_score.reject_model_version("does-not-exist", rejected_by="reviewer-1")
+
+
+def test_changelog_is_stored_and_defaults_to_none(ml_session_factory, fake_object_storage):
+    from solarfit.repositories import ml_models as ml_models_repo
+
+    _seed_samples(ml_session_factory, n_groups=20)
+    result = ml_score.train()
+
+    with ml_session_factory() as session:
+        row = session.get(MLModelVersion, result["version_id"])
+        assert row.changelog is None
+
+    with ml_session_factory() as session:
+        saved = ml_models_repo.save_model_version(
+            session,
+            version="ml_v_with_changelog",
+            feature_list=[],
+            hyperparameters={},
+            metrics={},
+            artifact_storage_key="ml-models/ml_v_with_changelog.joblib",
+            sample_count=1,
+            group_count=1,
+            changelog="retrained on the expanded feature set",
+        )
+        session.commit()
+        assert saved.changelog == "retrained on the expanded feature set"
+
+
 # ---------------------------------------------------------------------------
 # Task 11 — ML-02/05, score_with_ml_model()
 # ---------------------------------------------------------------------------

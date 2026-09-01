@@ -12,10 +12,14 @@ Every "which vendor am I" scoping check happens one layer up, in the
 router, via current_user().vendor_id — these functions take vendor_id
 as an explicit parameter and never trust a caller-supplied one.
 
-There is deliberately no create_job() here — see the migration's
-docstring and keerthana's build-plan gap note: no frontend flow assigns
-a vendor to a site anywhere, so vendor_jobs has no populating path yet.
-Tests seed rows directly against these ORM classes.
+create_job() is the one populating path for vendor_jobs today: routers/
+app_checks.py::complete_check() queues an unassigned job when a check
+resolves to SUITABLE_SUBJECT_TO_SURVEY, since that verdict means the
+engine couldn't be confident from imagery alone and a vendor needs to
+confirm the roof in person. Every other write in this module still
+takes an existing job/vendor id — this is the only one that creates a
+vendor_jobs row from scratch. Tests otherwise seed rows directly
+against these ORM classes.
 """
 
 from __future__ import annotations
@@ -35,6 +39,8 @@ __all__ = [
     "VendorJobRow",
     "VendorPayoutRow",
     "VendorRow",
+    "count_active_jobs_for_sites",
+    "create_job",
     "dispute_job",
     "get_accuracy_history",
     "get_earnings_summary",
@@ -43,9 +49,14 @@ __all__ = [
     "list_jobs",
     "list_payouts",
     "list_submissions",
+    "list_vendors",
     "remove_job",
+    "set_panorama_photo",
+    "set_shading_notes",
+    "set_verification_status",
     "update_availability",
     "update_job_status",
+    "vendor_admin_stats",
 ]
 
 
@@ -103,6 +114,8 @@ class VendorJobRow(Base):
     variance_pct: Mapped[float | None] = mapped_column(nullable=True)
     dispute_status: Mapped[str | None] = mapped_column(String(16), nullable=True, default="none")
     dispute_reason: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    panorama_photo_data_url: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    shading_notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -151,6 +164,87 @@ def get_vendor(session: Session, vendor_id: str | uuid.UUID) -> VendorRow | None
     return session.get(VendorRow, uuid.UUID(str(vendor_id)))
 
 
+def list_vendors(
+    session: Session,
+    *,
+    q: str | None = None,
+    verification_status: str | None = None,
+    sort: str | None = None,
+) -> list[VendorRow]:
+    """Admin listing — every vendor, unscoped (contrast with list_jobs()
+    etc. above, which are always scoped to one vendor's own portal).
+    `q` matches name or service_area.region, case-insensitively; filtered
+    in Python since the vendor base is a per-deployment admin list, not
+    consumer-scale, same tradeoff repositories/customer_accounts.py's
+    list_tenants() already makes."""
+    stmt = select(VendorRow)
+    if verification_status is not None:
+        stmt = stmt.where(VendorRow.verification_status == verification_status)
+    rows = list(session.scalars(stmt))
+
+    if q:
+        needle = q.lower()
+        rows = [
+            r
+            for r in rows
+            if needle in r.name.lower() or needle in str(r.service_area.get("region", "")).lower()
+        ]
+    if sort == "accuracy":
+        rows.sort(key=lambda r: r.accuracy_score, reverse=True)
+    elif sort == "sla":
+        rows.sort(key=lambda r: vendor_admin_stats(session, r.id)["sla_compliance_pct"], reverse=True)
+    return rows
+
+
+def set_verification_status(session: Session, vendor_id: str | uuid.UUID, status: str) -> VendorRow | None:
+    """Admin action — suspend/reinstate/approve/reject all funnel through
+    this one status write. verification_status is the single source of
+    truth for a vendor's standing; there's no separate "suspended" flag
+    to keep in sync."""
+    row = get_vendor(session, vendor_id)
+    if row is not None:
+        row.verification_status = status
+        session.flush()
+    return row
+
+
+def count_active_jobs_for_sites(session: Session, site_ids: list[str]) -> int:
+    """Closes a real gap found during a frontend/backend sync audit:
+    PortfolioSummary.activeJobs was stubbed to 0 with a "once
+    vendor_jobs lands" TODO — it landed with keerthana's merge. "Active"
+    matches vendor_admin_stats()'s own definition: everything not yet
+    submitted."""
+    if not site_ids:
+        return 0
+    site_uuids = [uuid.UUID(str(s)) for s in site_ids]
+    stmt = select(VendorJobRow).where(
+        VendorJobRow.site_id.in_(site_uuids), VendorJobRow.status != "submitted"
+    )
+    return len(list(session.scalars(stmt)))
+
+
+def vendor_admin_stats(session: Session, vendor_id: str | uuid.UUID) -> dict[str, Any]:
+    """activeJobs/totalJobsCompleted/slaCompliancePct — computed at read
+    time from vendor_jobs, never stored, so they can't drift from the
+    real job history. "Completed" = submitted; "active" = everything
+    else (queued/accepted/in_progress/sla_at_risk/overdue); SLA
+    compliance = the fraction of submitted jobs turned in at or before
+    their deadline — an honest 0.0 (not a fabricated number) when
+    nothing has been submitted yet."""
+    vid = uuid.UUID(str(vendor_id))
+    rows = list(session.scalars(select(VendorJobRow).where(VendorJobRow.vendor_id == vid)))
+
+    submitted = [r for r in rows if r.status == "submitted"]
+    active = [r for r in rows if r.status != "submitted"]
+    on_time = [r for r in submitted if r.submitted_at is not None and r.submitted_at <= r.deadline]
+
+    return {
+        "active_jobs": len(active),
+        "total_jobs_completed": len(submitted),
+        "sla_compliance_pct": (len(on_time) / len(submitted) * 100.0) if submitted else 0.0,
+    }
+
+
 def update_availability(session: Session, vendor_id: str | uuid.UUID, available: bool) -> VendorRow | None:
     row = get_vendor(session, vendor_id)
     if row is not None:
@@ -171,6 +265,34 @@ def get_accuracy_history(session: Session, vendor_id: str | uuid.UUID) -> list[V
 # --------------------------------------------------------------------- #
 # jobs
 # --------------------------------------------------------------------- #
+
+
+def create_job(
+    session: Session,
+    *,
+    site_id: str | uuid.UUID,
+    district: str,
+    state: str,
+    requirements: list[str],
+    payout_inr: float,
+    estimated_capacity_kwp: float | None,
+    deadline: datetime,
+) -> VendorJobRow:
+    """Queues an unassigned (vendor_id=None) job — nothing here decides
+    which vendor picks it up, that's the existing accept flow. status
+    defaults to "queued" via the column default."""
+    row = VendorJobRow(
+        site_id=uuid.UUID(str(site_id)),
+        district=district,
+        state=state,
+        deadline=deadline,
+        payout_inr=payout_inr,
+        requirements=requirements,
+        estimated_capacity_kwp=estimated_capacity_kwp,
+    )
+    session.add(row)
+    session.flush()
+    return row
 
 
 def list_jobs(
@@ -239,6 +361,28 @@ def dispute_job(
     return update_job_status(
         session, job_id, vendor_id, status="submitted", dispute_status="open", dispute_reason=reason
     )
+
+
+def set_panorama_photo(
+    session: Session, job_id: str | uuid.UUID, vendor_id: str | uuid.UUID, *, data_url: str
+) -> VendorJobRow | None:
+    row = get_job(session, job_id, vendor_id)
+    if row is None:
+        return None
+    row.panorama_photo_data_url = data_url
+    session.flush()
+    return row
+
+
+def set_shading_notes(
+    session: Session, job_id: str | uuid.UUID, vendor_id: str | uuid.UUID, *, notes: str
+) -> VendorJobRow | None:
+    row = get_job(session, job_id, vendor_id)
+    if row is None:
+        return None
+    row.shading_notes = notes
+    session.flush()
+    return row
 
 
 # --------------------------------------------------------------------- #

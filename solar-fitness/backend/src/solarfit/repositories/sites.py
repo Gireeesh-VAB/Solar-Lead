@@ -65,19 +65,25 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
 from solarfit.db import Base
-from solarfit.domain.site import ShadingEstimate, Site
+from solarfit.domain.site import ShadingEstimate, Site, UsnCapture
 from solarfit.providers import validation
 
 __all__ = [
+    "CompositeSiteRow",
     "SiteRow",
     "SiteVersionRow",
+    "applied_obstacle_ids",
     "create",
+    "create_composite_site",
     "get",
+    "get_composite_site",
+    "list_composite_sites",
     "list_sites",
     "new_boundary_version",
     "new_geometry_version",
     "record_field_measurement",
     "restore_version",
+    "update_usn",
     "versions",
 ]
 
@@ -126,6 +132,29 @@ class SiteRow(Base):
     # frozen contract Person 1 does not own the evolution of alone.
     shading: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
+    # karthik addition — the frontend's Site type needs these and nothing
+    # backend-side stored them before (POST /sites accepted `address` as
+    # geocoding *input* but never persisted it). Deliberately NOT added to
+    # the frozen domain/site.py Site contract every other person codes
+    # against — routers/app_sites.py reads these straight off this row,
+    # the same way it already has to for updated_at below.
+    address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    district: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    tags: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+
+    # USN-01..06 (karthik + omkar, independently added and reconciled on
+    # merge — both sides landed the identical columns) — the three
+    # capture paths (manual/bill OCR/payment-proof OCR) all converge on
+    # this one usn + usn_source pair. Scoped at the schema-validation
+    # layer (SITE-02, domain/schemas.py) to BILLING_LINKED_SITE_TYPES
+    # only; this column exists on every row regardless of site_type,
+    # same as address/district/state above. The confirmed value only,
+    # not the USN-06 evidence trail (see repositories/usn_uploads.py for
+    # that).
+    usn: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    usn_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
     current_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     created_at: Mapped[datetime] = mapped_column(
@@ -163,6 +192,15 @@ class SiteVersionRow(Base):
     )
 
     geometry_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    # SITE-04 — every boundary carries the imagery it was traced from,
+    # not just the current one on SiteRow. Previously only geometry_source
+    # was captured per version, so a site's history lost imagery_date/
+    # imagery_quality/geometry_confidence context the moment a second
+    # version was written.
+    imagery_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    imagery_quality: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    geometry_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Who and why. `source` is free-form so Person 3 can pass
     # "obstacle_detection" without a schema change, and an admin reversal
@@ -230,7 +268,7 @@ def _to_domain(row: SiteRow) -> Site:
         imagery_quality=row.imagery_quality,
         geometry_confidence=row.geometry_confidence,
         shading=ShadingEstimate(**row.shading) if row.shading else None,
-        usn=None,  # USN-01..06 is Person 4's; see the migration's note.
+        usn=UsnCapture(usn=row.usn, usn_source=row.usn_source) if row.usn is not None else None,  # type: ignore[arg-type]
         created_at=row.created_at,
     )
 
@@ -255,6 +293,12 @@ def create(
     imagery_quality: str | None = None,
     geometry_confidence: float | None = None,
     shading: ShadingEstimate | dict | None = None,
+    address: str | None = None,
+    district: str | None = None,
+    state: str | None = None,
+    tags: list[str] | None = None,
+    usn: str | None = None,
+    usn_source: str | None = None,
     actor: str = "system",
 ) -> Site:
     """SITE-01. Create a site.
@@ -262,6 +306,13 @@ def create(
     When a boundary is supplied at creation it becomes version 1 —
     SITE-05's history starts at the first geometry, not at the first
     change, so there is never a current boundary with no history row.
+
+    address/district/state/tags (karthik addition) are optional and
+    frontend-facing only — existing callers that don't pass them are
+    unaffected. usn/usn_source (USN-01..04) are likewise optional —
+    SITE-02's JSON Schema is what actually enforces they're only ever
+    supplied for BILLING_LINKED_SITE_TYPES; this function just stores
+    whatever it's given.
     """
     if isinstance(shading, ShadingEstimate):
         shading = shading.model_dump()
@@ -279,6 +330,12 @@ def create(
         imagery_quality=imagery_quality,
         geometry_confidence=geometry_confidence,
         shading=shading,
+        address=address,
+        district=district,
+        state=state,
+        tags=tags,
+        usn=usn,
+        usn_source=usn_source,
         current_version=0,
     )
     session.add(row)
@@ -291,6 +348,9 @@ def create(
             boundary=boundary,
             exclusions=exclusions,
             geometry_source=geometry_source,
+            imagery_date=imagery_date,
+            imagery_quality=imagery_quality,
+            geometry_confidence=geometry_confidence,
             actor=actor,
             source=geometry_source or "create",
             note="initial geometry",
@@ -307,6 +367,30 @@ def create(
 def get(session: Session, site_id: str | uuid.UUID) -> Site | None:
     row = session.get(SiteRow, uuid.UUID(str(site_id)))
     return _to_domain(row) if row else None
+
+
+def update_usn(session: Session, site_id: str | uuid.UUID, *, usn: str, usn_source: str) -> Site:
+    """USN-01..04. Persists a captured usn/usn_source onto an existing
+    site — the write-side counterpart create()'s own usn/usn_source
+    kwargs cover at creation time. Called by whichever capture path has
+    already validated the value (manual entry, or USN-02/03's
+    providers.usn_ocr.confirm_and_finalize()) — this is a pure
+    persistence step, no format or site-type validation of its own,
+    same division of responsibility as create(): SITE-02's JSON Schema
+    (domain/schemas.py), enforced at the router layer, is what actually
+    restricts usn/usn_source to BILLING_LINKED_SITE_TYPES.
+
+    Raises LookupError for an unknown site — never a silent no-op,
+    matching new_geometry_version()'s own discipline.
+    """
+    row = session.get(SiteRow, uuid.UUID(str(site_id)))
+    if row is None:
+        raise LookupError(f"site {site_id} not found")
+    row.usn = usn
+    row.usn_source = usn_source
+    row.updated_at = _now()
+    session.flush()
+    return _to_domain(row)
 
 
 def list_sites(
@@ -336,6 +420,9 @@ def _append_version(
     actor: str,
     source: str,
     note: str | None = None,
+    imagery_date: datetime | None = None,
+    imagery_quality: str | None = None,
+    geometry_confidence: float | None = None,
     applied_obstacle_ids: list[str] | None = None,
     applied_obstacle_polygons: dict[str, dict] | None = None,
 ) -> SiteVersionRow:
@@ -345,6 +432,9 @@ def _append_version(
         boundary=_to_wkt(boundary),
         exclusions=_to_wkt(exclusions),
         geometry_source=geometry_source,
+        imagery_date=imagery_date,
+        imagery_quality=imagery_quality,
+        geometry_confidence=geometry_confidence,
         actor=actor,
         source=source,
         note=note,
@@ -368,6 +458,9 @@ def new_geometry_version(
     source: str,
     geometry_source: str | None = None,
     note: str | None = None,
+    imagery_date: datetime | None = None,
+    imagery_quality: str | None = None,
+    geometry_confidence: float | None = None,
     applied_obstacle_ids: list[str] | None = None,
     applied_obstacle_polygons: dict[str, dict] | None = None,
 ) -> Site:
@@ -381,6 +474,13 @@ def new_geometry_version(
     ``source`` is the audit reason — ``"obstacle_detection"`` for Person
     3's OBS-04 auto-apply, ``"obstacle_rejected"`` for the OBS-06
     reversal, ``"manual_edit"`` for an operator correction.
+
+    ``imagery_date``/``imagery_quality``/``geometry_confidence`` (SITE-04):
+    like ``geometry_source``, default to the site's current values when
+    omitted — an exclusions-only change (OBS-04/06) doesn't re-trace the
+    boundary from new imagery, so the imagery context that produced the
+    boundary is unchanged and should carry forward rather than going
+    missing from this version.
 
     ``applied_obstacle_ids``/``applied_obstacle_polygons`` (Person 3
     addition): only meaningful when source == "obstacle_detection" —
@@ -403,6 +503,12 @@ def new_geometry_version(
     row.exclusions = _to_wkt(next_exclusions)
     if geometry_source is not None:
         row.geometry_source = geometry_source
+    if imagery_date is not None:
+        row.imagery_date = imagery_date
+    if imagery_quality is not None:
+        row.imagery_quality = imagery_quality
+    if geometry_confidence is not None:
+        row.geometry_confidence = geometry_confidence
 
     _append_version(
         session,
@@ -410,6 +516,9 @@ def new_geometry_version(
         boundary=next_boundary,
         exclusions=next_exclusions,
         geometry_source=geometry_source or row.geometry_source,
+        imagery_date=imagery_date or row.imagery_date,
+        imagery_quality=imagery_quality or row.imagery_quality,
+        geometry_confidence=geometry_confidence if geometry_confidence is not None else row.geometry_confidence,
         actor=actor,
         source=source,
         note=note,
@@ -491,6 +600,22 @@ def versions(session: Session, site_id: str | uuid.UUID) -> list[SiteVersionRow]
     return list(session.scalars(stmt))
 
 
+def applied_obstacle_ids(session: Session, site_id: str | uuid.UUID) -> set[str]:
+    """OBS-04 idempotency: every obstacle id ever auto-applied to this
+    site, across its whole SITE-05 history. The same cached vision
+    detection (site_analysis_cache.vision_refinement) can be replayed on
+    every assessment call for this site, or reused by a different site
+    at the same rounded lat/long (CACHE-01/03) — an obstacle already
+    reflected in this site's exclusions must never be unioned in again,
+    which is exactly what a naive re-apply would otherwise do on every
+    single POST /v1/assessments/{id}."""
+    ids: set[str] = set()
+    for v in versions(session, site_id):
+        if v.applied_obstacle_ids:
+            ids.update(v.applied_obstacle_ids)
+    return ids
+
+
 def restore_version(
     session: Session,
     site_id: str | uuid.UUID,
@@ -536,3 +661,72 @@ def restore_version(
         note=note or f"restored from version {version_no}",
     )
     return _to_domain(row)
+
+
+# --------------------------------------------------------------------- #
+# SITE-06 composite sites (karthik addition — feeder/DT aggregation)
+# --------------------------------------------------------------------- #
+
+
+class CompositeSiteRow(Base):
+    """SITE-06. A named group of existing sites (a feeder or distribution
+    transformer's membership), for the frontend's aggregate reporting.
+    member_site_ids is plain JSONB rather than a join table — membership
+    here is small and read far more often than it changes."""
+
+    __tablename__ = "composite_sites"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    feeder_or_dt: Mapped[str] = mapped_column(String(255), nullable=False)
+    member_site_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+def create_composite_site(
+    session: Session,
+    *,
+    name: str,
+    feeder_or_dt: str,
+    member_site_ids: list[str],
+    owner_org: str,
+) -> CompositeSiteRow:
+    """Validates every member id resolves to a real site owned by the
+    same tenant before inserting — a composite site quietly grouping
+    someone else's roofs (or nothing at all) would be a silent data bug,
+    not a feature."""
+    if not member_site_ids:
+        raise ValueError("a composite site needs at least one member site")
+
+    for site_id in member_site_ids:
+        member = get(session, site_id)
+        if member is None or member.owner_org != owner_org:
+            raise LookupError(f"site {site_id} not found")
+
+    row = CompositeSiteRow(name=name, feeder_or_dt=feeder_or_dt, member_site_ids=member_site_ids)
+    session.add(row)
+    session.flush()
+    return row
+
+
+def get_composite_site(session: Session, composite_id: str | uuid.UUID) -> CompositeSiteRow | None:
+    return session.get(CompositeSiteRow, uuid.UUID(str(composite_id)))
+
+
+def list_composite_sites(session: Session, *, owner_org: str) -> list[CompositeSiteRow]:
+    """No owner_org column on composite_sites itself — scoped instead by
+    "every member site belongs to this tenant", read off the first member
+    (create_composite_site() already guarantees every member shares one
+    owner_org, so checking the first is checking them all)."""
+    stmt = select(CompositeSiteRow).order_by(CompositeSiteRow.created_at.desc())
+    result = []
+    for row in session.scalars(stmt):
+        if row.member_site_ids:
+            first_member = get(session, row.member_site_ids[0])
+            if first_member is not None and first_member.owner_org == owner_org:
+                result.append(row)
+    return result

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Home, ListChecks, Sun, User } from "lucide-react";
 import { Header } from "@/components/layout/Header";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 
 const NAV_ITEMS = [
   { href: "/home", label: "Home", icon: Home },
@@ -10,6 +11,7 @@ const NAV_ITEMS = [
 
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {
   return (
+    <AuthGuard role="customer">
     <div className="flex min-h-screen w-full flex-col">
       <Header
         showSearch={false}
@@ -60,5 +62,6 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
         ))}
       </nav>
     </div>
+    </AuthGuard>
   );
 }

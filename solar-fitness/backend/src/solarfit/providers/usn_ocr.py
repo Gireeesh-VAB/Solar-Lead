@@ -27,10 +27,10 @@ Design notes (flagged, not silent):
     So extract_from_bill()/extract_from_payment_proof() DO have a
     persistence side effect (the evidence row + object-storage upload);
     only the confirmed *value* waits for a separate step.
-  - Persisting the confirmed usn onto Site.usn is deferred to whoever
-    calls confirm_and_finalize() — repositories/sites.py::update_usn()
-    doesn't exist yet (Person 1's file, still a stub). Wired in once it
-    lands, or at Phase 3's router work.
+  - Persisting the confirmed usn onto Site.usn is the caller's job —
+    routers/app_usn.py's /confirm route calls confirm_and_finalize()
+    then repositories.sites.update_usn(), rather than this module
+    reaching into Person 1's file itself.
   - No jurisdiction-specific USN format spec exists anywhere in the
     source material — _validate_usn_format() is a placeholder length/
     charset check, not a real format rule. Override once one is known.
@@ -117,9 +117,20 @@ def _object_storage_client():
 def _upload_to_object_storage(key: str, data: bytes) -> None:
     """Lazily-constructed S3-compatible client — matches the
     OBJECT_STORAGE_ENDPOINT_URL shape already in Settings. Monkeypatched
-    in tests, same as _run_text_detection."""
+    in tests, same as _run_text_detection.
+
+    USN-06 requires this evidence to be "encrypted at rest" — previously
+    asserted only in this module's docstring, never actually passed to
+    the storage call. ServerSideEncryption="AES256" (SSE-S3) is the
+    broadly-supported default across AWS S3 and S3-compatible services
+    (MinIO, DigitalOcean Spaces, etc.); this is a compliance requirement
+    on evidence handling, not a tunable business coefficient, so it's
+    fixed here rather than a config-pack value.
+    """
     settings = get_settings()
-    _object_storage_client().put_object(Bucket=settings.object_storage_bucket, Key=key, Body=data)
+    _object_storage_client().put_object(
+        Bucket=settings.object_storage_bucket, Key=key, Body=data, ServerSideEncryption="AES256"
+    )
 
 
 def delete_from_object_storage(key: str) -> None:
@@ -197,10 +208,10 @@ def confirm_and_finalize(upload_id: str, confirmed_usn: str, confirmed_by: str) 
     """USN-02/03's confirm-before-store step. Validates the (possibly
     operator-corrected) value and marks the evidence row confirmed.
     Persisting the result onto Site.usn is the caller's job, via
-    repositories.sites.update_usn() — not yet implemented (Person 1's
-    file, coordination point). confirmed_by is accepted now for the
-    audit trail even though nothing persists it beyond the evidence
-    row's status change yet."""
+    repositories.sites.update_usn() (now implemented — see
+    routers/app_usn.py's /confirm route, the one caller). confirmed_by
+    is accepted now for the audit trail even though nothing persists it
+    beyond the evidence row's status change yet."""
     del confirmed_by  # accepted for the audit-trail API shape; not yet persisted anywhere
 
     validated = _validate_usn_format(confirmed_usn)

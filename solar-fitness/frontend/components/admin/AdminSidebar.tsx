@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Building2,
   ClipboardList,
   FileBarChart,
   Gauge,
@@ -23,7 +22,6 @@ const NAV = [
   {
     group: "Accounts",
     items: [
-      { href: "/admin/tenants", label: "Tenants", icon: Building2 },
       { href: "/admin/vendors", label: "Vendors", icon: Users },
       { href: "/admin/vendors/verification", label: "Verification queue", icon: ShieldCheck },
     ],
