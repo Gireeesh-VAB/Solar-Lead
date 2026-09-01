@@ -1,0 +1,231 @@
+# Versioned parameter pack — CFG-01: every coefficient lives here, none
+# hard-coded in application logic. Loaded via packs/config_pack.py.
+#
+# STATUS: placeholder values only, seeded on Day 0 so nobody is blocked.
+# Person 2 owns tuning these to real numbers (§9.4/§9.6/§10.3 Rules Engine).
+
+version: "rooftop_v1"
+
+# AREA-05 — utilisation factor by class, used where per-site precision
+# is unavailable. Read by Person 1's engine/area.py.
+utilisation_factor:
+  ROOFTOP_GOVT: 0.75
+  ROOFTOP_RESIDENTIAL: 0.70
+  ROOFTOP_CI: 0.72
+
+# CACHE-01 — lat/long rounding precision (decimal places) for the result
+# cache key. 5 decimal places is roughly 1.1m at the equator. Read by
+# Person 3's repositories/analysis_cache.py.
+cache_precision: 5
+
+# AREA-03 — edge setback, metres, applied as a negative buffer in a
+# projected CRS. Placeholder.
+edge_setback_m: 0.5
+
+# CON-07 — minimum viable system size, kWp, below which a site is gated
+# out regardless of other ceilings. Placeholder.
+minimum_viable_kwp: 1.0
+
+# GEO-07 — boundary plausibility envelope. A rooftop smaller than a
+# parking space or larger than a stadium is a units error or a
+# mis-traced neighbourhood, not a roof. Deliberately wide — this rejects
+# nonsense, it does not second-guess a genuinely large industrial roof.
+# Read by Person 1's providers/validation.py.
+min_plausible_boundary_area_m2: 5.0
+max_plausible_boundary_area_m2: 500000.0
+
+# GEO-07 — a boundary this far (metres) from the site's own centroid
+# means the geocode and the trace disagree about which building this is.
+# Read by Person 1's providers/validation.py.
+max_centroid_distance_m: 500.0
+
+# OBS-04 — confidence at/above which a detected obstacle auto-applies to
+# the site's exclusions (versioned via SITE-05) rather than staying
+# advisory-only (OBS-05). Read by Person 3's engine/obstacles.py.
+auto_apply_confidence_threshold: 0.85
+
+# SHADE-03 — generation performance derate per unit of SHADED fraction
+# (shading_score is 0=fully shaded..1=unobstructed, so GEN-01's
+# performance ratio is multiplied by (1 - (1 - shading_score) * this
+# factor) — an unobstructed site gets no derate, a fully shaded site
+# gets the full factor). Placeholder. Read by Person 2's engine/generation.py.
+shading_derate_factor: 1.0
+
+# VIS-04 — below this self-reported confidence, a vision-refinement
+# response is treated as insufficient_data rather than trusted.
+# Placeholder. Read by Person 3's providers/vision.py.
+vision_min_confidence: 0.3
+
+# OBS-03/GEO-07 — an obstacle's geodesic area (m^2) must be at least this
+# large to be plausible; smaller is treated as noise, not a real
+# detection. Placeholder. Read by Person 3's providers/vision.py.
+min_obstacle_area_m2: 0.25
+
+# OBS-03/GEO-07 — an obstacle's area, as a fraction of its boundary's own
+# area, above which it's implausibly large to be a real obstacle rather
+# than a mis-detected boundary. Placeholder. Read by Person 3's
+# providers/vision.py.
+max_obstacle_area_fraction_of_boundary: 0.5
+
+# VIS-05/VIZ-05/OBS-07 — seconds to wait on a dispatched Celery task
+# (vision refinement, obstacle apply, panorama generation) before giving
+# up. These run through the real worker/queue infrastructure now rather
+# than inline, but the calling endpoint (POST /v1/assessments/{id}) is
+# still synchronous, so this bounds how long one request can block.
+# Placeholder.
+async_task_timeout_s: 30
+
+# VIZ-01 — points per side of the elevation grid sampled from the DSM
+# crop before triangulation; higher = finer mesh, more triangles.
+# Placeholder. Read by Person 3's engine/panorama.py.
+panorama_grid_resolution: 24
+
+# CON-07 — usable-area-to-capacity conversion, kWp per m^2 of usable roof
+# area, used by packs/universal.py. ~0.2 kWp/m2 (200 Wp/m2) is a typical
+# rooftop panel-density placeholder pending real panel-spec tuning.
+capacity_density_kwp_per_m2: 0.2
+
+# CON-05 — net-metering export cap as a ratio of sanctioned load (kVA).
+# Placeholder ratio; real value needs DISCOM tariff-order research.
+net_metering_cap:
+  max_export_ratio_of_sanctioned_load: 1.0
+
+# CON-05 — consumption-offset ceiling. Placeholder ratio/yield pending
+# real billing-based tuning.
+consumption_offset_ceiling:
+  target_offset_ratio: 1.0
+  assumed_specific_yield_kwh_per_kwp: 1400
+
+# CON-05 — transformer headroom ceiling, as a fraction of nameplate
+# transformer capacity. Placeholder.
+transformer_headroom:
+  max_fraction_of_transformer_capacity: 0.8
+
+# CON-05/USN — subsidy tier caps, kWp, by declared consumer category.
+# UNKNOWN (null = insufficient_data) is the only tier usable while
+# site.usn is None, i.e. before Person 4 ships USN capture. Placeholder
+# tier boundaries; real values need scheme documentation.
+subsidy_tier_cap:
+  UNKNOWN: null
+  DOMESTIC: 10.0
+  COMMERCIAL: 100.0
+
+# GEN-03 — performance-ratio multiplier by site type. Rooftop-only scope
+# keeps every type at 1.0 for now; kept configurable per GEN-03 rather
+# than assumed, ready for e.g. floating's cooling uplift if scope reopens.
+performance_adjustment:
+  ROOFTOP_GOVT: 1.0
+  ROOFTOP_RESIDENTIAL: 1.0
+  ROOFTOP_CI: 1.0
+
+# GEN-01 — baseline performance ratio before GEN-03's adjustment and
+# SHADE-03's shading derate. Placeholder pending real-world calibration.
+default_performance_ratio: 0.8
+
+# GEN-01/02 — reference/fallback specific yield, kWh/kWp/year. Used
+# whenever the weather provider is unavailable, and as the base the
+# GEN-02 weather-refinement multiplier scales. Placeholder pending a
+# real per-district irradiance dataset (see §10.3's pvlib upgrade path).
+fallback_specific_yield_kwh_per_kwp: 1400
+
+# GEN-02 — baseline irradiance (W/m^2) the current weather reading is
+# compared against to build the weather-refinement multiplier.
+reference_irradiance_w_m2: 600
+
+# GEN-02 — clamp on the weather-refinement multiplier so one instantaneous
+# reading can't swing the yield implausibly far from the reference value.
+weather_refinement_multiplier_bounds: [0.7, 1.3]
+
+# FIT-01 — weighted components of the fitness score. Must sum to 1.0.
+# When a degradable component (shading, generation_yield) is excluded for
+# a given site, its weight is redistributed proportionally across the
+# remaining present components rather than assumed zero. Placeholder.
+# Read by Person 4's engine/fitness.py.
+fitness_weights:
+  capacity_adequacy: 0.30
+  constraint_headroom: 0.20
+  geometry_quality: 0.20
+  shading: 0.15
+  generation_yield: 0.15
+
+# FIT-02 — verdict thresholds against the weighted raw score (0..1).
+# score >= suitable -> SUITABLE; >= suitable_subject_to_survey ->
+# SUITABLE_SUBJECT_TO_SURVEY; >= conditional -> CONDITIONAL; else
+# NOT_SUITABLE (subject to the Gate override — see engine/fitness.py).
+# Placeholder.
+fitness_verdict_thresholds:
+  suitable: 0.75
+  suitable_subject_to_survey: 0.55
+  conditional: 0.35
+
+# FIT-01 capacity_adequacy component — capacity.recommended_kwp is scored
+# against (this multiple x minimum_viable_kwp), clamped to [0, 1].
+# Placeholder.
+fitness_capacity_adequacy_target_multiple: 5.0
+
+# FIT-01 constraint_headroom component — capacity.headroom_kwp is
+# normalised against this figure, clamped to [0, 1]. Placeholder.
+fitness_headroom_normalization_kwp: 5.0
+
+# FIT-04 — weighted components of the confidence figure. Must sum to 1.0.
+# Ceiling.confidence_delta values are added on top of this blend, not
+# folded into it. Placeholder.
+fitness_confidence_weights:
+  geometry: 0.30
+  imagery_recency: 0.15
+  constraint_completeness: 0.25
+  gate_resolution: 0.15
+  calibration_state: 0.15
+
+# FIT-04 imagery_recency sub-component — full confidence (1.0) at/below
+# this age in days, linearly decaying to 0.0 at
+# fitness_imagery_recency_zero_score_days. Placeholder.
+fitness_imagery_recency_full_score_days: 180
+fitness_imagery_recency_zero_score_days: 730
+
+# CAL-02 — field-survey vs. remote usable-area variance (fraction, e.g.
+# 0.15 = 15%) above which a calibration record is flagged and the remote
+# estimate marked superseded. Placeholder. Read by Person 4's
+# repositories/calibration.py.
+calibration_variance_threshold: 0.15
+
+# CAL-03 — minimum number of flagged/labelled calibration records for a
+# site_type before a utilisation-factor update is proposed (never applied
+# silently). Placeholder.
+calibration_sample_count_threshold: 20
+
+# CAL-03 — clamp on a proposed utilisation-factor correction, [min, max].
+# A single batch of field surveys shouldn't be able to propose an
+# implausible factor outside this range regardless of the raw median
+# ratio. Placeholder.
+utilisation_factor_proposal_bounds: [0.3, 1.0]
+
+# CAL-05 — the three confidence figures get_calibration_confidence_
+# adjustment() returns, by calibration-data state. Placeholder.
+calibration_confidence_no_data: 0.5       # no records yet — neutral, not a penalty
+calibration_confidence_high_variance: 0.2 # records exist, mean |variance| over threshold
+calibration_confidence_validated: 0.9     # records exist, variance within threshold
+
+# USN-06 — days a bill/payment-proof image and its raw OCR text are kept
+# after upload before the purge job removes them. The confirmed usn
+# value itself is NOT covered by this window — it lives with the Site
+# indefinitely, since CON-05's subsidy-tier lookup needs it. Placeholder.
+# Read by Person 4's repositories/usn_uploads.py.
+usn_ocr_retention_days: 90
+
+# ML-01 — minimum distinct site_id groups required before train() will
+# attempt anything (below this, offline training returns None rather
+# than fitting on too little data). Placeholder. These three keys are
+# ML-ops parameters rather than rooftop business rules, kept here anyway
+# for consistency with the single-config-pack pattern. Read by Person
+# 4's engine/ml_score.py.
+ml_min_training_groups: 10
+
+# ML-01 — cap on cross-validation folds during hyperparameter search
+# (actual folds used is min(this, group_count)). Placeholder.
+ml_cv_max_folds: 5
+
+# ML-01 — fraction of site_id groups held out as the final test split
+# for the promotion-vs-baseline comparison. Placeholder.
+ml_test_split_fraction: 0.2
+

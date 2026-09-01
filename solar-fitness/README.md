@@ -11,7 +11,7 @@ Python/FastAPI backend, rooftop-only scope (`ROOFTOP_GOVT` / `ROOFTOP_RESIDENTIA
 Requires [uv](https://docs.astral.sh/uv/) and Docker.
 
 ```bash
-make up        # Postgres+PostGIS and Redis, via infra/docker-compose.yml
+make up        # Postgres+PostGIS and Redis, via backend/infra/docker-compose.yml
 make migrate   # alembic upgrade head
 make test      # the two real tests that exist on Day 0 (geometry, projection)
 make run       # FastAPI dev server — GET /health should return {"status": "ok"}
@@ -19,7 +19,7 @@ make worker    # Celery worker — dispatch solarfit.workers.celery_app.ping to 
 ```
 
 No `make` on your machine? Run the underlying commands directly — see the `Makefile`,
-they're one line each (`cd apps/api && uv run ...`).
+they're one line each (`cd backend && uv run ...`).
 
 Copy `.env.example` to `.env` and fill in real API keys before you need `providers/solar_api.py`,
 `providers/vision.py`, `providers/weather.py`, or `providers/usn_ocr.py` — the scaffold boots
@@ -27,13 +27,13 @@ fine with an empty `.env` for everything else.
 
 ## Where everything lives
 
-- `apps/api/src/solarfit/domain/` — the frozen shared contracts (`Site`, `ShadingEstimate`,
+- `backend/src/solarfit/domain/` — the frozen shared contracts (`Site`, `ShadingEstimate`,
   `Ceiling`, `Gate`, `CapacityResult`, `AnalysisResult`, `VisionRefinement`, `Obstacle`,
   `PanoramaResult`, `MLScore`). Don't change these without the whole team agreeing — everyone's
   code imports from here.
-- `apps/api/src/solarfit/packs/config_pack.py` — the parameter-pack loader. Real coefficients
-  live in `packages/config-packs/rooftop_v1.yaml` (currently placeholder values).
-- `db/migrations/` — Alembic. `0001_enable_postgis.py` is the only shared migration; your table(s)
+- `backend/src/solarfit/packs/config_pack.py` — the parameter-pack loader. Real coefficients
+  live in `backend/packages/config-packs/rooftop_v1.yaml` (currently placeholder values).
+- `backend/db/migrations/` — Alembic. `0001_enable_postgis.py` is the only shared migration; your table(s)
   are your own next migration.
 - Every other file under `engine/`, `providers/`, `packs/`, `repositories/`, `routers/` that
   isn't listed above is a **stub** with a docstring naming its owner and the exact requirement
@@ -62,7 +62,7 @@ explicit `"unavailable"` one for non-Solar-API geometry sources).
 §9.4 Constraints, §9.5 Capacity Resolver, §9.6 Generation, §9.10 Configuration, plus the
 generation-derate half of §9.17 Shading Analysis (`SHADE-03`).
 
-Files: `packages/config-packs/rooftop_v1.yaml` (tune the placeholder values),
+Files: `backend/packages/config-packs/rooftop_v1.yaml` (tune the placeholder values),
 `packs/{universal,rooftop,jurisdictions}.py`, `engine/{resolver,generation}.py`,
 `providers/weather.py`.
 
@@ -79,19 +79,129 @@ correctly derated when shading data is present.
 §9.11 Vision Refinement, §9.12 3D Visualization, §9.14 Result Cache, and §9.16 Obstacle
 Detection in full (`OBS-01..09`).
 
-Files: `providers/vision.py` (now also the obstacle-detection half, `OBS-01..03`),
-`engine/panorama.py`, `engine/obstacles.py` (new — `OBS-04..06`, the auto-apply/reversal half),
-`repositories/analysis_cache.py`, `workers/celery_app.py` (extend with real tasks).
+**Progress: Day 1 (Result Cache), Day 2 (Vision Refinement), Day 3 (Obstacle Detection), Day 4
+(3D Panorama), Day 5 (full-chain wiring + production-hardening), Day 6 (spec-compliance fixes),
+and Day 7 (context-mismatch audit fixes) are done — real, tested, 56/56 passing** (including
+the 5 DB-integration cache tests). Person 3's slice is feature-complete.
 
-Start with: the `site_analysis_cache` migration (see `repositories/analysis_cache.py`'s
-docstring for the exact DDL, or §14 of the document), then `round_latlng`/`find_by_key`/`create`,
-then `get_or_create_analysis()` per §12.1. `providers/vision.py`'s `refine_with_vision_model()`
-returns obstacles in the SAME call as the boundary refinement — don't crop or call the vision-LLM
-twice. `engine/obstacles.py` is the one stage in the pipeline that changes `usable_area_m2`
-without a human step (`OBS-04`), so build it carefully: it calls back into Person 1's
-`repositories.sites.new_boundary_version()` to version the exclusions, then Person 2's
-`engine.area.compute_usable_area_m2()` to recompute — reusing their interfaces, not duplicating
-them.
+**Day 7 — fixes for places the code was reasoning about, or claiming, more than the actual
+available input supports.** Four items, kept independent:
+1. The vision prompt asked GPT-4 Vision to note "shading from nearby structures/trees," but
+   `crop_to_boundary()` masks everything outside the roof polygon — those structures are never
+   in the image the model sees. Reworded to ask for visible shadow evidence on the roof surface
+   itself instead of a causal claim about things outside the frame.
+2. The 3D panorama now tints the mesh with real per-roof-segment shading — a new
+   `providers/vision.py`'s `fetch_building_insights()` (a `buildingInsights:findClosest` call,
+   deliberately separate from Person 1's `resolve_via_solar_api()` stub) feeds
+   `engine/panorama.py`'s vertex coloring, using each segment's sunshine relative to the
+   brightest segment on that same roof. Real Google-computed spatial data, not a vision guess;
+   best-effort — any failure exports the mesh uncolored rather than blocking generation.
+3. The synthetic `Site` built inline for `apply_or_flag()` had `owner_org`/`jurisdiction` set to
+   `"unknown"` — now an unmistakable poison marker instead, so any future code that starts
+   reading those fields fails loudly rather than quietly trusting a fake value.
+4. CACHE-01's rounding-precision collision risk (two different rooftops close enough together
+   could round into the same cache bucket) is now clearly documented in
+   `repositories/analysis_cache.py`'s module docstring — a spec-mandated tradeoff, not a P3 bug,
+   flagged for the team rather than fixed unilaterally.
+
+**Day 6 — fixes from auditing the full v1.2 spec against the actual code.** Four real gaps
+found and closed, all within Person 3's own files:
+- Three previously-hardcoded coefficients (`_MIN_OBSTACLE_AREA_M2`, `_MAX_OBSTACLE_AREA_FRACTION_OF_BOUNDARY`
+  in `vision.py`; `_GRID_RESOLUTION` in `panorama.py`) moved into `rooftop_v1.yaml` +
+  `config_pack.py` accessors — closes a real §17 non-negotiable violation ("no coefficient
+  hard-coded").
+- `get_or_create_analysis()`'s cache insert had no handling for the `(lat_rounded, lng_rounded)`
+  unique-constraint race between two concurrent cache-miss requests for the same location — now
+  catches `IntegrityError` and returns the concurrent insert as a hit (CACHE-02/05), instead of
+  crashing.
+- `reject_applied_obstacle()` now raises a clear, actionable `NotImplementedError` when
+  `repositories.sites` isn't real yet, instead of an unlabeled one leaking from a different
+  module — deliberately *not* given `apply_or_flag()`'s advisory-only fallback, since there's
+  nothing safe to fall back to when reversing a change that was never actually persisted.
+- VIZ-04's "regenerate on boundary change" now has a real trigger: a successful (non-degraded)
+  `apply_or_flag()` auto-apply calls `force_refresh()` for the site's own location, invalidating
+  any stale cached panorama/vision-refinement so the next lookup regenerates.
+
+**Day 5 — obstacle detection is now wired into `get_or_create_analysis()`.** It calls
+`engine.obstacles.apply_or_flag()` on the just-detected obstacles before persisting the cache
+row, so `.applied` flags are real, not always `False`. Since this cache layer is deliberately
+site-independent (`CACHE-01/03` — keyed on lat/long, never on `site_id`), a minimal synthetic
+`Site` is built inline just to satisfy `apply_or_flag()`'s signature (it only ever reads
+`.id`/`.boundary`/`.exclusions`, so placeholder `name`/`owner_org`/`jurisdiction` values are
+inert, never persisted as real site data). `apply_or_flag()`'s auto-apply branch still depends
+on Person 1's `repositories/sites.py` (still a stub) — rather than let that crash the pipeline,
+it catches `NotImplementedError` from that dependency and falls back to advisory-only, logged,
+never silent. Once Person 1 ships `repositories/sites.py` for real, this starts auto-applying
+for real with no code change here.
+
+**Day 5 — production-hardening.** `providers/vision.py`'s `with_retries()` (a small,
+dependency-free retry loop, reused by `providers/storage.py`) retries Solar API HTTP calls on a
+timeout or a 5xx, but never on a 4xx (a bad API key doesn't fix itself on retry #2). The three
+Person-3 Celery tasks now carry `autoretry_for`/`retry_backoff` as a backstop for genuine bugs,
+on top of `with_retries()` already covering transient HTTP failures.
+
+**Keys still needed for live verification:** `GOOGLE_SOLAR_API_KEY` (imagery, obstacles, DSM
+elevation — everything degrades to `insufficient_data`/`not_generated` without it),
+`GOOGLE_MAPS_API_KEY`/`WEATHER_API_KEY` (Person 1/2's own stages), and the four
+`OBJECT_STORAGE_*` settings (panorama upload — without them `generate_panorama()` always
+returns `not_generated`, which is correct behavior, just untested against a real bucket).
+`OPENAI_API_KEY` is already set.
+
+**Frontend/API integration — reported, not built here (Person 1/4 + frontend).** `web/` runs
+entirely on mock fixtures — zero live HTTP calls anywhere, `NEXT_PUBLIC_API_BASE_URL` referenced
+only in a comment. All three backend routers are mounted in `main.py` but have no route
+handlers (only `/health` responds). Even once wired, there's a shape mismatch: the frontend's
+`Assessment.visionRefinement` type has no `obstacles[]`/`confidence`/`status`, `panoramaUrl` is a
+bare string with no `status`/`reason`/`version`, and there's no frontend `Obstacle` type at all.
+
+Files: `providers/vision.py` (real: VIS-01..06 and the OBS-01..03 detection/validation half),
+`engine/panorama.py` (real: VIZ-01..05), `providers/storage.py` (new, real: VIZ-02's
+object-storage upload), `engine/obstacles.py` (real: OBS-04..06), `repositories/analysis_cache.py`
+(real), `repositories/sites.py` (still a stub — `NotImplementedError` bodies, but its interface
+now includes the `source`/`exclusions`/`applied_obstacle_ids` params and
+`find_version_applying_obstacle()` that `engine/obstacles.py` depends on), `workers/celery_app.py`
+(real: `solarfit.ping`, `solarfit.vision.refine`, `solarfit.obstacles.apply`,
+`solarfit.panorama.generate`).
+
+**Panorama rendering (Day 4 decision):** no `pyrender`/`Open3D`/OpenGL — `PanoramaResult.url` is
+documented only as "a reference URL, the mesh/render artifact lives in object storage," not
+specifically a rendered 2D image, so `generate_panorama()` exports a `.glb` 3D mesh (`trimesh`,
+pure Python + numpy) for the frontend to render client-side instead. `pyrender`'s offscreen path
+needs a GPU or an OSMesa native build, which is fragile-to-unavailable on a plain Windows dev
+box — skipping it avoids that risk entirely for a deliverable the frozen contract doesn't
+actually require. Elevation comes from the same Solar API Data Layers fetch used for VIS-01
+(`fetch_solar_api_datalayers()`'s `dsmUrl`, not a second imagery path); triangulation uses
+`shapely.ops.triangulate()` (GEOS-backed, already a dependency) rather than adding `scipy`.
+`providers/storage.py` wraps `boto3` against the `object_storage_*` settings (currently empty in
+`.env`) — with no endpoint configured it degrades to `PanoramaResult(status="not_generated")`,
+never raises, same discipline as VIS-04.
+
+**Obstacle georeferencing (Day 3 decision):** the vision-LLM can't reliably emit precise
+lat/lng from pixels (same limitation that keeps `corrected_boundary` at `None`), but an
+obstacle is small and well-bounded, so it instead reports a normalized image-fraction bounding
+box (0..1, origin top-left) and the server converts that to a real GeoJSON polygon using the
+crop's own affine transform — `crop_to_boundary()` now returns a `CroppedImagery` object
+(png bytes + transform + CRS + dimensions) instead of raw bytes so that conversion is possible.
+
+**Imagery source (Day 2 decision):** real Google Solar API **Data Layers** (`rgbUrl`, a
+georeferenced GeoTIFF), not a plain map screenshot — cropping uses `rasterio`/GDAL against the
+image's own embedded geotransform. `rasterio` installs cleanly via `uv add rasterio` (prebuilt
+wheel, bundles GDAL — no manual GDAL/OSGeo4W setup needed on Windows). `engine/panorama.py`'s
+`VIZ-01` (Day 4) reuses this same fetch/open machinery for its elevation source (`dsmUrl`) — no
+second imagery path was built.
+
+`providers/vision.py`'s `refine_with_vision_model()` returns obstacles in the SAME call as the
+boundary refinement, as planned — no second crop, no second vision-LLM call.
+`engine/obstacles.py` is the one stage in the pipeline that changes `usable_area_m2` without a
+human step (`OBS-04`); it's built and tested against Person 1's `repositories.sites` interface
+(still `NotImplementedError` bodies) and `engine.area.compute_usable_area_m2()` (still a stub) —
+both called for real via lazy import, mocked in tests, same discipline as the Day 1/2 cache
+pipeline. Once Person 1 fills in `repositories/sites.py` for real, `apply_or_flag()` and
+`reject_applied_obstacle()` need no changes.
+
+Live-call verification: `uv run python -m solarfit.manual_smoke_test_vision` (not part of
+`pytest` — real Solar API + OpenAI calls, needs `GOOGLE_SOLAR_API_KEY`/`OPENAI_API_KEY` in
+`.env`).
 
 **Done when:** a pipeline run produces a stored vision annotation, a structured obstacle list,
 and a panorama URL (or explicit `not_generated`); a high-confidence obstacle auto-applies to
