@@ -10,12 +10,15 @@ Run the beat scheduler with: uv run celery -A solarfit.workers.celery_app beat -
 
 from celery import Celery
 from celery.schedules import crontab
+from celery.utils.log import get_task_logger
 
 from solarfit.config import get_settings
 
 settings = get_settings()
 
 celery_app = Celery("solarfit", broker=settings.redis_url, backend=settings.redis_url)
+
+logger = get_task_logger(__name__)
 
 # First beat_schedule entry in the project — added by Person 4 for
 # USN-06's purge job (workers/tasks_usn.py). Anyone else adding a
@@ -53,14 +56,26 @@ def refine_vision_task(lat: float, lng: float, boundary: dict, radius_meters: fl
         from solarfit.workers.celery_app import refine_vision_task
         refine_vision_task.delay(lat, lng, boundary)
     """
+    from solarfit.domain.assessment import VisionRefinement
     from solarfit.providers.vision import (
         crop_to_boundary,
         fetch_rgb_imagery,
         refine_with_vision_model,
     )
 
-    imagery = fetch_rgb_imagery(lat, lng, radius_meters)
-    cropped = crop_to_boundary(imagery, boundary)
+    # The docstring above was only ever true of refine_with_vision_model()
+    # — the two steps before it could and did raise. No imagery at a
+    # location is an ordinary outcome, not a bug: it left the whole
+    # assessment 500ing after ~30s of the autoretry backstop retrying a
+    # 404 that could never succeed. VIS-04 says degrade to
+    # insufficient_data and never block the pipeline, so do that here too.
+    try:
+        imagery = fetch_rgb_imagery(lat, lng, radius_meters)
+        cropped = crop_to_boundary(imagery, boundary)
+    except (ValueError, OSError) as exc:
+        logger.info("Vision: no usable imagery at (%s, %s) — %s", lat, lng, exc)
+        return VisionRefinement(status="insufficient_data").model_dump()
+
     result = refine_with_vision_model(cropped, boundary)
     return result.model_dump()
 

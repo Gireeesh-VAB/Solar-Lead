@@ -20,6 +20,7 @@ from solarfit.routers import (
     app_sites,
     app_usn,
     app_vendor,
+    artifacts,
     assessments,
     imports,
     sites,
@@ -55,6 +56,7 @@ app.include_router(app_calibration_ml.router)
 app.include_router(app_usn.router)
 app.include_router(app_assessments.router)
 app.include_router(app_checks.router)
+app.include_router(artifacts.router)
 
 
 @app.get("/health")

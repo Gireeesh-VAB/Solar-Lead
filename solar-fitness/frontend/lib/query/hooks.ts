@@ -286,6 +286,19 @@ export function useCheck(checkId: string) {
   return useQuery({ queryKey: ["check", checkId], queryFn: () => api.getCheck(checkId) });
 }
 
+/** Google's panel layout for a check's rooftop. Kept out of useCheck() so
+ *  a slow or failing Solar API call never delays the result itself — the
+ *  map and the analysis render first, panels arrive when they arrive. */
+export function useCheckSolarLayout(checkId: string) {
+  return useQuery({
+    queryKey: ["check", checkId, "solar-layout"],
+    queryFn: () => api.getCheckSolarLayout(checkId),
+    // The layout is a property of the building, not of this page view.
+    staleTime: 60 * 60 * 1000,
+    retry: 1,
+  });
+}
+
 export function useCreateCheck() {
   const qc = useQueryClient();
   return useMutation({

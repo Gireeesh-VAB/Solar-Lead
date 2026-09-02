@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ErrorState } from "@/components/ui/Primitives";
 import { useCompleteCheck } from "@/lib/query/hooks";
 
 const STEPS = [
@@ -19,6 +20,8 @@ export function ProcessingClient({ checkId }: { checkId: string }) {
   const router = useRouter();
   const completeCheck = useCompleteCheck(checkId);
   const [activeStep, setActiveStep] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (activeStep >= STEPS.length) return;
@@ -29,14 +32,41 @@ export function ProcessingClient({ checkId }: { checkId: string }) {
   useEffect(() => {
     if (activeStep < STEPS.length) return;
     let cancelled = false;
-    completeCheck.mutateAsync().then(() => {
-      if (!cancelled) router.replace(`/check/${checkId}/result`);
-    });
+    completeCheck
+      .mutateAsync()
+      .then(() => {
+        if (!cancelled) router.replace(`/check/${checkId}/result`);
+      })
+      // Without this the rejection was unhandled: no navigation, no state
+      // change, and the spinner above ran forever. The backend answers a
+      // location it can't assess with a 422 and a message written for the
+      // customer ("...draw the roof outline on the map to continue") — it
+      // just had nowhere to go.
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Something went wrong.");
+      });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStep]);
+  }, [activeStep, attempt]);
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-sm py-16">
+        <ErrorState
+          title="We couldn't finish this check"
+          description={error}
+          onRetry={() => {
+            setError(null);
+            setActiveStep(STEPS.length);
+            setAttempt((a) => a + 1);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex max-w-sm flex-col items-center gap-6 py-16 text-center">

@@ -7,6 +7,7 @@ packages/config-packs/*.yaml per CFG-01 — see packs/config_pack.py.
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -16,7 +17,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # started from backend/, which isn't the convention here (README says
 # `cd backend && uv run ...`). Same fix as packs/config_pack.py's
 # _DEFAULT_PACKS_DIR.
-_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+_BACKEND_DIR = Path(__file__).resolve().parents[2]
+_ENV_FILE = _BACKEND_DIR / ".env"
 
 
 class Settings(BaseSettings):
@@ -38,6 +40,21 @@ class Settings(BaseSettings):
     # USN-02/03 — Google Cloud Vision (TEXT_DETECTION) service-account
     # credentials, distinct from the API-key-style GCP settings above.
     google_application_credentials_path: str = ""
+
+    # VIZ-02 artifact storage. "local" writes .glb files to a directory on
+    # disk and serves them back through routers/artifacts.py; "s3" uses the
+    # object_storage_* settings below. Local is the default so a developer
+    # gets working 3D models without any AWS/MinIO credentials at all —
+    # same "real working dev default" posture as database_url and
+    # jwt_secret above, not a production recommendation.
+    object_storage_backend: Literal["local", "s3"] = "local"
+    # Deliberately outside src/ and gitignored — generated .glb files are
+    # build output, never source.
+    local_storage_dir: str = str(_BACKEND_DIR / "var" / "artifacts")
+    # Origin the artifact route is reachable at, used to build the URL
+    # persisted to panorama_url. Must be whatever the browser can reach,
+    # which is why it is configuration rather than a derived value.
+    public_base_url: str = "http://localhost:8000"
 
     object_storage_bucket: str = ""
     object_storage_endpoint_url: str = ""

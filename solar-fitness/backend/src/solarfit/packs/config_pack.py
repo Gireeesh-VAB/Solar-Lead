@@ -126,6 +126,29 @@ def get_panorama_grid_resolution(*, pack: str = "rooftop_v1") -> int:
     return int(load_pack(pack)["panorama_grid_resolution"])
 
 
+def get_panorama_build_params(*, pack: str = "rooftop_v1") -> dict[str, float]:
+    """VIZ-01. The 3D building-assembly tunables — ground estimation,
+    height sanity bounds, ground-plane margin, and solar-panel mounting
+    geometry. Returned as one dict because engine/panorama.py needs the
+    whole set together on every call."""
+    data = load_pack(pack)
+    return {
+        "ground_search_buffer_m": float(data["panorama_ground_search_buffer_m"]),
+        "max_roof_step_m": float(data["panorama_max_roof_step_m"]),
+        "ground_percentile": float(data["panorama_ground_percentile"]),
+        "min_building_height_m": float(data["panorama_min_building_height_m"]),
+        "max_building_height_m": float(data["panorama_max_building_height_m"]),
+        "fallback_building_height_m": float(data["panorama_fallback_building_height_m"]),
+        "ground_margin_m": float(data["panorama_ground_margin_m"]),
+        "roof_smoothing_passes": float(data["panorama_roof_smoothing_passes"]),
+        "roof_smoothing_weight": float(data["panorama_roof_smoothing_weight"]),
+        "panel_thickness_m": float(data["panorama_panel_thickness_m"]),
+        "panel_clearance_m": float(data["panorama_panel_clearance_m"]),
+        "panel_gap_m": float(data["panorama_panel_gap_m"]),
+        "panel_frame_m": float(data["panorama_panel_frame_m"]),
+    }
+
+
 def get_capacity_density_kwp_per_m2(*, pack: str = "rooftop_v1") -> float:
     """CON-07/universal.py's area-to-kWp conversion for the usable-area
     ceiling and the minimum-viable-size gate."""
@@ -138,6 +161,14 @@ def get_net_metering_export_ratio(*, pack: str = "rooftop_v1") -> float:
     return float(load_pack(pack)["net_metering_cap"]["max_export_ratio_of_sanctioned_load"])
 
 
+def get_electricity_tariff_inr_per_kwh(*, pack: str = "rooftop_v1") -> float:
+    """Effective retail tariff for turning a monthly bill into units.
+
+    A placeholder average, not a slab model — see the pack's own note.
+    Every bill-derived system size scales inversely with it."""
+    return float(load_pack(pack)["electricity_tariff_inr_per_kwh"])
+
+
 def get_consumption_offset_target_ratio(*, pack: str = "rooftop_v1") -> float:
     """CON-05."""
     return float(load_pack(pack)["consumption_offset_ceiling"]["target_offset_ratio"])
@@ -146,7 +177,9 @@ def get_consumption_offset_target_ratio(*, pack: str = "rooftop_v1") -> float:
 def get_consumption_offset_assumed_yield(*, pack: str = "rooftop_v1") -> float:
     """CON-05. kWh/kWp/year fallback used only when generation.py hasn't
     produced a real yield figure yet for this site."""
-    return float(load_pack(pack)["consumption_offset_ceiling"]["assumed_specific_yield_kwh_per_kwp"])
+    return float(
+        load_pack(pack)["consumption_offset_ceiling"]["assumed_specific_yield_kwh_per_kwp"]
+    )
 
 
 def get_transformer_headroom_max_fraction(*, pack: str = "rooftop_v1") -> float:

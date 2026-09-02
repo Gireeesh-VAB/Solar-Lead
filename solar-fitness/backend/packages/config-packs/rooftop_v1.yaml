@@ -80,6 +80,79 @@ async_task_timeout_s: 30
 # Placeholder. Read by Person 3's engine/panorama.py.
 panorama_grid_resolution: 24
 
+# VIZ-01 — 3D building assembly. The mesh is no longer the roof surface
+# alone: walls are extruded from the roof perimeter down to a ground
+# level estimated from the DSM, a ground plane is added beneath, and the
+# real Solar API solarPanels[] layout is placed on the roof.
+#
+# Metres of DSM to sample OUTSIDE the roof polygon when estimating ground
+# level. The DSM crop used for the roof is masked to the boundary, so it
+# contains no ground pixels at all — this buffer is what makes a ground
+# estimate possible.
+panorama_ground_search_buffer_m: 12.0
+# GEO-04 hands back a 4-vertex BOUNDING BOX, not a traced roof outline
+# (see providers/solar_api.py), so the DSM crop always catches ground and
+# courtyard beside the building as well as the roof itself. Triangulating
+# both together stretches faces from ground level up to the roof and the
+# building renders as a fan, with panels dropped onto the ground pixels.
+#
+# Roof pixels are the high cluster. Anything more than this far below the
+# roof's own upper quartile is a mis-cropped surface, not part of the
+# roof, and is discarded before triangulation.
+#
+# 4 m still admits a genuine multi-level roof — more than a storey of
+# step between sections — while cutting the band of facade pixels down
+# the side of the building, which Delaunay would otherwise bridge into a
+# ragged skirt hanging off the roof edge. Measured at a real Hyderabad
+# site: 8 m kept 419 points spanning 9.6 m, 4 m keeps 400 of them
+# spanning 5.9 m. Nineteen points bought most of the cleanup.
+panorama_max_roof_step_m: 4.0
+# Percentile of those outside-the-roof pixels taken as ground level. A low
+# percentile avoids neighbouring buildings and trees dragging the estimate
+# up; not the minimum, which would chase a single noisy pixel.
+panorama_ground_percentile: 20
+# Sanity bounds on the resulting roof-minus-ground building height. A DSM
+# artifact outside these is discarded in favour of the fallback below,
+# rather than exported as a 500 m cliff.
+panorama_min_building_height_m: 2.0
+panorama_max_building_height_m: 120.0
+# Used only when the DSM yields no usable ground estimate at all.
+panorama_fallback_building_height_m: 6.0
+# Metres the ground plane extends beyond the building footprint. Enough
+# to seat the building in a setting; more and the plane dominates the
+# frame and the building reads as a small object on a big grey slab.
+panorama_ground_margin_m: 5.0
+# Cosmetic smoothing of the roof surface, VISUALISATION ONLY.
+#
+# BASE-tier DSM carries roughly a metre of noise, which triangulates into
+# a crumpled surface with spikes poking between the panels. These passes
+# average each vertex's height toward its neighbours', leaving x/y — and
+# therefore the footprint — untouched.
+#
+# This changes NO reported number. Area and capacity come from
+# engine/area.py and packs/universal.py, which never read this mesh;
+# engine/panorama.py is the visualisation path and nothing else. Kept
+# gentle so a real parapet or stairwell still reads as one.
+panorama_roof_smoothing_passes: 6
+panorama_roof_smoothing_weight: 0.5
+# Solar panel geometry. Panel length/width/wattage come from the Solar API
+# response itself (panelHeightMeters/panelWidthMeters/panelCapacityWatts)
+# — only the mounting depth, which the API does not report, is set here.
+panorama_panel_thickness_m: 0.04
+# Mounting clearance above the roof surface. Also keeps the panel faces
+# off the roof faces so they do not z-fight in the viewer.
+panorama_panel_clearance_m: 0.15
+# Clamp gap between neighbouring modules. The Solar API packs panel
+# centres exactly one panel-width apart, so rendering each module at its
+# full nominal size fuses the whole array into one dark slab. Real arrays
+# are clamped with a gap; rendering it is what makes individual panels
+# legible.
+panorama_panel_gap_m: 0.035
+# Aluminium frame border around each module's glass. Purely how a real
+# module is built — a dark laminate inside a light frame — and the single
+# biggest thing separating "array of panels" from "navy blob".
+panorama_panel_frame_m: 0.045
+
 # CON-07 — usable-area-to-capacity conversion, kWp per m^2 of usable roof
 # area, used by packs/universal.py. ~0.2 kWp/m2 (200 Wp/m2) is a typical
 # rooftop panel-density placeholder pending real panel-spec tuning.
@@ -95,6 +168,21 @@ net_metering_cap:
 consumption_offset_ceiling:
   target_offset_ratio: 1.0
   assumed_specific_yield_kwh_per_kwp: 1400
+
+# Effective retail tariff used to turn a customer's monthly BILL into the
+# units they consume, which is what consumption_offset_ceiling above
+# actually needs. Customers remember what they pay, not how many units
+# they used, so the form asks for rupees and this converts.
+#
+# PLACEHOLDER, and a load-bearing one: every recommended system size
+# derived from a bill scales inversely with this number. Indian domestic
+# tariffs are slabbed and vary by state and by consumption band — a
+# Telangana domestic connection can sit anywhere from about 1.45 to 9.50
+# INR/unit. 8.0 is a mid-to-upper effective rate for a household already
+# large enough to be considering rooftop solar; it is NOT a per-state or
+# per-slab model and should be replaced by one, or by asking the customer
+# for units directly, before this drives a real quote.
+electricity_tariff_inr_per_kwh: 8.0
 
 # CON-05 — transformer headroom ceiling, as a fraction of nameplate
 # transformer capacity. Placeholder.

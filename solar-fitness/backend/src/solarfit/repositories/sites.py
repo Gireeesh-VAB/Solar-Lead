@@ -155,6 +155,13 @@ class SiteRow(Base):
     usn: Mapped[str | None] = mapped_column(String(64), nullable=True)
     usn_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
+    # CON-05 input. The customer's own lowest/highest monthly bill, stored
+    # as entered rather than as derived kWh: the tariff that converts it is
+    # a config-pack placeholder that will change, and re-deriving from the
+    # original keeps old checks correct when it does.
+    monthly_bill_low_inr: Mapped[float | None] = mapped_column(Float, nullable=True)
+    monthly_bill_high_inr: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     current_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     created_at: Mapped[datetime] = mapped_column(
@@ -299,6 +306,8 @@ def create(
     tags: list[str] | None = None,
     usn: str | None = None,
     usn_source: str | None = None,
+    monthly_bill_low_inr: float | None = None,
+    monthly_bill_high_inr: float | None = None,
     actor: str = "system",
 ) -> Site:
     """SITE-01. Create a site.
@@ -336,6 +345,8 @@ def create(
         tags=tags,
         usn=usn,
         usn_source=usn_source,
+        monthly_bill_low_inr=monthly_bill_low_inr,
+        monthly_bill_high_inr=monthly_bill_high_inr,
         current_version=0,
     )
     session.add(row)
@@ -367,6 +378,28 @@ def create(
 def get(session: Session, site_id: str | uuid.UUID) -> Site | None:
     row = session.get(SiteRow, uuid.UUID(str(site_id)))
     return _to_domain(row) if row else None
+
+
+def get_bill_range(session: Session, site_id: str | uuid.UUID) -> tuple[float | None, float | None]:
+    """The customer's (lowest, highest) monthly bill, or (None, None).
+
+    Returned separately rather than added to the domain Site: that
+    contract is frozen Day 0 and every other person codes against it.
+    Only the capacity path needs this, so only the capacity path asks.
+
+    An id that isn't a UUID reports "no bill" rather than raising. The
+    caller is mid-lookup and has its own not-found path a line later;
+    letting a malformed id explode here turned that clean 404 into a 500.
+    """
+    try:
+        key = uuid.UUID(str(site_id))
+    except (ValueError, AttributeError, TypeError):
+        return None, None
+
+    row = session.get(SiteRow, key)
+    if row is None:
+        return None, None
+    return row.monthly_bill_low_inr, row.monthly_bill_high_inr
 
 
 def update_usn(session: Session, site_id: str | uuid.UUID, *, usn: str, usn_source: str) -> Site:
@@ -518,7 +551,9 @@ def new_geometry_version(
         geometry_source=geometry_source or row.geometry_source,
         imagery_date=imagery_date or row.imagery_date,
         imagery_quality=imagery_quality or row.imagery_quality,
-        geometry_confidence=geometry_confidence if geometry_confidence is not None else row.geometry_confidence,
+        geometry_confidence=geometry_confidence
+        if geometry_confidence is not None
+        else row.geometry_confidence,
         actor=actor,
         source=source,
         note=note,
@@ -538,9 +573,7 @@ def new_boundary_version(
 ) -> Site:
     """Compatibility shim over the Day-0 stub signature. Prefer
     new_geometry_version(), which can also change exclusions."""
-    return new_geometry_version(
-        session, site_id, boundary=boundary, actor=actor, source=source
-    )
+    return new_geometry_version(session, site_id, boundary=boundary, actor=actor, source=source)
 
 
 def record_field_measurement(

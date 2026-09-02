@@ -422,6 +422,10 @@ export interface NewCheckInput {
   lat: number;
   lng: number;
   siteType?: SiteType;
+  /** CON-05 input. Optional — omitting them sizes the system by roof area
+   *  alone, which is what every check did before bills could be captured. */
+  monthlyBillLowInr?: number;
+  monthlyBillHighInr?: number;
 }
 
 export async function createCheck(input: NewCheckInput): Promise<Site> {
@@ -438,4 +442,39 @@ export async function getCustomerProfile(): Promise<CustomerProfile> {
 
 export async function updateCustomerProfile(input: Partial<CustomerProfile>): Promise<CustomerProfile> {
   return apiFetch("/app/customer/profile", { method: "PATCH", body: input });
+}
+
+// -----------------------------------------------------------------------------
+// Google's real per-panel solar layout for a check's rooftop, for drawing
+// over the satellite imagery.
+//
+// Deliberately its OWN endpoint rather than a field on the check: it costs
+// a Solar API call, it is presentation-only, and a failure must never take
+// the result page's verdict or capacity down with it.
+//
+// panelCount/totalKwp here describe GOOGLE'S layout. They are not P2's
+// recommendation and the two genuinely disagree — never present them as
+// one number.
+// -----------------------------------------------------------------------------
+
+export interface SolarPanelPolygonDto {
+  corners: { lat: number; lng: number }[];
+  capacityWatts: number | null;
+  orientation: string;
+  segmentIndex: number | null;
+  azimuthDegrees: number | null;
+  pitchDegrees: number | null;
+}
+
+export interface SolarLayout {
+  status: "ok" | "no_coverage" | "no_layout" | "error";
+  reason: string | null;
+  source: string;
+  panelCount: number;
+  totalKwp: number;
+  panels: SolarPanelPolygonDto[];
+}
+
+export async function getCheckSolarLayout(checkId: string): Promise<SolarLayout> {
+  return apiFetch(`/app/checks/${checkId}/solar-layout`);
 }

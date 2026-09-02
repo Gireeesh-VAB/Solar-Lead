@@ -120,6 +120,8 @@ def create_site_core(
     district: str | None = None,
     state: str | None = None,
     tags: list[str] | None = None,
+    monthly_bill_low_inr: float | None = None,
+    monthly_bill_high_inr: float | None = None,
 ) -> tuple[Site, str | None]:
     """The real work behind SITE-01 + GEO-02 — geometry resolution,
     GEO-07/08 validation, SITE-02 schema check, persistence. Pulled out
@@ -131,7 +133,9 @@ def create_site_core(
 
     address/district/state/tags (karthik addition) are keyword-only and
     optional — the existing POST /sites caller below never passes them,
-    unaffected; routers/app_sites.py's frontend-shaped create does.
+    unaffected; routers/app_sites.py's frontend-shaped create does. The
+    monthly bill pair is the same: only the customer check flow collects
+    it, and a site created without it behaves exactly as before.
 
     The boundary goes through GEO-07/08 validation before it is stored —
     a rejected trace is a 422, never a silently repaired polygon.
@@ -147,10 +151,21 @@ def create_site_core(
 
     # GEO-04 + SHADE-01. Only when the caller gave an address and no
     # geometry — a supplied boundary always wins, since every other
-    # source outranks solar_api in base.PRECEDENCE.
+    # source outranks solar_api in base.PRECEDENCE. An address is what
+    # signals "please go and find this roof"; a bare centroid does not,
+    # and must not trigger a billed lookup on its own.
     if boundary is None and payload.address:
         try:
-            result = solar_api.resolve_for_address(payload.address)
+            if centroid:
+                # Coordinates already known — the frontend's map pin gives
+                # us these directly. Geocoding the address as well would
+                # be a second billed call to convert an address into a
+                # location we are already holding, and it would make the
+                # whole flow depend on the Geocoding API for no benefit.
+                lng, lat = centroid["coordinates"][0], centroid["coordinates"][1]
+                result = solar_api.resolve_for_location(float(lat), float(lng))
+            else:
+                result = solar_api.resolve_for_address(payload.address)
         except solar_api.SolarApiError as exc:
             # Configuration/quota problems are ours, not the caller's.
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
@@ -164,6 +179,29 @@ def create_site_core(
         if result.usable:
             boundary = result.boundary
             geometry_source = "solar_api"
+
+            # The boundary above is Google's bounding RECTANGLE, not a
+            # traced roof outline — Building Insights does not return one
+            # (verified against the live API, 2026-09-01). Measuring that
+            # rectangle over-states a real roof badly: on a Banjara Hills
+            # building it gave 227.7 m² against Google's own 127.1 m²
+            # roof figure, a 79% over-estimate. Quoting a system twice the
+            # size a roof can hold is exactly the kind of plausible-looking
+            # wrong number §17 exists to prevent.
+            #
+            # So when Google reports its own roof area, that supersedes
+            # the rectangle. The rectangle is still stored as the boundary
+            # because downstream needs *a* shape (imagery cropping, map
+            # display, an operator's starting point for a trace), but it
+            # no longer decides the area.
+            solar_area_m2 = result.roof_area_m2
+            if solar_area_m2:
+                resolution_note = (
+                    f"area from Solar API roof stats ({solar_area_m2:.1f} m²); "
+                    "stored boundary is Google's bounding box, not a traced "
+                    "outline — trace it (GEO-02) or field-measure it (GEO-06) "
+                    "to supersede this"
+                )
         elif centroid is None:
             # No coverage AND no location: nothing to store at all.
             raise HTTPException(
@@ -213,8 +251,12 @@ def create_site_core(
     duplicate = find_nearby_site(session, centroid, owner_org)
     if duplicate is not None:
         existing_site_id, distance_m = duplicate
-        duplicate_note = f"possible duplicate: existing site {existing_site_id} is {distance_m:.0f} m away"
-        resolution_note = f"{resolution_note}; {duplicate_note}" if resolution_note else duplicate_note
+        duplicate_note = (
+            f"possible duplicate: existing site {existing_site_id} is {distance_m:.0f} m away"
+        )
+        resolution_note = (
+            f"{resolution_note}; {duplicate_note}" if resolution_note else duplicate_note
+        )
 
     confidence = (
         validation.geometry_confidence(
@@ -268,6 +310,8 @@ def create_site_core(
         tags=tags,
         usn=payload.usn,
         usn_source=payload.usn_source,
+        monthly_bill_low_inr=monthly_bill_low_inr,
+        monthly_bill_high_inr=monthly_bill_high_inr,
         actor=owner_org,
     )
     return site, resolution_note

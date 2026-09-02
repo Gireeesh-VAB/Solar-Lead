@@ -221,12 +221,19 @@ def test_usn_on_a_residential_site_is_accepted_by_the_endpoint(client):
 def test_creating_a_site_near_an_existing_one_flags_a_possible_duplicate(client):
     """Regression: SITE-07's duplicate check was wired into bulk import
     only — a single POST /sites right on top of an existing site never
-    ran it at all."""
-    first = client.post("/sites", json=_payload(name="First roof"), headers=HEADERS).json()["site"]
+    ran it at all.
+
+    Uses a fresh tenant: `sites` is shared with every other row in this
+    database, so with a fixed org the check can match somebody else's
+    older roof at the same coordinates and the assertion below fails for
+    a reason that has nothing to do with the behaviour under test.
+    """
+    org = {"X-Owner-Org": f"org-dup-{uuid4().hex[:8]}"}
+    first = client.post("/sites", json=_payload(name="First roof"), headers=org).json()["site"]
 
     # ~10m away — well inside imports.py's 15m DUPLICATE_RADIUS_M, same tenant.
     nearby = client.post(
-        "/sites", json=_payload(name="Second roof", boundary=_poly(dlon=0.0001)), headers=HEADERS
+        "/sites", json=_payload(name="Second roof", boundary=_poly(dlon=0.0001)), headers=org
     )
     assert nearby.status_code == 201
     note = nearby.json()["resolution_note"]
@@ -236,7 +243,10 @@ def test_creating_a_site_near_an_existing_one_flags_a_possible_duplicate(client)
 
 
 def test_creating_a_site_far_from_others_has_no_duplicate_note(client):
-    far = client.post("/sites", json=_payload(name="Solo roof"), headers=HEADERS)
+    # Fresh tenant for the same reason as above — an unrelated roof at
+    # these coordinates would otherwise produce a duplicate note.
+    org = {"X-Owner-Org": f"org-solo-{uuid4().hex[:8]}"}
+    far = client.post("/sites", json=_payload(name="Solo roof"), headers=org)
     assert far.status_code == 201
     assert far.json()["resolution_note"] is None
 

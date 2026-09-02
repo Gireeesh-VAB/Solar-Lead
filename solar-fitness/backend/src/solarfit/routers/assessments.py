@@ -52,9 +52,11 @@ from solarfit.domain.site import RoofSiteType, UsnCapture
 from solarfit.engine import fitness, generation, resolver
 from solarfit.engine import ml_score as ml_score_engine
 from solarfit.engine.area import compute_usable_area_m2
+from solarfit.engine.consumption import estimate_annual_consumption
 from solarfit.packs import config_pack, rooftop, universal
 from solarfit.packs.config_pack import pack_version
 from solarfit.providers import weather as weather_provider
+from solarfit.providers.validation import GeometryRejected
 from solarfit.repositories import analysis_cache as analysis_cache_repo
 from solarfit.repositories import calibration
 from solarfit.repositories import sites as sites_repo
@@ -95,14 +97,29 @@ class AssessmentResponse(BaseModel):
     constraint_pack_version: str  # API-04
 
 
-def _collect_ceilings_and_gates(site, usable_area_m2: float) -> tuple[list, list]:
+def _collect_ceilings_and_gates(
+    site, usable_area_m2: float, annual_consumption_kwh: float | None = None
+) -> tuple[list, list]:
     """Rooftop-only product — both packs apply uniformly, no site-type
-    conditionals here (matches §17's resolver discipline)."""
+    conditionals here (matches §17's resolver discipline).
+
+    `annual_consumption_kwh` is CON-05's input, derived from the
+    customer's own bill by engine/consumption.py. Passing None leaves
+    consumption_offset at insufficient_data, which is what every
+    assessment did before a bill could be captured: the system was then
+    sized by roof area alone, and a household came back at tens of kWp it
+    could never use.
+    """
+    consumption_params = (
+        {"annual_consumption_kwh": annual_consumption_kwh}
+        if annual_consumption_kwh is not None
+        else {}
+    )
     ceilings = [
         universal.usable_area_ceiling(site, usable_area_m2),
         universal.evacuation_headroom_ceiling(site, {}),
         rooftop.net_metering_cap(site, {}),
-        rooftop.consumption_offset_ceiling(site, {}),
+        rooftop.consumption_offset_ceiling(site, consumption_params),
         rooftop.transformer_headroom_ceiling(site, {}),
         rooftop.subsidy_tier_cap(site, {}),  # already reads site.usn internally
     ]
@@ -129,6 +146,10 @@ def orchestrate_assessment(site_id: str, owner_org: str | None = None) -> Assess
     """
     with session_scope() as session:
         site = sites_repo.get(session, site_id)
+        # CON-05's input, read here rather than in a second session. Kept
+        # off the domain Site because that contract is frozen Day 0 and
+        # only the capacity path below needs it.
+        bill_low, bill_high = sites_repo.get_bill_range(session, site_id)
     if site is None or (owner_org is not None and site.owner_org != owner_org):
         raise SiteNotFoundError(f"Site {site_id} not found")
 
@@ -171,7 +192,12 @@ def orchestrate_assessment(site_id: str, owner_org: str | None = None) -> Assess
     usable_site = site.model_copy(update={"boundary": analysis.boundary})
     usable_area_m2 = compute_usable_area_m2(usable_site)
 
-    ceilings, gates = _collect_ceilings_and_gates(site, usable_area_m2)
+    # CON-05 — the customer's own bill, converted to annual units.
+    consumption = estimate_annual_consumption(bill_low, bill_high)
+
+    ceilings, gates = _collect_ceilings_and_gates(
+        site, usable_area_m2, consumption.annual_kwh if consumption else None
+    )
     capacity = resolver.resolve_capacity(ceilings)
 
     generation_estimate = (
@@ -308,3 +334,18 @@ def post_assessment(
         return orchestrate_assessment(site_id, owner_org)
     except SiteNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except GeometryRejected as e:
+        # GEO-04: absent Solar API coverage is a recordable outcome, not a
+        # server fault. Google covers India building-by-building, so this
+        # is the common case here rather than an edge one — a 500 both
+        # misreports it as our bug and leaves the caller with nothing
+        # actionable. The site still exists; it just needs geometry from a
+        # source that outranks solar_api (GEO-02 manual trace, GEO-05
+        # import, GEO-06 field measurement).
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"{e} — this location has no automatic roof data. Trace the "
+                "roof boundary manually to continue."
+            ),
+        ) from e

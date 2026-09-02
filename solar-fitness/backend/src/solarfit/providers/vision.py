@@ -98,7 +98,9 @@ class TransientError(Exception):
     which is never transient and should propagate immediately."""
 
 
-def with_retries(fn, *, attempts: int = 3, base_delay_s: float = 0.5, retryable_exceptions=(TransientError,)):
+def with_retries(
+    fn, *, attempts: int = 3, base_delay_s: float = 0.5, retryable_exceptions=(TransientError,)
+):
     """A small, dependency-free retry loop with exponential backoff.
     Reused as-is by providers/storage.py — the loop mechanics are
     generic; each caller decides what counts as retryable via
@@ -135,21 +137,49 @@ def _get_with_retries(url: str, *, params: dict | None = None) -> httpx.Response
     return with_retries(_do)
 
 
+# Both Solar API endpoints below 404 outright when the requested quality
+# does not exist at a location — neither falls back on its own.
+# Hardcoding MEDIUM meant every Indian location failed: verified
+# 2026-09-01 against two Hyderabad sites, MEDIUM -> 404 and BASE -> 200
+# at both, with Building Insights reporting imageryQuality=BASE for each.
+# Descending order so we still take the best data available where better
+# exists.
+_SOLAR_API_QUALITY_TIERS = ("MEDIUM", "BASE")
+
+
 def fetch_solar_api_datalayers(lat: float, lng: float, radius_meters: float = 25.0) -> dict:
     """The real imagery source for VIS-01, and later VIZ-01's elevation
     (dsmUrl). One HTTP call to Solar API's Data Layers endpoint; the
     returned URLs still need the API key appended before they can be
-    downloaded (see _download_geotiff_bytes)."""
+    downloaded (see _download_geotiff_bytes).
+
+    Returns {} when no tier has imagery here — the same "absence is data,
+    not an exception" shape fetch_building_insights() below already uses,
+    so callers handle one convention rather than two.
+    """
     api_key = get_settings().google_solar_api_key
-    params = {
-        "location.latitude": lat,
-        "location.longitude": lng,
-        "radiusMeters": radius_meters,
-        "view": "IMAGERY_LAYERS",
-        "requiredQuality": "MEDIUM",
-        "key": api_key,
-    }
-    return _get_with_retries(_SOLAR_API_DATALAYERS_URL, params=params).json()
+
+    for quality in _SOLAR_API_QUALITY_TIERS:
+        params = {
+            "location.latitude": lat,
+            "location.longitude": lng,
+            "radiusMeters": radius_meters,
+            "view": "IMAGERY_LAYERS",
+            "requiredQuality": quality,
+            "key": api_key,
+        }
+        try:
+            return _get_with_retries(_SOLAR_API_DATALAYERS_URL, params=params).json()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                logger.info(
+                    "Data Layers: no %s imagery at (%s, %s), trying next tier", quality, lat, lng
+                )
+                continue
+            raise
+
+    logger.info("Data Layers: no imagery at any quality tier for (%s, %s)", lat, lng)
+    return {}
 
 
 def fetch_building_insights(lat: float, lng: float) -> dict:
@@ -163,18 +193,30 @@ def fetch_building_insights(lat: float, lng: float) -> dict:
     on it. Returns {} (not an exception) if the location has no Solar
     API coverage — callers treat that the same as "no shading data"."""
     api_key = get_settings().google_solar_api_key
-    params = {
-        "location.latitude": lat,
-        "location.longitude": lng,
-        "requiredQuality": "MEDIUM",
-        "key": api_key,
-    }
-    try:
-        return _get_with_retries(_BUILDING_INSIGHTS_URL, params=params).json()
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 404:  # no Solar API coverage here
-            return {}
-        raise
+
+    # Same descending tier walk as fetch_solar_api_datalayers above.
+    # Pinning MEDIUM here 404'd at every BASE-tier location — i.e. most of
+    # India — and the 404 was swallowed as "no coverage", so the shading
+    # tint and the solarPanels[] panel layout silently never arrived.
+    for quality in _SOLAR_API_QUALITY_TIERS:
+        params = {
+            "location.latitude": lat,
+            "location.longitude": lng,
+            "requiredQuality": quality,
+            "key": api_key,
+        }
+        try:
+            return _get_with_retries(_BUILDING_INSIGHTS_URL, params=params).json()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                logger.info(
+                    "Building Insights: no %s data at (%s, %s), trying next tier", quality, lat, lng
+                )
+                continue
+            raise
+
+    logger.info("Building Insights: no data at any quality tier for (%s, %s)", lat, lng)
+    return {}
 
 
 def _download_geotiff_bytes(asset_url: str) -> bytes:
@@ -243,7 +285,9 @@ def crop_to_boundary(imagery: bytes, boundary: dict) -> CroppedImagery:
             dst.write(bands)
         png_bytes = out_memfile.read()
 
-    return CroppedImagery(png_bytes=png_bytes, transform=out_transform, crs=crs, width=width, height=height)
+    return CroppedImagery(
+        png_bytes=png_bytes, transform=out_transform, crs=crs, width=width, height=height
+    )
 
 
 class _ObstacleSchema(BaseModel):
@@ -272,7 +316,9 @@ class _VisionRefinementSchema(BaseModel):
 _GEOD = Geod(ellps="WGS84")
 
 
-def _bbox_fraction_to_bounding_polygon(item: _ObstacleSchema, cropped: CroppedImagery) -> dict | None:
+def _bbox_fraction_to_bounding_polygon(
+    item: _ObstacleSchema, cropped: CroppedImagery
+) -> dict | None:
     """OBS-01/02. Converts a normalized image-fraction bounding box into
     a real GeoJSON Polygon in EPSG:4326, using the crop's own affine
     transform — the same "trust the image's own geotransform" discipline
@@ -367,7 +413,9 @@ def refine_with_vision_model(cropped: CroppedImagery, boundary: dict) -> VisionR
         min_confidence = get_vision_min_confidence()
         if parsed.confidence < min_confidence:
             logger.info(
-                "Vision refinement: confidence %.2f below threshold %.2f", parsed.confidence, min_confidence
+                "Vision refinement: confidence %.2f below threshold %.2f",
+                parsed.confidence,
+                min_confidence,
             )
             return VisionRefinement(
                 obstruction_notes=parsed.obstruction_notes,
@@ -379,9 +427,15 @@ def refine_with_vision_model(cropped: CroppedImagery, boundary: dict) -> VisionR
         for item in parsed.obstacles:
             bounding_polygon = _bbox_fraction_to_bounding_polygon(item, cropped)
             if bounding_polygon is None:
-                logger.warning("Vision refinement: dropping obstacle with degenerate bbox (%s)", item.type)
+                logger.warning(
+                    "Vision refinement: dropping obstacle with degenerate bbox (%s)", item.type
+                )
                 continue
-            obstacles.append(Obstacle(type=item.type, bounding_polygon=bounding_polygon, confidence=item.confidence))
+            obstacles.append(
+                Obstacle(
+                    type=item.type, bounding_polygon=bounding_polygon, confidence=item.confidence
+                )
+            )
 
         return VisionRefinement(
             corrected_boundary=None,  # see VIS-02 scoping note
@@ -417,7 +471,9 @@ def validate_obstacle_polygon(obstacle: Obstacle, boundary: dict) -> bool:
         return False
     if not boundary_geom.is_valid or boundary_geom.is_empty:
         return False
-    if not boundary_geom.covers(poly):  # GEO-08: contained in the boundary (touching an edge is fine)
+    if not boundary_geom.covers(
+        poly
+    ):  # GEO-08: contained in the boundary (touching an edge is fine)
         return False
 
     obstacle_area_m2 = abs(_GEOD.geometry_area_perimeter(poly)[0])

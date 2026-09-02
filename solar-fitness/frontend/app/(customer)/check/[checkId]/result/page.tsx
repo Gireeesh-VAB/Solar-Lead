@@ -8,7 +8,7 @@ import { VerdictChip } from "@/components/ui/VerdictChip";
 import { ConfidenceMeter } from "@/components/ui/ConfidenceMeter";
 import { BindingConstraintTag } from "@/components/ui/BindingConstraintTag";
 import { Button, Card } from "@/components/ui/Primitives";
-import { MapView } from "@/components/map/MapView";
+import { ResultMap } from "./ResultMap";
 import { formatKwp } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -67,9 +67,16 @@ export default async function ResultPage({ params }: { params: Promise<{ checkId
 
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">Location</p>
-        <MapView
-          pins={[{ id: check.id, lat: check.location.lat, lng: check.location.lng, label: check.name, verdict: assessment.verdict }]}
-          height={260}
+        <ResultMap
+          checkId={check.id}
+          pin={{
+            id: check.id,
+            lat: check.location.lat,
+            lng: check.location.lng,
+            label: check.name,
+            verdict: assessment.verdict,
+          }}
+          height={300}
         />
         <p className="mt-1.5 flex items-center gap-1 text-xs text-ink-faint">
           <MapPin size={12} strokeWidth={1.75} aria-hidden="true" />
