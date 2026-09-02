@@ -7,6 +7,7 @@ import type {
   AssessmentListParams,
   AuditLogListParams,
   NewCheckInput,
+  NewVendorInput,
   SiteListParams,
   VendorJobListParams,
 } from "@/lib/api/client";
@@ -218,8 +219,12 @@ export function useDisputeSubmission(id: string) {
 // Super admin portal
 // -----------------------------------------------------------------------------
 
-export function useAdminVendors(params: AdminVendorListParams = {}) {
-  return useQuery({ queryKey: ["admin-vendors", params], queryFn: () => api.listAdminVendors(params) });
+export function useAdminVendors(params: AdminVendorListParams = {}, options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: ["admin-vendors", params],
+    queryFn: () => api.listAdminVendors(params),
+    enabled: options.enabled,
+  });
 }
 
 export function useAdminVendor(id: string) {
@@ -270,7 +275,53 @@ export function useRotateApiKey() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (service: string) => api.rotateApiKey(service),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["platform-health"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["platform-health"] });
+      qc.invalidateQueries({ queryKey: ["service-api-keys"] });
+    },
+  });
+}
+
+export function useServiceApiKeys() {
+  return useQuery({ queryKey: ["service-api-keys"], queryFn: api.listServiceApiKeys });
+}
+
+export function useFeatureFlags() {
+  return useQuery({ queryKey: ["feature-flags"], queryFn: api.listFeatureFlags });
+}
+
+export function useSetFeatureFlag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { key: string; enabled: boolean }) => api.setFeatureFlag(input.key, input.enabled),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["feature-flags"] }),
+  });
+}
+
+export function useCreateAdminVendor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: NewVendorInput) => api.createAdminVendor(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-vendors"] }),
+  });
+}
+
+export function useAdminVendorJobs(vendorId: string) {
+  return useQuery({ queryKey: ["admin-vendor-jobs", vendorId], queryFn: () => api.listAdminVendorJobs(vendorId) });
+}
+
+export function useAdminVendorPayouts(vendorId: string) {
+  return useQuery({
+    queryKey: ["admin-vendor-payouts", vendorId],
+    queryFn: () => api.listAdminVendorPayouts(vendorId),
+  });
+}
+
+export function usePublishJurisdiction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (pack: string) => api.publishJurisdiction(pack),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["jurisdictions"] }),
   });
 }
 

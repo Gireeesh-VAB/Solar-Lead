@@ -8,11 +8,14 @@ Run a worker with: uv run celery -A solarfit.workers.celery_app worker --logleve
 Run the beat scheduler with: uv run celery -A solarfit.workers.celery_app beat --loglevel=info
 """
 
+import logging
+
 from celery import Celery
 from celery.schedules import crontab
 
 from solarfit.config import get_settings
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 celery_app = Celery("solarfit", broker=settings.redis_url, backend=settings.redis_url)
@@ -52,15 +55,34 @@ def refine_vision_task(lat: float, lng: float, boundary: dict, radius_meters: fl
     Dispatch with:
         from solarfit.workers.celery_app import refine_vision_task
         refine_vision_task.delay(lat, lng, boundary)
+
+    Fix note: the docstring above always claimed "never raises", but
+    fetch_rgb_imagery()/crop_to_boundary() sat outside
+    refine_with_vision_model()'s own try/except — a location with no
+    Solar API Data Layers coverage (a real, ordinary 404, not a bug)
+    propagated as an unhandled exception, which autoretry_for retried
+    3x against a condition that can never succeed, then finally failed
+    the task for good, which analysis_cache.py's blocking .get(timeout=)
+    then re-raised into the request path (a 500 on POST .../complete,
+    surfaced live as the frontend's processing page hanging forever with
+    no error — see ProcessingClient.tsx's fix for the other half of
+    this). Now caught here too, so VIS-04 actually holds for this step
+    the way the docstring already claimed it did.
     """
+    from solarfit.domain.assessment import VisionRefinement
     from solarfit.providers.vision import (
         crop_to_boundary,
         fetch_rgb_imagery,
         refine_with_vision_model,
     )
 
-    imagery = fetch_rgb_imagery(lat, lng, radius_meters)
-    cropped = crop_to_boundary(imagery, boundary)
+    try:
+        imagery = fetch_rgb_imagery(lat, lng, radius_meters)
+        cropped = crop_to_boundary(imagery, boundary)
+    except Exception:
+        logger.exception("Vision refinement: imagery fetch/crop failed for (%s, %s)", lat, lng)
+        return VisionRefinement(status="insufficient_data").model_dump()
+
     result = refine_with_vision_model(cropped, boundary)
     return result.model_dump()
 

@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from solarfit.db import get_session
 from solarfit.main import app
 from solarfit.repositories import audit as audit_repo
+from solarfit.repositories import sites as sites_repo
 
 
 @pytest.fixture
@@ -141,7 +142,12 @@ def test_platform_health_returns_expected_shape(client, make_auth_header):
     assert body["incidentsThisMonth"] == 0  # honest zero — nothing writes "platform.incident" yet
     assert len(body["quotas"]) == 4
     for quota in body["quotas"]:
-        assert quota["used"] == 0
+        # `used` is a real count of this month's activity (see
+        # _QUOTA_LIMITS's docstring) — not asserted as exactly 0, since a
+        # shared dev database may already have sites/assessments from
+        # this month. test_platform_health_quota_used_reflects_real_activity
+        # below verifies it actually moves with real data.
+        assert quota["used"] >= 0
         assert quota["limit"] > 0
         assert quota["unit"]
 
@@ -152,6 +158,29 @@ def test_platform_health_counts_incidents_this_month(client, make_auth_header, d
 
     response = client.get("/app/admin/platform-health", headers=headers)
     assert response.json()["incidentsThisMonth"] == 1
+
+
+def test_platform_health_quota_used_reflects_real_activity(client, make_auth_header, db_session):
+    """Google Maps API's `used` is a real count of sites created this
+    month — creating one more site must move it, not stay pinned at a
+    hardcoded value."""
+    headers = make_auth_header(role="admin")
+
+    def maps_used() -> int:
+        body = client.get("/app/admin/platform-health", headers=headers).json()
+        return next(q["used"] for q in body["quotas"] if q["service"] == "Google Maps API")
+
+    before = maps_used()
+    sites_repo.create(
+        db_session,
+        site_type="ROOFTOP_RESIDENTIAL",
+        name="Quota Test Rooftop",
+        owner_org="Test Org",
+        jurisdiction="IN-TG",
+        centroid={"type": "Point", "coordinates": [78.4867, 17.3850]},
+    )
+    after = maps_used()
+    assert after == before + 1
 
 
 # --------------------------------------------------------------------- #

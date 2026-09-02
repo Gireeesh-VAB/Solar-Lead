@@ -19,12 +19,14 @@ import type {
   CalibrationProposal,
   CompositeSite,
   ConfidenceTier,
+  FeatureFlag,
   HistoryEvent,
   ImportJob,
   JurisdictionConstraintPack,
   ModelVersionProposal,
   PayoutEntry,
   PlatformHealthMetric,
+  ServiceApiKey,
   Site,
   SiteType,
   Verdict,
@@ -119,6 +121,10 @@ async function getModelVersionOrThrow(id: string): Promise<ModelVersionProposal>
 
 export async function listJurisdictions(): Promise<JurisdictionConstraintPack[]> {
   return apiFetch("/app/jurisdictions");
+}
+
+export async function publishJurisdiction(pack: string): Promise<JurisdictionConstraintPack> {
+  return apiFetch(`/app/admin/jurisdictions/${pack}/publish`, { method: "POST" });
 }
 
 // -----------------------------------------------------------------------------
@@ -302,6 +308,45 @@ export async function rejectVendorVerification(id: string): Promise<AdminVendorS
   return apiFetch(`/app/admin/vendors/${id}/verification/reject`, { method: "POST" });
 }
 
+export interface NewVendorInput {
+  name: string;
+  legalName?: string;
+  gstNumber?: string;
+  panNumber?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  serviceAreaRegion: string;
+  serviceAreaDistricts: string[];
+  payoutMethodType: "UPI" | "Bank transfer";
+  payoutMaskedAccount: string;
+  certifications: string[];
+  documents: string[];
+}
+
+export interface NewVendorResult {
+  vendor: AdminVendorSummary;
+  loginEmail: string;
+  temporaryPassword: string;
+}
+
+export async function createAdminVendor(input: NewVendorInput): Promise<NewVendorResult> {
+  return apiFetch("/app/admin/vendors", { method: "POST", body: input });
+}
+
+export async function listAdminVendorJobs(vendorId: string): Promise<VendorJob[]> {
+  return apiFetch(`/app/admin/vendors/${vendorId}/jobs`);
+}
+
+export async function listAdminVendorPayouts(vendorId: string): Promise<PayoutEntry[]> {
+  return apiFetch(`/app/admin/vendors/${vendorId}/payouts`);
+}
+
 export interface AdminAssessmentRow {
   siteId: string;
   siteName: string;
@@ -400,6 +445,18 @@ export async function getPlatformHealth(): Promise<PlatformHealthMetric> {
 
 export async function rotateApiKey(service: string): Promise<{ service: string; rotatedAt: string }> {
   return apiFetch("/app/admin/api-keys/rotate", { method: "POST", body: { service } });
+}
+
+export async function listServiceApiKeys(): Promise<ServiceApiKey[]> {
+  return apiFetch("/app/admin/api-keys");
+}
+
+export async function listFeatureFlags(): Promise<FeatureFlag[]> {
+  return apiFetch("/app/admin/feature-flags");
+}
+
+export async function setFeatureFlag(key: string, enabled: boolean): Promise<FeatureFlag> {
+  return apiFetch(`/app/admin/feature-flags/${key}`, { method: "PATCH", body: { enabled } });
 }
 
 // -----------------------------------------------------------------------------

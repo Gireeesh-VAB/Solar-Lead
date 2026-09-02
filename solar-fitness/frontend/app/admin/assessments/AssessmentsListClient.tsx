@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { useAllAssessments } from "@/lib/query/hooks";
 import { TableSkeleton, ErrorState, EmptyState, Button } from "@/components/ui/Primitives";
 import { VerdictChip } from "@/components/ui/VerdictChip";
@@ -88,9 +87,7 @@ export function AssessmentsListClient() {
                 {pageItems.map((row, i) => (
                   <tr key={row.siteId} className={i % 2 === 1 ? "bg-surface" : undefined}>
                     <td className="py-2.5 pr-3">
-                      <Link href={`/admin/tenants`} className="font-medium text-ink hover:text-slate">
-                        {row.siteName}
-                      </Link>
+                      <p className="font-medium text-ink">{row.siteName}</p>
                       <p className="font-mono tabular text-xs text-ink-faint">{row.siteId}</p>
                     </td>
                     <td className="py-2.5 pr-3 text-ink-soft">{row.district}, {row.state}</td>

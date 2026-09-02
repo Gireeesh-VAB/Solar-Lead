@@ -88,6 +88,15 @@ def mark_confirmed(session: Session, upload_id: str) -> UsnOcrUpload:
     return upload
 
 
+def count_uploaded_since(session: Session, since: datetime) -> int:
+    """Real proxy for Vision API usage on the admin platform-health
+    quota display — every bill/payment-proof upload triggers one OCR
+    call. No per-provider call metering exists anywhere in this
+    codebase, so this is the closest honest count."""
+    stmt = select(UsnOcrUpload).where(UsnOcrUpload.uploaded_at >= since)
+    return len(list(session.scalars(stmt).all()))
+
+
 def find_expired(session: Session) -> list[UsnOcrUpload]:
     """USN-06. Rows past their retention deadline that still hold
     evidence to purge. Returns the rows themselves (not just IDs) since

@@ -1,0 +1,345 @@
+INFO:     Started server process [6724]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:59213 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64345 - "OPTIONS /app/auth/signup HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64345 - "POST /app/auth/signup HTTP/1.1" 201 Created
+INFO:     127.0.0.1:64345 - "OPTIONS /app/customer/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62758 - "PATCH /app/customer/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51435 - "GET /app/checks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62758 - "OPTIONS /app/checks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64345 - "POST /app/checks HTTP/1.1" 201 Created
+INFO:     127.0.0.1:64345 - "OPTIONS /app/checks/5b37298d-9617-4325-848b-0023d3c0e3fd/complete HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50295 - "POST /app/checks/5b37298d-9617-4325-848b-0023d3c0e3fd/complete HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62308 - "GET /app/checks/5b37298d-9617-4325-848b-0023d3c0e3fd HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57011 - "OPTIONS /app/auth/signup HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57011 - "POST /app/auth/signup HTTP/1.1" 201 Created
+INFO:     127.0.0.1:57011 - "OPTIONS /app/customer/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50640 - "PATCH /app/customer/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59318 - "GET /app/checks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50640 - "OPTIONS /app/checks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57011 - "POST /app/checks HTTP/1.1" 201 Created
+INFO:     127.0.0.1:57011 - "OPTIONS /app/checks/ed8b4c6b-e742-48d8-a82a-6c3ab7e6504c/complete HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50640 - "POST /app/checks/ed8b4c6b-e742-48d8-a82a-6c3ab7e6504c/complete HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\celery\backends\asynchronous.py", line 397, in _wait_for_pending
+    for _ in self.drain_events_until(
+             ~~~~~~~~~~~~~~~~~~~~~~~^
+            result.on_ready, timeout=timeout,
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            on_interval=on_interval):
+            ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\celery\backends\asynchronous.py", line 86, in drain_events_until
+    raise socket.timeout()
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\applications.py", line 96, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\routing.py", line 670, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 2734, in app
+    await route.handle(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1780, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 2789, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1800, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1279, in handle
+    await app(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 158, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 144, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 706, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2641, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1033, in run
+    result = context.run(func, *args)
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\routers\app_checks.py", line 194, in complete_check
+    response = orchestrate_assessment(check_id)
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\routers\assessments.py", line 137, in orchestrate_assessment
+    analysis = analysis_cache_repo.get_or_create_analysis(lat, lng, site.site_type, params={})
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\repositories\analysis_cache.py", line 278, in get_or_create_analysis
+    refinement_dict = refine_vision_task.delay(lat, lng, boundary).get(timeout=timeout_s)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\celery\result.py", line 253, in get
+    return self.backend.wait_for_pending(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, timeout=timeout,
+        ^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        on_message=on_message,
+        ^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\celery\backends\asynchronous.py", line 298, in wait_for_pending
+    for _ in self._wait_for_pending(result, **kwargs):
+             ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\celery\backends\asynchronous.py", line 403, in _wait_for_pending
+    raise TimeoutError('The operation timed out.')
+celery.exceptions.TimeoutError: The operation timed out.
+INFO:     127.0.0.1:58645 - "OPTIONS /app/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58645 - "POST /app/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56902 - "GET /app/checks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54264 - "POST /app/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60391 - "OPTIONS /app/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60391 - "POST /app/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60391 - "OPTIONS /app/vendor/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60391 - "OPTIONS /app/vendor/earnings-summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57025 - "OPTIONS /app/vendor/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56144 - "GET /app/vendor/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60391 - "GET /app/vendor/earnings-summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57025 - "GET /app/vendor/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56025 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56032 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49946 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49948 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49953 - "GET /app/jurisdictions HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:49955 - "POST /app/auth/signup HTTP/1.1" 422 Unprocessable Content
+INFO:     127.0.0.1:49956 - "POST /app/auth/signup HTTP/1.1" 201 Created
+INFO:     127.0.0.1:49954 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60777 - "OPTIONS /app/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60777 - "POST /app/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57188 - "GET /app/checks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63949 - "OPTIONS /app/checks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63949 - "POST /app/checks HTTP/1.1" 201 Created
+INFO:     127.0.0.1:63949 - "OPTIONS /app/checks/a9491332-3637-43be-82c1-02ea3d2818fe/complete HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63949 - "POST /app/checks/a9491332-3637-43be-82c1-02ea3d2818fe/complete HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58509 - "GET /app/checks/a9491332-3637-43be-82c1-02ea3d2818fe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56866 - "POST /app/checks HTTP/1.1" 201 Created
+INFO:     127.0.0.1:56866 - "OPTIONS /app/checks/e19e5f6c-1e3b-411a-ab29-2829437be3c6/complete HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56866 - "POST /app/checks/e19e5f6c-1e3b-411a-ab29-2829437be3c6/complete HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\applications.py", line 96, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\routing.py", line 670, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 2734, in app
+    await route.handle(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1780, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 2789, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1800, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1279, in handle
+    await app(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 158, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 144, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 706, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2641, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1033, in run
+    result = context.run(func, *args)
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\routers\app_checks.py", line 194, in complete_check
+    response = orchestrate_assessment(check_id)
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\routers\assessments.py", line 137, in orchestrate_assessment
+    analysis = analysis_cache_repo.get_or_create_analysis(lat, lng, site.site_type, params={})
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\repositories\analysis_cache.py", line 275, in get_or_create_analysis
+    boundary = resolve_via_solar_api(site=geo_lookup_site, params=params)  # GEO
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\solar_api.py", line 442, in resolve_via_solar_api
+    raise GeometryRejected(
+    ...<2 lines>...
+    )
+solarfit.providers.validation.GeometryRejected: Solar API could not resolve a boundary (no_coverage): no building covered at this location
+INFO:     127.0.0.1:56874 - "POST /app/checks/e19e5f6c-1e3b-411a-ab29-2829437be3c6/complete HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\applications.py", line 96, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\routing.py", line 670, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 2734, in app
+    await route.handle(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1780, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 2789, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1800, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1279, in handle
+    await app(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 158, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 144, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 706, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2641, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1033, in run
+    result = context.run(func, *args)
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\routers\app_checks.py", line 194, in complete_check
+    response = orchestrate_assessment(check_id)
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\routers\assessments.py", line 137, in orchestrate_assessment
+    analysis = analysis_cache_repo.get_or_create_analysis(lat, lng, site.site_type, params={})
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\repositories\analysis_cache.py", line 275, in get_or_create_analysis
+    boundary = resolve_via_solar_api(site=geo_lookup_site, params=params)  # GEO
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\solar_api.py", line 442, in resolve_via_solar_api
+    raise GeometryRejected(
+    ...<2 lines>...
+    )
+solarfit.providers.validation.GeometryRejected: Solar API could not resolve a boundary (no_coverage): no building covered at this location

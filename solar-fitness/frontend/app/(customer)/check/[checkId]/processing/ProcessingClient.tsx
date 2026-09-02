@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/Primitives";
+import { ApiError } from "@/lib/api/fetchClient";
 import { cn } from "@/lib/utils";
 import { useCompleteCheck } from "@/lib/query/hooks";
 
@@ -19,24 +21,58 @@ export function ProcessingClient({ checkId }: { checkId: string }) {
   const router = useRouter();
   const completeCheck = useCompleteCheck(checkId);
   const [activeStep, setActiveStep] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (activeStep >= STEPS.length) return;
+    if (error || activeStep >= STEPS.length) return;
     const timer = setTimeout(() => setActiveStep((s) => s + 1), STEP_DURATION_MS);
     return () => clearTimeout(timer);
-  }, [activeStep]);
+  }, [activeStep, error]);
 
   useEffect(() => {
-    if (activeStep < STEPS.length) return;
+    if (error || activeStep < STEPS.length) return;
     let cancelled = false;
-    completeCheck.mutateAsync().then(() => {
-      if (!cancelled) router.replace(`/check/${checkId}/result`);
-    });
+    completeCheck
+      .mutateAsync()
+      .then(() => {
+        if (!cancelled) router.replace(`/check/${checkId}/result`);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof ApiError ? err.message : "Something went wrong while checking this location.");
+      });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStep]);
+  }, [activeStep, error]);
+
+  const retry = () => {
+    setError(null);
+    setActiveStep(STEPS.length); // skip the step animation on retry — it already played once
+  };
+
+  if (error) {
+    return (
+      <div className="mx-auto flex max-w-sm flex-col items-center gap-4 py-16 text-center">
+        <AlertTriangle size={32} strokeWidth={1.75} style={{ color: "var(--bad)" }} aria-hidden="true" />
+        <div>
+          <h1 className="text-lg font-semibold text-ink">We couldn&apos;t finish checking this location</h1>
+          <p role="alert" className="mt-1 text-sm text-ink-soft">
+            {error}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button type="button" variant="secondary" onClick={() => router.push("/check/new")}>
+            Check another location
+          </Button>
+          <Button type="button" onClick={retry}>
+            Try again
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex max-w-sm flex-col items-center gap-6 py-16 text-center">

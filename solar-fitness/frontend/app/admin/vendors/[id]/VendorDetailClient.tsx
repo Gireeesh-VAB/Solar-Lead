@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useAdminVendor, useAdminVendorStatusAction, useVendorJobs, useVendorPayouts } from "@/lib/query/hooks";
+import {
+  useAdminVendor,
+  useAdminVendorJobs,
+  useAdminVendorPayouts,
+  useAdminVendorStatusAction,
+} from "@/lib/query/hooks";
 import { Card, CardSkeleton, ErrorState, Button } from "@/components/ui/Primitives";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { formatDate } from "@/lib/utils";
@@ -10,10 +15,8 @@ import { Ban, CheckCircle2 } from "lucide-react";
 export function VendorDetailClient({ vendorId }: { vendorId: string }) {
   const vendor = useAdminVendor(vendorId);
   const statusAction = useAdminVendorStatusAction(vendorId);
-  // Demo submissions/payout data reused from the vendor-portal mock store — in
-  // production this would be scoped server-side by vendorId.
-  const jobs = useVendorJobs();
-  const payouts = useVendorPayouts();
+  const jobs = useAdminVendorJobs(vendorId);
+  const payouts = useAdminVendorPayouts(vendorId);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   if (vendor.isLoading) {
@@ -83,6 +86,64 @@ export function VendorDetailClient({ vendorId }: { vendorId: string }) {
           )}
         </div>
       </Card>
+
+      {(v.legalName || v.gstNumber || v.panNumber || v.contactName || v.contactEmail || v.addressLine1 || (v.certifications && v.certifications.length > 0)) && (
+        <Card className="p-4 space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-faint">Business & contact details</h2>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            {v.legalName && (
+              <div>
+                <p className="text-xs text-ink-faint">Legal name</p>
+                <p className="text-ink">{v.legalName}</p>
+              </div>
+            )}
+            {v.gstNumber && (
+              <div>
+                <p className="text-xs text-ink-faint">GST number</p>
+                <p className="font-mono tabular text-ink">{v.gstNumber}</p>
+              </div>
+            )}
+            {v.panNumber && (
+              <div>
+                <p className="text-xs text-ink-faint">PAN number</p>
+                <p className="font-mono tabular text-ink">{v.panNumber}</p>
+              </div>
+            )}
+            {v.contactName && (
+              <div>
+                <p className="text-xs text-ink-faint">Contact person</p>
+                <p className="text-ink">{v.contactName}</p>
+              </div>
+            )}
+            {v.contactPhone && (
+              <div>
+                <p className="text-xs text-ink-faint">Contact phone</p>
+                <p className="font-mono tabular text-ink">{v.contactPhone}</p>
+              </div>
+            )}
+            {v.contactEmail && (
+              <div>
+                <p className="text-xs text-ink-faint">Contact email</p>
+                <p className="text-ink">{v.contactEmail}</p>
+              </div>
+            )}
+            {(v.addressLine1 || v.city || v.state || v.pincode) && (
+              <div className="col-span-2">
+                <p className="text-xs text-ink-faint">Address</p>
+                <p className="text-ink">
+                  {[v.addressLine1, v.addressLine2, v.city, v.state, v.pincode].filter(Boolean).join(", ")}
+                </p>
+              </div>
+            )}
+            {v.certifications && v.certifications.length > 0 && (
+              <div className="col-span-2">
+                <p className="text-xs text-ink-faint">Certifications</p>
+                <p className="text-ink">{v.certifications.join(", ")}</p>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       <Card className="p-4">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-faint">Recent submissions</h2>

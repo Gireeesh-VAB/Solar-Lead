@@ -16,7 +16,13 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
-export function LoginForm() {
+export function LoginForm({
+  defaultEmail = "",
+  defaultPassword = "",
+}: {
+  defaultEmail?: string;
+  defaultPassword?: string;
+}) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -26,7 +32,7 @@ export function LoginForm() {
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { email: defaultEmail, password: defaultPassword },
   });
 
   const onSubmit = handleSubmit(async (values) => {

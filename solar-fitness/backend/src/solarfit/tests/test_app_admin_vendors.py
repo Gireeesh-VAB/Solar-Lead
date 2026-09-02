@@ -16,7 +16,8 @@ from solarfit.db import get_session
 from solarfit.main import app
 from solarfit.repositories import audit as audit_repo
 from solarfit.repositories import sites as sites_repo
-from solarfit.repositories.vendors import VendorJobRow, VendorRow
+from solarfit.repositories import users as users_repo
+from solarfit.repositories.vendors import VendorJobRow, VendorPayoutRow, VendorRow
 
 LON, LAT = 78.4867, 17.3850
 
@@ -191,3 +192,111 @@ def test_mutation_on_unknown_vendor_is_404(client, make_auth_header):
         headers=make_auth_header(role="admin"),
     )
     assert r.status_code == 404
+
+
+def _create_payload(**overrides) -> dict:
+    payload = {
+        "name": "New Vendor Surveys",
+        "legalName": "New Vendor Surveys Pvt Ltd",
+        "gstNumber": "36AAAAA0000A1Z5",
+        "panNumber": "AAAAA0000A",
+        "contactName": "Asha Rao",
+        "contactPhone": "+91-9000000000",
+        "contactEmail": "asha@newvendor.example",
+        "addressLine1": "12 MG Road",
+        "city": "Hyderabad",
+        "state": "Telangana",
+        "pincode": "500001",
+        "serviceAreaRegion": "Telangana",
+        "serviceAreaDistricts": ["Hyderabad", "Rangareddy"],
+        "payoutMethodType": "UPI",
+        "payoutMaskedAccount": "newvendor@upi",
+        "certifications": ["Electrical contractor license"],
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_create_vendor_requires_admin_role(client, make_auth_header):
+    r = client.post("/app/admin/vendors", json=_create_payload(), headers=make_auth_header(role="vendor"))
+    assert r.status_code == 403
+
+
+def test_create_vendor_requires_auth(client):
+    r = client.post("/app/admin/vendors", json=_create_payload())
+    assert r.status_code == 401
+
+
+def test_create_vendor_creates_row_and_linked_login(client, make_auth_header, db_session):
+    r = client.post("/app/admin/vendors", json=_create_payload(), headers=make_auth_header(role="admin"))
+    assert r.status_code == 201
+    body = r.json()
+
+    assert body["loginEmail"] == "asha@newvendor.example"
+    assert len(body["temporaryPassword"]) >= 8
+    assert body["vendor"]["name"] == "New Vendor Surveys"
+    assert body["vendor"]["gstNumber"] == "36AAAAA0000A1Z5"
+    assert body["vendor"]["certifications"] == ["Electrical contractor license"]
+
+    user = users_repo.get_by_email(db_session, "asha@newvendor.example")
+    assert user is not None
+    assert user.role == "vendor"
+    assert str(user.vendor_id) == body["vendor"]["id"]
+
+    rows = audit_repo.list_audit_log(db_session, action="vendor.created")
+    assert any(row.target == body["vendor"]["id"] for row in rows)
+
+
+def test_create_vendor_duplicate_email_is_409(client, make_auth_header):
+    headers = make_auth_header(role="admin")
+    r1 = client.post("/app/admin/vendors", json=_create_payload(), headers=headers)
+    assert r1.status_code == 201
+
+    r2 = client.post(
+        "/app/admin/vendors", json=_create_payload(name="Another Vendor"), headers=headers
+    )
+    assert r2.status_code == 409
+
+
+def test_admin_can_read_specific_vendors_jobs_and_payouts(client, make_auth_header, db_session, site):
+    vendor_a = _vendor(db_session, name="Vendor A")
+    vendor_b = _vendor(db_session, name="Vendor B")
+    job_a = _job(db_session, site, vendor_a)
+    db_session.add(
+        VendorPayoutRow(
+            vendor_id=vendor_a.id,
+            job_id=job_a.id,
+            amount=1200,
+            status="paid",
+            date=datetime.now(UTC),
+            method="UPI",
+        )
+    )
+    db_session.add(
+        VendorPayoutRow(
+            vendor_id=vendor_b.id,
+            amount=900,
+            status="pending",
+            date=datetime.now(UTC),
+            method="UPI",
+        )
+    )
+    db_session.flush()
+
+    headers = make_auth_header(role="admin")
+
+    jobs_a = client.get(f"/app/admin/vendors/{vendor_a.id}/jobs", headers=headers)
+    assert jobs_a.status_code == 200
+    assert [j["id"] for j in jobs_a.json()] == [str(job_a.id)]
+
+    jobs_b = client.get(f"/app/admin/vendors/{vendor_b.id}/jobs", headers=headers)
+    assert jobs_b.status_code == 200
+    assert jobs_b.json() == []
+
+    payouts_a = client.get(f"/app/admin/vendors/{vendor_a.id}/payouts", headers=headers)
+    assert payouts_a.status_code == 200
+    assert [p["amount"] for p in payouts_a.json()] == [1200]
+
+    payouts_b = client.get(f"/app/admin/vendors/{vendor_b.id}/payouts", headers=headers)
+    assert payouts_b.status_code == 200
+    assert [p["amount"] for p in payouts_b.json()] == [900]

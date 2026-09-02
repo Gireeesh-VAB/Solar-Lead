@@ -27,6 +27,16 @@ export default function LoginPage() {
             Sign up
           </Link>
         </p>
+        <p className="mt-2 text-center text-xs text-ink-faint">
+          Dev shortcuts:{" "}
+          <Link href="/login/admin" className="underline hover:text-ink-soft">
+            admin
+          </Link>{" "}
+          ·{" "}
+          <Link href="/login/vendor" className="underline hover:text-ink-soft">
+            vendor
+          </Link>
+        </p>
       </div>
     </main>
   );
