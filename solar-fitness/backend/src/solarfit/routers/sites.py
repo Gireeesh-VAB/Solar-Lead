@@ -148,9 +148,18 @@ def create_site_core(
     # GEO-04 + SHADE-01. Only when the caller gave an address and no
     # geometry — a supplied boundary always wins, since every other
     # source outranks solar_api in base.PRECEDENCE.
-    if boundary is None and payload.address:
+    if boundary is None and (centroid is not None or payload.address):
         try:
-            result = solar_api.resolve_for_address(payload.address)
+            if centroid is not None:
+                # A real lat/lng is already known (e.g. a map pin) — resolve
+                # Building Insights directly against it rather than
+                # re-deriving a point from address text via the Geocoding
+                # API, which is a strictly lossier, extra-billed round trip
+                # for information we already have.
+                lng, lat = centroid["coordinates"]
+                result = solar_api.resolve_for_location(float(lat), float(lng))
+            else:
+                result = solar_api.resolve_for_address(payload.address)
         except solar_api.SolarApiError as exc:
             # Configuration/quota problems are ours, not the caller's.
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc

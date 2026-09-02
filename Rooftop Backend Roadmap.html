@@ -1,0 +1,1149 @@
+<title>Rooftop Backend Roadmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --paper: #eef1ef;
+    --panel: #ffffff;
+    --panel-sunk: #e5eae7;
+    --ink: #17242b;
+    --ink-soft: #435057;
+    --ink-faint: #6f7c81;
+    --line: #c7d0cd;
+    --line-soft: #dbe1de;
+    --accent: #c96a1f;
+    --accent-ink: #7a3f0f;
+    --accent-soft: #f3e2cf;
+    --good: #3c7d63;
+    --good-soft: #dce9e1;
+    --new: #b5651d;
+    --new-soft: #f3e2cf;
+    --gap: #a8422f;
+    --gap-soft: #f1ddd7;
+    --shadow: 0 1px 0 rgba(23,36,43,0.06);
+    --radius: 3px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #12191c;
+      --panel: #182124;
+      --panel-sunk: #0f1517;
+      --ink: #e9edea;
+      --ink-soft: #b7c1bd;
+      --ink-faint: #8a9591;
+      --line: #33403e;
+      --line-soft: #29332f;
+      --accent: #e2954f;
+      --accent-ink: #f4c793;
+      --accent-soft: #3a2a16;
+      --good: #7fbfa2;
+      --good-soft: #1e3129;
+      --new: #e2954f;
+      --new-soft: #3a2a16;
+      --gap: #e08571;
+      --gap-soft: #3a201a;
+      --shadow: 0 1px 0 rgba(0,0,0,0.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #12191c;
+    --panel: #182124;
+    --panel-sunk: #0f1517;
+    --ink: #e9edea;
+    --ink-soft: #b7c1bd;
+    --ink-faint: #8a9591;
+    --line: #33403e;
+    --line-soft: #29332f;
+    --accent: #e2954f;
+    --accent-ink: #f4c793;
+    --accent-soft: #3a2a16;
+    --good: #7fbfa2;
+    --good-soft: #1e3129;
+    --new: #e2954f;
+    --new-soft: #3a2a16;
+    --gap: #e08571;
+    --gap-soft: #3a201a;
+    --shadow: 0 1px 0 rgba(0,0,0,0.3);
+  }
+
+  * { box-sizing: border-box; }
+  ::selection { background: var(--accent-soft); color: var(--accent-ink); }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0 20px 96px;
+  }
+
+  a { color: var(--accent-ink); }
+
+  h1, h2, h3, .label {
+    font-family: "IBM Plex Sans", "IBM Plex Sans Condensed", -apple-system, sans-serif;
+    text-wrap: balance;
+  }
+
+  code, .mono, .tabular, table td.num, table th.num {
+    font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sheet {
+    max-width: 920px;
+    margin: 0 auto;
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    padding: 56px 0 32px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .eyebrow .rule { flex: 1; height: 1px; background: var(--line); }
+
+  h1 {
+    font-size: clamp(30px, 4.6vw, 44px);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 14px 0 10px;
+    color: var(--ink);
+  }
+
+  .dek {
+    font-family: "IBM Plex Serif", serif;
+    font-style: italic;
+    font-size: 18px;
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0 0 28px;
+  }
+
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+  }
+  .stat {
+    background: var(--panel);
+    padding: 16px 18px;
+  }
+  .stat .n {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1;
+  }
+  .stat .k {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 12px;
+    color: var(--ink-faint);
+    letter-spacing: 0.02em;
+    margin-top: 6px;
+  }
+
+  /* ---------- generic section ---------- */
+
+  section { padding: 44px 0; border-bottom: 1px solid var(--line-soft); }
+  section:last-of-type { border-bottom: none; }
+
+  .section-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .section-num {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px;
+    color: var(--ink-faint);
+  }
+  h2 {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0;
+    color: var(--ink);
+  }
+  .section-note {
+    font-family: "IBM Plex Serif", serif;
+    color: var(--ink-soft);
+    max-width: 68ch;
+    margin: 10px 0 26px;
+  }
+
+  /* ---------- status pill ---------- */
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: var(--radius);
+    white-space: nowrap;
+  }
+  .pill.real { background: var(--good-soft); color: var(--good); }
+  .pill.gap  { background: var(--gap-soft);  color: var(--gap); }
+  .pill.new  { background: var(--new-soft);  color: var(--new); }
+  .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* ---------- table ---------- */
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; background: var(--panel); }
+  thead th {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    text-align: left;
+    padding: 10px 14px;
+    background: var(--panel-sunk);
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    vertical-align: top;
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 14px;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody td.endpoint { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--ink); }
+  tbody td.desc { color: var(--ink-soft); }
+  tbody td.num { text-align: right; }
+
+  /* ---------- gap cards ---------- */
+
+  .gapgrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin-top: 22px;
+  }
+  .gapcard { background: var(--panel); padding: 18px 20px; }
+  .gapcard h3 {
+    font-size: 15px;
+    margin: 0 0 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .gapcard .tables {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin: 8px 0 0;
+  }
+  .gapcard p { font-family: "IBM Plex Sans", sans-serif; font-size: 13.5px; color: var(--ink-soft); margin: 0; }
+
+  /* ---------- assignment cards ---------- */
+
+  .roster {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+
+  .person {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+  }
+  .person-head {
+    padding: 18px 20px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel-sunk);
+  }
+  .person-name {
+    font-family: "IBM Plex Sans Condensed", sans-serif;
+    font-weight: 700;
+    font-size: 21px;
+    color: var(--ink);
+    text-transform: lowercase;
+  }
+  .person-role {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-top: 3px;
+  }
+  .person-count {
+    margin-top: 12px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .person-count .n {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .person-count .u {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-faint);
+  }
+
+  .person-body { padding: 16px 20px 20px; flex: 1; }
+  .workblock { margin-bottom: 16px; }
+  .workblock:last-child { margin-bottom: 0; }
+  .workblock h4 {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 13.5px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    color: var(--ink);
+  }
+  .workblock .count {
+    font-family: "IBM Plex Mono", monospace;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .workblock .eps {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    color: var(--ink-soft);
+    line-height: 1.7;
+    margin: 4px 0 0;
+  }
+  .workblock .note {
+    font-family: "IBM Plex Serif", serif;
+    font-size: 13px;
+    color: var(--ink-faint);
+    margin: 5px 0 0;
+  }
+
+  /* ---------- dependency list ---------- */
+
+  .deps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .deps li { background: var(--panel); padding: 13px 16px; display: flex; gap: 12px; align-items: baseline; font-family: "IBM Plex Sans", sans-serif; font-size: 14px; }
+  .deps .from { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--accent); white-space: nowrap; font-weight: 500; }
+  .deps .txt { color: var(--ink-soft); }
+  .deps .txt b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- rules callout ---------- */
+
+  .rules {
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    background: var(--panel);
+    padding: 20px 24px;
+  }
+  .rules h3 { font-size: 14px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink); }
+  .rules ul { margin: 0; padding-left: 18px; font-family: "IBM Plex Serif", serif; color: var(--ink-soft); }
+  .rules li { margin-bottom: 8px; }
+  .rules li:last-child { margin-bottom: 0; }
+  .rules b { color: var(--ink); }
+
+  /* ---------- plain-language callout ---------- */
+
+  .plain {
+    border: 1px solid var(--good);
+    border-left: 3px solid var(--good);
+    background: var(--good-soft);
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .plain h3 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 12px;
+    color: var(--good);
+  }
+  .plain dl { margin: 0; display: grid; gap: 12px; }
+  .plain dt {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--ink);
+  }
+  .plain dd {
+    font-family: "IBM Plex Serif", serif;
+    margin: 3px 0 0;
+    color: var(--ink-soft);
+    font-size: 14.5px;
+    max-width: 66ch;
+  }
+
+  /* ---------- workstream (technical detail) blocks ---------- */
+
+  .workstream {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    margin-bottom: 18px;
+  }
+  .workstream-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 20px;
+    background: var(--panel-sunk);
+    border-bottom: 1px solid var(--line);
+  }
+  .workstream-head h4 {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 15.5px;
+    font-weight: 700;
+    margin: 0;
+    color: var(--ink);
+  }
+  .workstream-head .tag {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    color: var(--ink-faint);
+  }
+  .workstream-body { padding: 18px 20px 20px; }
+  .workstream-body h5 {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-faint);
+    margin: 18px 0 8px;
+  }
+  .workstream-body h5:first-child { margin-top: 0; }
+
+  pre.schema {
+    background: var(--panel-sunk);
+    border: 1px solid var(--line-soft);
+    padding: 12px 16px;
+    overflow-x: auto;
+    margin: 0;
+  }
+  pre.schema code {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12.5px;
+    line-height: 1.65;
+    color: var(--ink-soft);
+    white-space: pre;
+  }
+  pre.schema .fld { color: var(--ink); }
+  pre.schema .cm { color: var(--ink-faint); font-style: italic; }
+
+  .note-list { margin: 0; padding-left: 18px; font-family: "IBM Plex Sans", sans-serif; font-size: 13.5px; color: var(--ink-soft); }
+  .note-list li { margin-bottom: 7px; }
+  .note-list li:last-child { margin-bottom: 0; }
+  .note-list code, .workstream-body table code { font-size: 12px; }
+
+  .workstream-body table { font-size: 13.5px; margin-top: 2px; }
+  .workstream-body .tablewrap { border: 1px solid var(--line-soft); }
+
+  .steps { list-style: none; counter-reset: step; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .steps li {
+    counter-increment: step;
+    background: var(--panel);
+    padding: 13px 16px 13px 52px;
+    position: relative;
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 16px;
+    top: 13px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--accent);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .steps b { color: var(--ink); font-weight: 600; }
+
+  .gapfound { border: 1px solid var(--gap); border-left: 3px solid var(--gap); background: var(--gap-soft); padding: 18px 22px; margin-top: 22px; }
+  .gapfound h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 10px; color: var(--gap); }
+  .gapfound ol { margin: 0; padding-left: 18px; font-family: "IBM Plex Serif", serif; color: var(--ink-soft); font-size: 14px; }
+  .gapfound li { margin-bottom: 8px; }
+  .gapfound li:last-child { margin-bottom: 0; }
+
+  footer {
+    max-width: 920px;
+    margin: 40px auto 0;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    color: var(--ink-faint);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  @media (max-width: 760px) {
+    .stat-row { grid-template-columns: repeat(2, 1fr); }
+    .roster { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="sheet">
+
+  <div class="masthead">
+    <div class="eyebrow">Solar Site Fitness &amp; Capacity Engine<span class="rule"></span>backend build-out</div>
+    <h1>Rooftop Backend Roadmap</h1>
+    <p class="dek">The frontend is fully built and running on mock data. This is the gap, closed: what the backend already does for real, what still needs building, and who is building which piece.</p>
+
+    <div class="stat-row">
+      <div class="stat"><div class="n tabular">3</div><div class="k">existing routers, untouched</div></div>
+      <div class="stat"><div class="n tabular">51</div><div class="k">new endpoints to build</div></div>
+      <div class="stat"><div class="n tabular">9</div><div class="k">new tables</div></div>
+      <div class="stat"><div class="n tabular">3</div><div class="k">people, ~17 endpoints each</div></div>
+    </div>
+  </div>
+
+  <section id="exists">
+    <div class="section-head"><span class="section-num">01</span><h2>What already exists</h2></div>
+    <p class="section-note">Three routers are registered today. Every endpoint in them is real — including the core assessment pipeline, which was silently broken for any first-time location until a same-day bug-fix pass. Nothing here changes: every new endpoint below is additive, in new files, under a new prefix.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Endpoint</th><th>Status</th><th>What it does</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="endpoint">POST /sites</td><td><span class="pill real">real</span></td><td class="desc">Creates a site; resolves geometry from an address via the Solar API; validated, versioned, auth-protected.</td></tr>
+          <tr><td class="endpoint">GET /sites, GET /sites/{id}</td><td><span class="pill real">real</span></td><td class="desc">Tenant-scoped list / read, auth-protected.</td></tr>
+          <tr><td class="endpoint">GET /sites/{id}/versions</td><td><span class="pill real">real</span></td><td class="desc">Geometry-change history only — not a general activity log.</td></tr>
+          <tr><td class="endpoint">POST /v1/imports</td><td><span class="pill real">real</span></td><td class="desc">Bulk CSV / GeoJSON / shapefile import with duplicate detection, auth-protected.</td></tr>
+          <tr><td class="endpoint">GET /v1/imports/export</td><td><span class="pill real">real</span></td><td class="desc">CSV / GeoJSON export, auth-protected.</td></tr>
+          <tr><td class="endpoint">POST /v1/assessments/{site_id}</td><td><span class="pill real">real</span></td><td class="desc">The core pipeline — cache, geometry, vision, obstacles, weather, 3D model, ML score, fitness verdict. Fixed today; not yet auth-protected.</td></tr>
+          <tr><td class="endpoint">POST/GET /v1/assessments/batch</td><td><span class="pill real">real</span></td><td class="desc">Async batch submit + poll.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="gap">
+    <div class="section-head"><span class="section-num">02</span><h2>What's missing</h2></div>
+    <p class="section-note">Everything below is genuinely absent — confirmed by reading every route the frontend calls against every route the backend serves, not inferred. Grouped by the new tables each piece needs.</p>
+
+    <div class="gapgrid">
+      <div class="gapcard">
+        <h3><span class="pill new">new</span>Login</h3>
+        <p>No individual user, role, or session exists anywhere — only a tenant-scoped API key. All three portals need real login.</p>
+        <p class="tables">users</p>
+      </div>
+      <div class="gapcard">
+        <h3><span class="pill new">new</span>Vendor portal</h3>
+        <p>Job assignment, acceptance, submission, disputes, payouts, earnings. Zero backend support today.</p>
+        <p class="tables">vendors · vendor_jobs · vendor_payouts · vendor_accuracy_history</p>
+      </div>
+      <div class="gapcard">
+        <h3><span class="pill new">new</span>Admin portal</h3>
+        <p>Customer-account management, vendor oversight, audit trail, platform health, API-key rotation.</p>
+        <p class="tables">audit_log</p>
+      </div>
+      <div class="gapcard">
+        <h3><span class="pill gap">gap</span>USN capture</h3>
+        <p>The bill/OCR pipeline is fully built — it just has no HTTP route to reach it.</p>
+        <p class="tables">(uses existing usn_ocr_uploads)</p>
+      </div>
+      <div class="gapcard">
+        <h3><span class="pill gap">gap</span>Approval gates</h3>
+        <p>Calibration proposals can be raised but never approved; the ML model-approval function exists with no route.</p>
+        <p class="tables">(uses existing tables)</p>
+      </div>
+      <div class="gapcard">
+        <h3><span class="pill new">new</span>Persisted assessments</h3>
+        <p>Every assessment is computed fresh and discarded. Nothing is stored, so there's no history, no stats, no cross-site list.</p>
+        <p class="tables">assessments</p>
+      </div>
+      <div class="gapcard">
+        <h3><span class="pill new">new</span>Composite &amp; import jobs</h3>
+        <p>Feeder/DT site grouping doesn't exist; bulk imports run synchronously with nothing saved to poll.</p>
+        <p class="tables">composite_sites · import_jobs</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="roster">
+    <div class="section-head"><span class="section-num">03</span><h2>Who builds what</h2></div>
+    <p class="section-note">Split by endpoint count, not table count — a status-toggle endpoint on someone else's table is real work too. Each stream starts independently; the few real hand-offs are listed underneath.</p>
+
+    <div class="roster">
+
+      <div class="person">
+        <div class="person-head">
+          <div class="person-name">karthik</div>
+          <div class="person-role">Foundation, site domain, imports, audit &amp; platform infra</div>
+          <div class="person-count"><span class="n tabular">16</span><span class="u">endpoints</span></div>
+          <div style="margin-top:10px;"><a href="#karthik-detail" style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;">↓ full build plan, §05</a></div>
+        </div>
+        <div class="person-body">
+          <div class="workblock">
+            <h4>Auth foundation <span class="count">3</span></h4>
+            <p class="eps">login · signup · me</p>
+            <p class="note">New <code>users</code> table, JWT issue/verify, CORS on main.py.</p>
+          </div>
+          <div class="workblock">
+            <h4>Site domain, frontend-shaped <span class="count">7</span></h4>
+            <p class="eps">listSites · getSite · createSite<br>getSiteHistory · getPortfolioSummary<br>listComposites · createComposite</p>
+            <p class="note">New <code>composite_sites</code> table. History assembled from existing tables.</p>
+          </div>
+          <div class="workblock">
+            <h4>Import job persistence <span class="count">3</span></h4>
+            <p class="eps">create async import<br>listImportJobs · getImportJob</p>
+            <p class="note">New <code>import_jobs</code> + rows. Existing sync import untouched.</p>
+          </div>
+          <div class="workblock">
+            <h4>Audit &amp; platform infra <span class="count">3</span></h4>
+            <p class="eps">listAuditLog<br>getPlatformHealth · rotateApiKey</p>
+            <p class="note">New <code>audit_log</code> + a shared logging helper the other two call into.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="person">
+        <div class="person-head">
+          <div class="person-name">omkar</div>
+          <div class="person-role">Assessment, USN, calibration &amp; ML, admin vendor oversight</div>
+          <div class="person-count"><span class="n tabular">17</span><span class="u">endpoints</span></div>
+          <div style="margin-top:10px;"><a href="#omkar-detail" style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;">↓ full build plan, §06</a></div>
+        </div>
+        <div class="person-body">
+          <div class="workblock">
+            <h4>Assessments, shaped &amp; secured <span class="count">2</span></h4>
+            <p class="eps">POST assessment (frontend-shaped)</p>
+            <p class="note">Wraps the existing pipeline unchanged; writes the new <code>assessments</code> table.</p>
+          </div>
+          <div class="workblock">
+            <h4>USN routes <span class="count">4</span></h4>
+            <p class="eps">manual · bill · payment-proof · confirm</p>
+            <p class="note">Gives his already-built OCR pipeline an HTTP surface.</p>
+          </div>
+          <div class="workblock">
+            <h4>Calibration &amp; ML approval <span class="count">4</span></h4>
+            <p class="eps">calibration approve / reject<br>model version approve / reject</p>
+            <p class="note">Closes the propose-with-no-approve gap in his own file.</p>
+          </div>
+          <div class="workblock">
+            <h4>Admin vendor oversight <span class="count">7</span></h4>
+            <p class="eps">listAdminVendors · getAdminVendor<br>suspend · reinstate<br>verification queue · approve · reject</p>
+            <p class="note">Reads/writes keerthana's vendor tables — status toggles, not new modeling.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="person">
+        <div class="person-head">
+          <div class="person-name">keerthana</div>
+          <div class="person-role">Vendor domain, customer-account admin, jurisdictions</div>
+          <div class="person-count"><span class="n tabular">18</span><span class="u">endpoints</span></div>
+          <div style="margin-top:10px;"><a href="#keerthana-detail" style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;">↓ full build plan, §07</a></div>
+        </div>
+        <div class="person-body">
+          <div class="workblock">
+            <h4>Vendor domain <span class="count">12</span></h4>
+            <p class="eps">job list/get/accept/decline/start/submit<br>profile get/update-availability<br>payouts · earnings · submissions · dispute</p>
+            <p class="note">New <code>vendors</code>, <code>vendor_jobs</code>, <code>vendor_payouts</code>, <code>vendor_accuracy_history</code>. Nobody else owns any of this today.</p>
+          </div>
+          <div class="workblock">
+            <h4>Customer-account admin <span class="count">5</span></h4>
+            <p class="eps">list · get · update-tier<br>suspend · reinstate</p>
+            <p class="note">No tenant table — operates directly on karthik's <code>users</code> rows where role = customer.</p>
+          </div>
+          <div class="workblock">
+            <h4>Jurisdictions <span class="count">1</span></h4>
+            <p class="eps">listJurisdictions</p>
+            <p class="note">Reads her own existing jurisdiction pack modules.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="deps">
+    <div class="section-head"><span class="section-num">04</span><h2>Hand-offs</h2></div>
+    <p class="section-note">The only real ordering constraints. Everyone's own schema and logic can start in parallel regardless.</p>
+    <ul class="deps">
+      <li><span class="from">karthik → omkar, keerthana</span><span class="txt">auth + the shared audit-log helper should land early — <b>omkar's</b> secured assessment call and <b>keerthana's</b> account listing both reference the <code>users</code> table, and both of their mutations log through it.</span></li>
+      <li><span class="from">omkar → karthik</span><span class="txt">the USN route needs one small addition to <code>repositories/sites.py</code> — <b>omkar</b> writes it himself, landing in <b>karthik's</b> file.</span></li>
+      <li><span class="from">keerthana → omkar</span><span class="txt"><b>omkar's</b> admin vendor-oversight endpoints read <b>keerthana's</b> vendor tables — coordinate the shape once she's drafted it.</span></li>
+      <li><span class="from">karthik → keerthana</span><span class="txt"><b>keerthana's</b> customer-account screens read and write <b>karthik's</b> <code>users</code> table directly — need it to exist first.</span></li>
+    </ul>
+  </section>
+
+  <section id="karthik-detail">
+    <div class="section-head"><span class="section-num">05</span><h2>karthik — detailed build plan</h2></div>
+    <p class="section-note">All three streams, drilled from an endpoint list down to something an engineer — or an agent — can build directly from: exact tables, exact routes, exact gotchas found across three passes. Karthik's foundation comes first since the other two lean on it.</p>
+
+    <div class="plain">
+      <h3>In plain terms</h3>
+      <dl>
+        <dt>Login &amp; accounts</dt>
+        <dd>Right now nobody can actually log into the app. This builds real sign-up and login, and settles what a "customer account" is — just one person's row in a table, not a company with sub-users.</dd>
+        <dt>Site pages</dt>
+        <dd>Makes the site data the app already has show up the way its screens expect — name, address, a map location, its full history of changes, and the ability to group several sites into one feeder-level report.</dd>
+        <dt>Upload tracking</dt>
+        <dd>Uploading a batch of sites today runs once and hands back one final result. This adds the ability to check on an upload while it's still running and look back at past ones.</dd>
+        <dt>Activity log &amp; admin basics</dt>
+        <dd>A record of who did what (approved a vendor, suspended an account), plus a first pass at system health and credential rotation — honestly limited where the real data doesn't exist yet, not faked.</dd>
+      </dl>
+    </div>
+
+    <div class="workstream">
+      <div class="workstream-head"><h4>1 · Auth foundation</h4><span class="tag">3 endpoints · 1 table</span></div>
+      <div class="workstream-body">
+        <h5>New table — users</h5>
+        <pre class="schema"><code><span class="fld">id</span>               uuid PK, server_default gen_random_uuid()
+<span class="fld">email</span>            varchar(255) unique, not null, indexed
+<span class="fld">password_hash</span>    varchar(255) not null
+<span class="fld">role</span>             varchar(16) not null        <span class="cm">-- admin | customer | vendor</span>
+<span class="fld">name</span>             varchar(255) not null
+<span class="fld">owner_org</span>        varchar(255) null           <span class="cm">-- customer only — the SAME string</span>
+                                              <span class="cm">-- sites.owner_org already uses. found</span>
+                                              <span class="cm">-- missing while checking keerthana's work</span>
+<span class="fld">tier</span>             varchar(32)  null           <span class="cm">-- customer only</span>
+<span class="fld">status</span>           varchar(16)  null default 'active'  <span class="cm">-- customer only</span>
+<span class="fld">billing_contact_email</span> varchar(255) null      <span class="cm">-- customer only</span>
+<span class="fld">vendor_id</span>        uuid null                   <span class="cm">-- vendor only, no FK yet —</span>
+                                              <span class="cm">-- keerthana's vendors table doesn't exist</span>
+                                              <span class="cm">-- when this migration lands; add the FK later</span>
+<span class="fld">created_at</span>       timestamptz not null, server_default now()
+<span class="fld">last_login_at</span>    timestamptz null</code></pre>
+
+        <h5>New files</h5>
+        <ul class="note-list">
+          <li><code>auth_users.py</code> — <code>hash_password</code>/<code>verify_password</code> (bcrypt), <code>create_access_token</code>/<code>decode_access_token</code> (pyjwt, HS256), <code>current_user()</code> dependency, <code>require_role(*roles)</code>. Parallel to <code>auth.py</code> — never edits it.</li>
+          <li><code>routers/app_auth.py</code> — the three endpoints below.</li>
+          <li><code>pyproject.toml</code> gains <code>pyjwt</code> and <code>bcrypt</code> — neither exists in the repo today.</li>
+          <li><code>config.py</code> gains <code>jwt_secret</code> and <code>jwt_expires_minutes</code> (default 10080 = 7 days), and a new <code>cors_allowed_origins</code> list — <code>main.py</code> gets real CORS middleware, an explicit allowlist, not a wildcard.</li>
+        </ul>
+
+        <h5>Endpoints</h5>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Route</th><th>Body</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="endpoint">POST /app/auth/signup</td><td class="endpoint">email, password, name, ownerOrg</td><td class="desc">Customer role only, hardcoded server-side. <code>ownerOrg</code> is a company name — matching an existing one joins as a seat. 409 on duplicate email. Minimum 8-char password.</td></tr>
+              <tr><td class="endpoint">POST /app/auth/login</td><td class="endpoint">email, password</td><td class="desc">Reuses <code>auth.py</code>'s existing rate limiter, keyed on email — closes a brute-force gap for free.</td></tr>
+              <tr><td class="endpoint">GET /app/auth/me</td><td class="endpoint">—</td><td class="desc">Returns the caller's own profile.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h5>For the other two streams</h5>
+        <p class="note-list" style="margin:0;">A <code>make_auth_header(role="customer", **overrides)</code> pytest fixture lands in <code>conftest.py</code> alongside this — omkar and keerthana both need it to test their own <code>current_user()</code>-gated routes, and building it now avoids three slightly-different hand-rolled versions later.</p>
+      </div>
+    </div>
+
+    <div class="workstream">
+      <div class="workstream-head"><h4>2 · Site domain, frontend-shaped</h4><span class="tag">7 endpoints · 1 table + 4 new columns</span></div>
+      <div class="workstream-body">
+        <h5>Existing `sites` table gains 4 columns (additive only)</h5>
+        <pre class="schema"><code><span class="fld">address</span>  varchar(500) null
+<span class="fld">district</span> varchar(255) null
+<span class="fld">state</span>    varchar(255) null
+<span class="fld">tags</span>     jsonb null default '[]'</code></pre>
+        <p class="note-list" style="margin-top:8px;">None of these exist anywhere in the backend today — <code>POST /sites</code> accepts <code>address</code> as input but never stores it. Accepted directly on the new <code>POST /app/sites</code> request rather than reverse-geocoded.</p>
+
+        <h5>New table — composite_sites</h5>
+        <pre class="schema"><code><span class="fld">id</span>               uuid PK
+<span class="fld">name</span>             varchar(255) not null
+<span class="fld">feeder_or_dt</span>     varchar(255) not null
+<span class="fld">member_site_ids</span>  jsonb not null   <span class="cm">-- list[str]</span>
+<span class="fld">created_at</span>       timestamptz not null, server_default now()</code></pre>
+
+        <h5>Endpoints</h5>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Frontend fn</th><th>Route</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="endpoint">listSites</td><td class="endpoint">GET /app/sites</td><td class="desc">Scoped to the caller's <code>owner_org</code>.</td></tr>
+              <tr><td class="endpoint">getSite</td><td class="endpoint">GET /app/sites/{id}</td><td class="desc">—</td></tr>
+              <tr><td class="endpoint">createSite</td><td class="endpoint">POST /app/sites</td><td class="desc">Wraps the existing creation path.</td></tr>
+              <tr><td class="endpoint">getSiteHistory</td><td class="endpoint">GET /app/sites/{id}/history</td><td class="desc">Unions site_versions + assessments + usn_ocr_uploads + calibration_records by date — no new event table.</td></tr>
+              <tr><td class="endpoint">getPortfolioSummary</td><td class="endpoint">GET /app/sites/portfolio-summary</td><td class="desc"><b style="color:var(--gap)">activeJobs</b> reads keerthana's vendor_jobs table — cross-stream dependency.</td></tr>
+              <tr><td class="endpoint">listComposites</td><td class="endpoint">GET /app/composites</td><td class="desc">—</td></tr>
+              <tr><td class="endpoint">createComposite</td><td class="endpoint">POST /app/composites</td><td class="desc">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h5>Mapping gotchas</h5>
+        <ul class="note-list">
+          <li><code>location:{lat,lng}</code> ← GeoJSON centroid is <code>[lng,lat]</code> — needs swapping.</li>
+          <li><code>boundary</code> ← the polygon's exterior ring, flattened from GeoJSON pairs to <code>{lat,lng}</code> objects, closing point dropped.</li>
+          <li><code>updatedAt</code> isn't on the frozen <code>Site</code> contract — query the ORM row directly for it rather than touching that shared file.</li>
+          <li><code>latestAssessment</code> and <code>CompositeSite.aggregateCapacityKwp</code> both read the new <b style="color:var(--gap)">assessments</b> table — owned and written by omkar's stream. Build against a stub until his migration lands.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="workstream">
+      <div class="workstream-head"><h4>3 · Import job persistence</h4><span class="tag">3 endpoints · 2 tables</span></div>
+      <div class="workstream-body">
+        <h5>New tables</h5>
+        <pre class="schema"><code><span class="fld">import_jobs</span>
+  id              uuid PK
+  file_name       varchar(500) not null
+  status          varchar(16) not null   <span class="cm">-- queued|running|partial|complete|failed</span>
+  total_rows      integer not null
+  processed_rows  integer not null default 0
+  error_rows      integer not null default 0
+  created_by      varchar(255) not null
+  created_at      timestamptz not null, server_default now()
+
+<span class="fld">import_job_rows</span>
+  id              uuid PK
+  import_job_id   uuid FK -&gt; import_jobs.id, ondelete CASCADE
+  row_number      integer not null
+  identifier      varchar(255) null
+  status          varchar(16) not null   <span class="cm">-- success|error|warning</span>
+  message         text null</code></pre>
+
+        <h5>One small refactor — the only existing file touched</h5>
+        <p class="note-list" style="margin:0 0 14px;">The per-row loop inside <code>routers/imports.py::bulk_import()</code> is pulled into a standalone <code>process_import_rows()</code> function, called exactly as before by the existing sync endpoint — same behavior, existing tests untouched — so the new async path can reuse it instead of duplicating ~50 lines.</p>
+
+        <h5>Endpoints</h5>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Frontend fn</th><th>Route</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="endpoint">(create, async)</td><td class="endpoint">POST /app/imports</td><td class="desc">Dispatches a new Celery task (<code>tasks_imports.py</code>), returns immediately.</td></tr>
+              <tr><td class="endpoint">listImportJobs</td><td class="endpoint">GET /app/imports</td><td class="desc"><code>rows</code> omitted here — cheap list view.</td></tr>
+              <tr><td class="endpoint">getImportJob</td><td class="endpoint">GET /app/imports/{id}</td><td class="desc"><code>rows</code> fully populated.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note-list" style="margin-top:12px;"><code>POST /v1/imports</code> — the existing synchronous endpoint — is completely untouched.</p>
+      </div>
+    </div>
+
+    <div class="workstream">
+      <div class="workstream-head"><h4>4 · Audit log &amp; platform infra</h4><span class="tag">3 endpoints · 1 table</span></div>
+      <div class="workstream-body">
+        <h5>New table — audit_log</h5>
+        <pre class="schema"><code><span class="fld">id</span>          uuid PK
+<span class="fld">actor</span>       varchar(255) not null
+<span class="fld">action</span>      varchar(255) not null  <span class="cm">-- e.g. "vendor.approve"</span>
+<span class="fld">target</span>      varchar(255) not null
+<span class="fld">details</span>     text null   <span class="cm">-- plain string — the frontend type is `string`,</span>
+                        <span class="cm">-- not an object; caught on the second pass</span>
+<span class="fld">created_at</span>  timestamptz not null, server_default now()</code></pre>
+        <p class="note-list" style="margin-top:8px;">New <code>repositories/audit.py::write_audit_log()</code> — its own module, not inside the router, so omkar's and keerthana's routers can call it without importing karthik's router file.</p>
+
+        <h5>Endpoints</h5>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Frontend fn</th><th>Route</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="endpoint">listAuditLog</td><td class="endpoint">GET /app/admin/audit-log</td><td class="desc">—</td></tr>
+              <tr><td class="endpoint">getPlatformHealth</td><td class="endpoint">GET /app/admin/platform-health</td><td class="desc">Incident count is real (from audit_log); uptime/quota-usage are honest placeholders — no metering exists yet.</td></tr>
+              <tr><td class="endpoint">rotateApiKey</td><td class="endpoint">POST /app/admin/api-keys/rotate</td><td class="desc">Writes an audit entry; doesn't claim to rotate a secret nothing can actually rotate yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <section id="omkar-detail">
+    <div class="section-head"><span class="section-num">06</span><h2>omkar — detailed build plan</h2></div>
+    <p class="section-note">Assessment, USN, calibration/ML, and admin vendor oversight — the stream with the most real backend logic already built, and the most careful frontend-shape mapping to get right.</p>
+
+    <div class="plain">
+      <h3>In plain terms</h3>
+      <dl>
+        <dt>Real assessments, secured</dt>
+        <dd>Makes the "run an assessment" screen call the real engine instead of a random-number generator, and saves the result so it can be looked back on later — by the customer, and by admins across every account.</dd>
+        <dt>Utility bill capture</dt>
+        <dd>The logic to read a bill and pull out an account number is already built — this just gives the app screens a way to actually reach it.</dd>
+        <dt>Approving proposed changes</dt>
+        <dd>Right now the system can suggest "this number should change" but nobody can actually say yes — this adds the approve/reject step for both calibration adjustments and new ML model versions.</dd>
+        <dt>Admin oversight of vendors</dt>
+        <dd>Suspending a vendor, approving a new one, reviewing the sign-up queue — the admin-facing half of the vendor system keerthana builds.</dd>
+      </dl>
+    </div>
+
+    <div class="workstream">
+      <div class="workstream-head"><h4>5 · Assessments, frontend-shaped &amp; secured</h4><span class="tag">2 endpoints · 1 table</span></div>
+      <div class="workstream-body">
+        <h5>Endpoints</h5>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Frontend fn</th><th>Route</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="endpoint">(via completeCheck)</td><td class="endpoint">POST /app/assessments/{id}</td><td class="desc">Wraps the real engine unchanged; writes the new <code>assessments</code> table.</td></tr>
+              <tr><td class="endpoint">listAllAssessments</td><td class="endpoint">GET /app/admin/assessments</td><td class="desc">Cross-org, admin-only. Reads the same table the row above writes.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h5>Real mapping gaps — flagged, not guessed at</h5>
+        <ul class="note-list">
+          <li><code>confidence: High|Medium|Low|N/A</code> ← the backend only has a raw 0–1 number. No threshold exists anywhere today — this plan sets one explicitly: <b>N/A</b> when there's no score, <b>High</b> ≥ 0.7, <b>Medium</b> ≥ 0.4, else <b>Low</b>.</li>
+          <li><code>bindingConstraint:{name,reason,kind}</code> ← the backend only has a bare constraint name string. Found by matching it against the full ceiling list to pull its reason/kind.</li>
+          <li><code>visionRefinement.deltaKwp</code> — <b style="color:var(--gap)">the backend has no such number at all.</b> Returned as a documented placeholder, not invented.</li>
+          <li><code>generation:{p50AnnualKwh,p90AnnualKwh}</code> — <b style="color:var(--gap)">unimplemented backend-wide</b> (confirmed earlier this session). Omitted entirely rather than sent as zero — the frontend type is optional for exactly this reason.</li>
+          <li><code>cache.originalDate</code> ← needs a second lookup, of the original cached analysis, not the current call's own timestamp.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="workstream">
+      <div class="workstream-head"><h4>6 · USN HTTP routes</h4><span class="tag">4 endpoints · 0 new tables</span></div>
+      <div class="workstream-body">
+        <p class="note-list" style="margin:0 0 12px;">The OCR pipeline is fully built already (<code>providers/usn_ocr.py</code>) — it just has no way for the app to reach it. Every route below 422s immediately on a non-billing-linked site type.</p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Flow</th><th>Route</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="endpoint">manual entry</td><td class="endpoint">POST /app/sites/{id}/usn/manual</td><td class="desc">—</td></tr>
+              <tr><td class="endpoint">bill OCR</td><td class="endpoint">POST /app/sites/{id}/usn/bill</td><td class="desc">Returns a preview, not persisted yet.</td></tr>
+              <tr><td class="endpoint">payment-proof OCR</td><td class="endpoint">POST /app/sites/{id}/usn/payment-proof</td><td class="desc">Same, other document type.</td></tr>
+              <tr><td class="endpoint">confirm</td><td class="endpoint">POST /app/sites/{id}/usn/confirm</td><td class="desc">Persists the (possibly corrected) value.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note-list" style="margin-top:12px;">Needs one small new function, <code>update_usn()</code>, landing in karthik's <code>repositories/sites.py</code> — his file, omkar's function, worth a heads-up before merging.</p>
+      </div>
+    </div>
+
+    <div class="workstream">
+      <div class="workstream-head"><h4>7 · Calibration &amp; ML approval</h4><span class="tag">4 endpoints · 1 new column</span></div>
+      <div class="workstream-body">
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Frontend fn</th><th>Route</th></tr></thead>
+            <tbody>
+              <tr><td class="endpoint">approveCalibrationProposal</td><td class="endpoint">POST /app/admin/calibration-proposals/{id}/approve</td></tr>
+              <tr><td class="endpoint">rejectCalibrationProposal</td><td class="endpoint">POST /app/admin/calibration-proposals/{id}/reject</td></tr>
+              <tr><td class="endpoint">approveModelVersion</td><td class="endpoint">POST /app/admin/model-versions/{id}/approve</td></tr>
+              <tr><td class="endpoint">rejectModelVersion</td><td class="endpoint">POST /app/admin/model-versions/{id}/reject</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note-list" style="margin-top:12px;">The approve function for calibration doesn't exist yet — added mirroring the ML model version approval that already works correctly.</p>
+        <p class="note-list" style="margin:8px 0 0;"><b style="color:var(--gap)">Real product mismatch, not just an engineering gap</b>: the frontend imagines a per-jurisdiction "remote vs. measured" variance record; the backend actually tracks a per-site-type utilisation-factor correction. The closest honest mapping is used, but this is worth a design-side look, not a silent fit.</p>
+        <p class="note-list" style="margin:8px 0 0;"><code>ModelVersionProposal.changelog</code> has no backend field at all — one small additive column closes it.</p>
+      </div>
+    </div>
+
+    <div class="workstream">
+      <div class="workstream-head"><h4>8 · Admin vendor oversight</h4><span class="tag">7 endpoints · reads keerthana's tables</span></div>
+      <div class="workstream-body">
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Frontend fn</th><th>Route</th></tr></thead>
+            <tbody>
+              <tr><td class="endpoint">listAdminVendors</td><td class="endpoint">GET /app/admin/vendors</td></tr>
+              <tr><td class="endpoint">getAdminVendor</td><td class="endpoint">GET /app/admin/vendors/{id}</td></tr>
+              <tr><td class="endpoint">suspendVendor</td><td class="endpoint">POST /app/admin/vendors/{id}/suspend</td></tr>
+              <tr><td class="endpoint">reinstateVendor</td><td class="endpoint">POST /app/admin/vendors/{id}/reinstate</td></tr>
+              <tr><td class="endpoint">listVendorVerificationQueue</td><td class="endpoint">GET /app/admin/vendors/verification-queue</td></tr>
+              <tr><td class="endpoint">approveVendorVerification</td><td class="endpoint">POST /app/admin/vendors/{id}/verification/approve</td></tr>
+              <tr><td class="endpoint">rejectVendorVerification</td><td class="endpoint">POST /app/admin/vendors/{id}/verification/reject</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note-list" style="margin-top:12px;">Its own router file (<code>app_admin_vendors.py</code>) — reads/writes <b style="color:var(--gap)">keerthana's</b> vendor tables, calls karthik's <code>write_audit_log()</code> on every mutation. <code>slaCompliancePct</code>/<code>activeJobs</code>/<code>totalJobsCompleted</code> are computed at read time from job history, not stored.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="keerthana-detail">
+    <div class="section-head"><span class="section-num">07</span><h2>keerthana — detailed build plan</h2></div>
+    <p class="section-note">The vendor portal end to end, plus the admin side of customer accounts and the jurisdiction list — the largest single new domain in the whole build-out.</p>
+
+    <div class="plain">
+      <h3>In plain terms</h3>
+      <dl>
+        <dt>The vendor portal</dt>
+        <dd>Everything a field surveyor does today: see assigned jobs, accept or decline them, mark progress, submit results, see what they've earned, dispute a payout. All of it is currently backed by nothing.</dd>
+        <dt>Managing customer accounts</dt>
+        <dd>The admin screen the app calls "Tenants" — really just a list of customer sign-ups, who's on which plan, and the ability to suspend one.</dd>
+        <dt>Jurisdiction list</dt>
+        <dd>A small screen showing which state-specific rule sets exist — honestly, there's only one built for real today.</dd>
+      </dl>
+    </div>
+
+    <div class="workstream">
+      <div class="workstream-head"><h4>9 · Vendor domain</h4><span class="tag">12 endpoints · 4 tables</span></div>
+      <div class="workstream-body">
+        <h5>New tables</h5>
+        <pre class="schema"><code><span class="fld">vendors</span>
+  id                    uuid PK
+  name                  varchar(255) not null
+  verification_status   varchar(16) not null default 'pending'
+  availability           boolean not null default true
+  accuracy_score         float not null default 0
+  service_area           jsonb not null   <span class="cm">-- {region, districts:[]}</span>
+  payout_method_type     varchar(16) not null
+  payout_masked_account  varchar(64) not null
+  documents              jsonb not null default '[]'
+  joined_at              timestamptz not null, server_default now()
+
+<span class="fld">vendor_jobs</span>
+  id                     uuid PK
+  site_id                uuid FK -&gt; sites.id
+  vendor_id              uuid FK -&gt; vendors.id, null
+  status                 varchar(16) not null   <span class="cm">-- queued..overdue</span>
+  deadline                timestamptz not null
+  payout_inr              numeric not null
+  requirements             jsonb not null default '[]'
+  distance_km              float null
+  submitted_at              timestamptz null
+  estimated/measured_capacity_kwp  float null
+  reconciled_payout_inr     numeric null
+  variance_pct               float null
+  dispute_status              varchar(16) null default 'none'
+  dispute_reason               text null
+
+<span class="fld">vendor_payouts</span>
+  id           uuid PK
+  vendor_id    uuid FK -&gt; vendors.id
+  job_id       uuid FK -&gt; vendor_jobs.id, null   <span class="cm">-- fixture data has orphaned refs</span>
+  amount       numeric not null
+  status       varchar(16) not null
+  date         timestamptz not null
+  method       varchar(16) not null
+
+<span class="fld">vendor_accuracy_history</span>
+  id, vendor_id FK, label, score, recorded_at</code></pre>
+
+        <h5>Endpoints</h5>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Frontend fn</th><th>Route</th></tr></thead>
+            <tbody>
+              <tr><td class="endpoint">listVendorJobs</td><td class="endpoint">GET /app/vendor/jobs</td></tr>
+              <tr><td class="endpoint">getVendorJob</td><td class="endpoint">GET /app/vendor/jobs/{id}</td></tr>
+              <tr><td class="endpoint">acceptVendorJob</td><td class="endpoint">POST /app/vendor/jobs/{id}/accept</td></tr>
+              <tr><td class="endpoint">declineVendorJob</td><td class="endpoint">POST /app/vendor/jobs/{id}/decline</td></tr>
+              <tr><td class="endpoint">startVendorJob</td><td class="endpoint">POST /app/vendor/jobs/{id}/start</td></tr>
+              <tr><td class="endpoint">submitVendorJob</td><td class="endpoint">POST /app/vendor/jobs/{id}/submit</td></tr>
+              <tr><td class="endpoint">getVendorProfile</td><td class="endpoint">GET /app/vendor/profile</td></tr>
+              <tr><td class="endpoint">updateVendorAvailability</td><td class="endpoint">PATCH /app/vendor/profile/availability</td></tr>
+              <tr><td class="endpoint">listVendorPayouts</td><td class="endpoint">GET /app/vendor/payouts</td></tr>
+              <tr><td class="endpoint">getVendorEarningsSummary</td><td class="endpoint">GET /app/vendor/earnings-summary</td></tr>
+              <tr><td class="endpoint">listVendorSubmissions</td><td class="endpoint">GET /app/vendor/submissions</td></tr>
+              <tr><td class="endpoint">disputeSubmission</td><td class="endpoint">POST /app/vendor/submissions/{id}/dispute</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note-list" style="margin-top:12px;">"Which vendor am I" resolves from <code>current_user().vendor_id</code> — karthik's field.</p>
+
+        <div class="gapfound" style="margin-top:16px;">
+          <h3>A real gap, not invented an answer to</h3>
+          <ol><li>There is <b>no frontend function anywhere for creating a vendor_job</b> — assigning a vendor to a site isn't in the 41-function inventory at all, only ever pre-seeded fixture data. Without some creation path, this table stays permanently empty in a real deployment.</li></ol>
+        </div>
+      </div>
+    </div>
+
+    <div class="workstream">
+      <div class="workstream-head"><h4>10 · Customer account admin</h4><span class="tag">5 endpoints · 0 new tables</span></div>
+      <div class="workstream-body">
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Frontend fn</th><th>Route</th></tr></thead>
+            <tbody>
+              <tr><td class="endpoint">listTenants</td><td class="endpoint">GET /app/admin/customers</td></tr>
+              <tr><td class="endpoint">getTenant</td><td class="endpoint">GET /app/admin/customers/{id}</td></tr>
+              <tr><td class="endpoint">updateTenantTier</td><td class="endpoint">PATCH /app/admin/customers/{id}/tier</td></tr>
+              <tr><td class="endpoint">suspendTenant</td><td class="endpoint">POST /app/admin/customers/{id}/suspend</td></tr>
+              <tr><td class="endpoint">reinstateTenant</td><td class="endpoint">POST /app/admin/customers/{id}/reinstate</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note-list" style="margin-top:12px;">Reads/writes karthik's <code>users</code> table directly, filtered to <code>role="customer"</code>, now correctly linked via <code>owner_org</code>. <code>Tenant.users[]</code> is every user sharing that org — genuinely meaningful now — and <code>seatCount</code> is just their count. <code>apiCallsThisMonth</code> has no real metering behind it anywhere; returned as an honest <code>0</code>, not a fabricated number.</p>
+      </div>
+    </div>
+
+    <div class="workstream">
+      <div class="workstream-head"><h4>11 · Jurisdictions</h4><span class="tag">1 endpoint · 0 new tables</span></div>
+      <div class="workstream-body">
+        <p class="note-list" style="margin:0;">Reads her own <code>packs/jurisdictions/</code> Python modules. <b style="color:var(--gap)">Only one jurisdiction (AP) actually exists today</b> — the endpoint honestly returns a one-entry list rather than a fabricated multi-state catalogue.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="wrap-detail">
+    <div class="section-head"><span class="section-num">08</span><h2>Closing the loop across all three</h2></div>
+
+    <div class="gapfound">
+      <h3>Every gap found and closed across all three passes</h3>
+      <ol>
+        <li><code>AuditLogEntry.details</code> is a plain string in the frontend type — first draft had it as JSON.</li>
+        <li><code>CompositeSite.aggregateCapacityKwp</code> and <code>PortfolioSummary.activeJobs</code> both need cross-stream reads the first draft's dependency list missed.</li>
+        <li>Login had no brute-force protection — now reuses the existing rate limiter instead of leaving it open.</li>
+        <li>Signup had no duplicate-email or minimum-password handling.</li>
+        <li>CORS was mentioned but not specified precisely enough to build safely.</li>
+        <li>No shared test fixture was planned for the other streams' auth-gated routes — the exact kind of small inconsistency that caused this session's earlier merge friction.</li>
+        <li><b>The <code>users</code> table had no <code>owner_org</code> field</b> — without it, nothing, including karthik's own site endpoints, had any way to scope "this customer's data." The single biggest correction this pass, caught only by checking keerthana's work against karthik's already-"finished" schema.</li>
+        <li><code>Assessment</code>'s frontend shape and the real backend response don't line up on confidence, binding constraint, or generation/vision-refinement fields — each given an explicit mapping or explicit omission instead of a silent guess.</li>
+        <li><code>CalibrationProposal</code>'s frontend shape and the backend's real model track different things — flagged as a product question.</li>
+        <li>No creation path exists anywhere for a vendor_job — flagged as an open gap rather than assumed away.</li>
+        <li><code>ModelVersionProposal.changelog</code> has no backend field — needs one small additive column.</li>
+        <li>Three separate "no real metering exists" spots are now handled the same honest-placeholder way instead of each being solved differently.</li>
+      </ol>
+    </div>
+
+    <h5 style="margin-top:32px;">Next steps for the team</h5>
+    <ol class="steps">
+      <li><b>karthik implements his slice first</b> — auth foundation above everything else, since <code>users</code> (with <code>owner_org</code>), <code>write_audit_log()</code>, and the shared test fixture are load-bearing for the other two.</li>
+      <li><b>omkar and keerthana start their own table/schema work in parallel</b>, not waiting on karthik — <code>vendors</code>/<code>vendor_jobs</code>, <code>assessments</code>, the calibration/ML approval functions don't need his foundation to exist yet, only the final auth-gating and audit-logging lines do.</li>
+      <li><b>Cross-reads get wired last</b>: karthik's history/portfolio-summary endpoints (need omkar's <code>assessments</code> and keerthana's <code>vendor_jobs</code>), omkar's admin-vendor-oversight (needs keerthana's <code>vendors</code>), keerthana's customer-account admin (needs karthik's <code>users</code>).</li>
+      <li><b>Migration order</b>: whoever lands first sets the new head; everyone else rebases their <code>down_revision</code> onto it before merging — the same protocol that resolved this session's earlier 4-way branch merge, applied proactively this time.</li>
+      <li><b>Once all three are merged</b>: run the full suite together, confirm a single alembic head, and do one combined manual pass — signup → login → create a site → run an assessment → see it in history/portfolio-summary → assign a vendor job → approve it as admin.</li>
+      <li><b>Frontend wiring is the step after that</b>, not part of this round — once the backend matches <code>lib/types.ts</code>, rewrite <code>lib/api/client.ts</code> to call it for real, and connect the login/signup forms. Its own follow-up plan.</li>
+    </ol>
+  </section>
+
+  <section id="rules" style="border-bottom:none;">
+    <div class="section-head"><span class="section-num">09</span><h2>Ground rules</h2></div>
+    <div class="rules">
+      <h3>What holds this together</h3>
+      <ul>
+        <li><b>Nothing existing changes.</b> All three current routers, their response shapes, and their tests stay exactly as they are. Every new endpoint lives in new files under a new <code>/app/*</code> prefix.</li>
+        <li><b>No tenant or organization layer.</b> There are exactly three roles — customer, vendor, admin. A customer account is one row in <code>users</code>, not a member of some larger entity. The admin "Tenant" screen is customer-account management, nothing more.</li>
+        <li><b>The existing API-key system is untouched.</b> The new login system is a separate, parallel path for the web app — server-to-server integration keeps using API keys exactly as it does today.</li>
+        <li><b>Every new table is additive.</b> No existing column is removed, renamed, or turned into a foreign key it wasn't before.</li>
+      </ul>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <span>solar-fitness / backend</span>
+  <span>karthik · keerthana · omkar</span>
+</footer>

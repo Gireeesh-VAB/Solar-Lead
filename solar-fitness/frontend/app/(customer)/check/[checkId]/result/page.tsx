@@ -9,6 +9,7 @@ import { ConfidenceMeter } from "@/components/ui/ConfidenceMeter";
 import { BindingConstraintTag } from "@/components/ui/BindingConstraintTag";
 import { Button, Card } from "@/components/ui/Primitives";
 import { MapView } from "@/components/map/MapView";
+import { PanoramaViewer } from "@/components/panorama/PanoramaViewer";
 import { formatKwp } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -64,6 +65,11 @@ export default async function ResultPage({ params }: { params: Promise<{ checkId
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">Why</p>
         <BindingConstraintTag constraint={assessment.bindingConstraint} />
       </Card>
+
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">3D roof view</p>
+        <PanoramaViewer panoramaUrl={assessment.panoramaUrl} siteName={check.name} />
+      </div>
 
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">Location</p>

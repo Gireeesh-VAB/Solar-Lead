@@ -1,0 +1,93 @@
+ 
+ -------------- celery@DESKTOP-6CKNE63 v5.6.3 (recovery)
+--- ***** ----- 
+-- ******* ---- Windows-11-10.0.26200-SP0 2026-09-01 17:39:52
+- *** --- * --- 
+- ** ---------- [config]
+- ** ---------- .> app:         solarfit:0x1cc76c97620
+- ** ---------- .> transport:   redis://localhost:6379/0
+- ** ---------- .> results:     redis://localhost:6379/0
+- *** --- * --- .> concurrency: 8 (solo)
+-- ******* ---- .> task events: OFF (enable -E to monitor tasks in this worker)
+--- ***** ----- 
+ -------------- [queues]
+                .> celery           exchange=celery(direct) key=celery
+                
+
+[tasks]
+  . solarfit.obstacles.apply
+  . solarfit.panorama.generate
+  . solarfit.ping
+  . solarfit.vision.refine
+
+[2026-09-01 17:39:53,061: INFO/MainProcess] Connected to redis://localhost:6379/0
+[2026-09-01 17:39:53,069: INFO/MainProcess] mingle: searching for neighbors
+[2026-09-01 17:39:54,115: INFO/MainProcess] mingle: all alone
+[2026-09-01 17:39:54,161: INFO/MainProcess] celery@DESKTOP-6CKNE63 ready.
+[2026-09-01 17:39:54,164: INFO/MainProcess] Task solarfit.vision.refine[396dff72-9a64-4f1d-9b16-b7b691fcbe85] received
+[2026-09-01 17:39:57,730: INFO/MainProcess] HTTP Request: GET https://solar.googleapis.com/v1/dataLayers:get?location.latitude=17.4174&location.longitude=78.4495&radiusMeters=25.0&view=IMAGERY_LAYERS&requiredQuality=MEDIUM&key=AIzaSyAOnln_IeD5DX9Peyfq4-bVmpU4LaR83zw "HTTP/1.1 404 Not Found"
+[2026-09-01 17:39:57,733: ERROR/MainProcess] Vision refinement: imagery fetch/crop failed for (17.4174, 78.4495)
+Traceback (most recent call last):
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\workers\celery_app.py", line 80, in refine_vision_task
+    imagery = fetch_rgb_imagery(lat, lng, radius_meters)
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\vision.py", line 191, in fetch_rgb_imagery
+    layers = fetch_solar_api_datalayers(lat, lng, radius_meters)
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\vision.py", line 152, in fetch_solar_api_datalayers
+    return _get_with_retries(_SOLAR_API_DATALAYERS_URL, params=params).json()
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\vision.py", line 135, in _get_with_retries
+    return with_retries(_do)
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\vision.py", line 110, in with_retries
+    return fn()
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\vision.py", line 126, in _do
+    response.raise_for_status()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\httpx\_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '404 Not Found' for url 'https://solar.googleapis.com/v1/dataLayers:get?location.latitude=17.4174&location.longitude=78.4495&radiusMeters=25.0&view=IMAGERY_LAYERS&requiredQuality=MEDIUM&key=AIzaSyAOnln_IeD5DX9Peyfq4-bVmpU4LaR83zw'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[2026-09-01 17:39:57,775: INFO/MainProcess] Task solarfit.vision.refine[396dff72-9a64-4f1d-9b16-b7b691fcbe85] succeeded in 3.6106748999991396s: {'corrected_boundary': None, 'obstruction_notes': [], 'obstacles': [], 'confidence': None, 'status': 'insufficient_data'}
+[2026-09-01 18:40:53,775: INFO/MainProcess] Task solarfit.vision.refine[f9eb95c4-e6af-4658-8862-b64e0e2cd768] received
+[2026-09-01 18:40:55,713: INFO/MainProcess] HTTP Request: GET https://solar.googleapis.com/v1/dataLayers:get?location.latitude=17.238742529296875&location.longitude=78.59084011393306&radiusMeters=25.0&view=IMAGERY_LAYERS&requiredQuality=MEDIUM&key=AIzaSyAOnln_IeD5DX9Peyfq4-bVmpU4LaR83zw "HTTP/1.1 404 Not Found"
+[2026-09-01 18:40:55,715: ERROR/MainProcess] Vision refinement: imagery fetch/crop failed for (17.238742529296875, 78.59084011393306)
+Traceback (most recent call last):
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\workers\celery_app.py", line 80, in refine_vision_task
+    imagery = fetch_rgb_imagery(lat, lng, radius_meters)
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\vision.py", line 191, in fetch_rgb_imagery
+    layers = fetch_solar_api_datalayers(lat, lng, radius_meters)
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\vision.py", line 152, in fetch_solar_api_datalayers
+    return _get_with_retries(_SOLAR_API_DATALAYERS_URL, params=params).json()
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\vision.py", line 135, in _get_with_retries
+    return with_retries(_do)
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\vision.py", line 110, in with_retries
+    return fn()
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\vision.py", line 126, in _do
+    response.raise_for_status()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\httpx\_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '404 Not Found' for url 'https://solar.googleapis.com/v1/dataLayers:get?location.latitude=17.238742529296875&location.longitude=78.59084011393306&radiusMeters=25.0&view=IMAGERY_LAYERS&requiredQuality=MEDIUM&key=AIzaSyAOnln_IeD5DX9Peyfq4-bVmpU4LaR83zw'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[2026-09-01 18:40:55,727: INFO/MainProcess] Task solarfit.vision.refine[f9eb95c4-e6af-4658-8862-b64e0e2cd768] succeeded in 1.9405774999977439s: {'corrected_boundary': None, 'obstruction_notes': [], 'obstacles': [], 'confidence': None, 'status': 'insufficient_data'}
+[2026-09-01 18:40:56,715: INFO/MainProcess] Task solarfit.panorama.generate[92861365-36f1-42e8-8235-68d978743ca4] received
+[2026-09-01 18:40:59,345: INFO/MainProcess] HTTP Request: GET https://solar.googleapis.com/v1/dataLayers:get?location.latitude=17.239791649999997&location.longitude=78.5898666&radiusMeters=25.0&view=IMAGERY_LAYERS&requiredQuality=MEDIUM&key=AIzaSyAOnln_IeD5DX9Peyfq4-bVmpU4LaR83zw "HTTP/1.1 404 Not Found"
+[2026-09-01 18:40:59,346: ERROR/MainProcess] Panorama generation failed
+Traceback (most recent call last):
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\engine\panorama.py", line 227, in generate_panorama
+    layers = fetch_solar_api_datalayers(lat, lng)
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\vision.py", line 152, in fetch_solar_api_datalayers
+    return _get_with_retries(_SOLAR_API_DATALAYERS_URL, params=params).json()
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\vision.py", line 135, in _get_with_retries
+    return with_retries(_do)
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\vision.py", line 110, in with_retries
+    return fn()
+  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\vision.py", line 126, in _do
+    response.raise_for_status()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\httpx\_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '404 Not Found' for url 'https://solar.googleapis.com/v1/dataLayers:get?location.latitude=17.239791649999997&location.longitude=78.5898666&radiusMeters=25.0&view=IMAGERY_LAYERS&requiredQuality=MEDIUM&key=AIzaSyAOnln_IeD5DX9Peyfq4-bVmpU4LaR83zw'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[2026-09-01 18:40:59,358: INFO/MainProcess] Task solarfit.panorama.generate[92861365-36f1-42e8-8235-68d978743ca4] succeeded in 2.641673300000548s: {'url': None, 'status': 'not_generated', 'reason': 'Unexpected failure during panorama generation', 'generated_at': None, 'version': None}

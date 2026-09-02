@@ -253,6 +253,31 @@ export interface AdminVendorSummary {
   serviceArea: string;
   joinedAt: string;
   payoutMethod: "UPI" | "Bank transfer";
+  legalName?: string | null;
+  gstNumber?: string | null;
+  panNumber?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  certifications?: string[];
+}
+
+export interface FeatureFlag {
+  key: string;
+  label: string;
+  description: string;
+  enabled: boolean;
+}
+
+export interface ServiceApiKey {
+  service: string;
+  maskedValue: string;
+  lastRotatedAt: string | null;
 }
 
 export interface AuditLogEntry {

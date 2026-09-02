@@ -41,6 +41,7 @@ __all__ = [
     "VendorRow",
     "count_active_jobs_for_sites",
     "create_job",
+    "create_vendor",
     "dispute_job",
     "get_accuracy_history",
     "get_earnings_summary",
@@ -81,6 +82,22 @@ class VendorRow(Base):
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+    # Onboarding/profile fields — added alongside the admin "Add Vendor"
+    # flow (create_vendor() below). All nullable: existing vendor rows
+    # predate these and are never backfilled.
+    legal_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    gst_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    pan_number: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    contact_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    contact_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    address_line1: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    address_line2: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    pincode: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    certifications: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
 
 
 class VendorJobRow(Base):
@@ -158,6 +175,35 @@ class VendorAccuracyHistoryRow(Base):
 # --------------------------------------------------------------------- #
 # vendor profile
 # --------------------------------------------------------------------- #
+
+
+def create_vendor(
+    session: Session,
+    *,
+    name: str,
+    payout_method_type: str,
+    payout_masked_account: str,
+    service_area: dict | None = None,
+    documents: list | None = None,
+    certifications: list | None = None,
+    **extra: Any,
+) -> VendorRow:
+    """Admin "Add Vendor" flow — the one populating path for the vendors
+    table. Raises sqlalchemy.exc.IntegrityError on constraint violations;
+    the router's job to catch and turn into an HTTP response, same
+    convention as repositories/users.py::create_user()."""
+    row = VendorRow(
+        name=name,
+        payout_method_type=payout_method_type,
+        payout_masked_account=payout_masked_account,
+        service_area=service_area or {},
+        documents=documents or [],
+        certifications=certifications or [],
+        **extra,
+    )
+    session.add(row)
+    session.flush()
+    return row
 
 
 def get_vendor(session: Session, vendor_id: str | uuid.UUID) -> VendorRow | None:
