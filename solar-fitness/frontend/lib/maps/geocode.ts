@@ -31,6 +31,50 @@ export interface GeocodeResult {
   formatted?: string;
 }
 
+export interface AddressSuggestion {
+  placeId: string;
+  description: string;
+}
+
+/**
+ * Groups a burst of typing and the resolve that follows into ONE billable
+ * Places session. Without a token Google bills every keystroke separately.
+ * Mint one when the user starts typing, discard it once they pick.
+ */
+export function newSessionToken(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `s-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * Ranked suggestions for partial input.
+ *
+ * Returns [] rather than throwing when there is nothing to show — a
+ * half-typed word with no matches is ordinary, and a dropdown that
+ * flashes an error on every keystroke is unusable. Real failures still
+ * throw, so the caller can distinguish "nothing yet" from "search is
+ * down".
+ */
+export async function suggestAddresses(
+  query: string,
+  sessionToken?: string,
+  signal?: AbortSignal
+): Promise<AddressSuggestion[]> {
+  if (!query.trim()) return [];
+  const response = await apiFetch<{ suggestions: AddressSuggestion[] }>("/app/geocode/suggest", {
+    query: { q: query, session: sessionToken },
+    signal,
+  });
+  return response.suggestions ?? [];
+}
+
+/** Resolves a suggestion the user actually picked, by its place id. */
+export async function resolveSuggestion(
+  placeId: string,
+  sessionToken?: string
+): Promise<GeocodeResult> {
+  return fetchPoint({ placeId, session: sessionToken });
+}
+
 interface GeocodeResponse {
   found: boolean;
   lat: number | null;
@@ -50,9 +94,13 @@ interface GeocodeResponse {
  *     change; suggest a nearby landmark.
  */
 export async function geocodeAddress(address: string): Promise<GeocodeResult> {
+  return fetchPoint({ address });
+}
+
+async function fetchPoint(query: Record<string, string | undefined>): Promise<GeocodeResult> {
   let response: GeocodeResponse;
   try {
-    response = await apiFetch<GeocodeResponse>("/app/geocode", { query: { address } });
+    response = await apiFetch<GeocodeResponse>("/app/geocode", { query });
   } catch (err) {
     // The backend answers 503 when its own key is denied or Google is
     // unreachable — a configuration or outage problem, never a bad

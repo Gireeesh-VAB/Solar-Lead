@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Crosshair, Loader2, Search } from "lucide-react";
+import { Crosshair, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Primitives";
+import { AddressAutocomplete } from "@/components/map/AddressAutocomplete";
 import { MapView, type MapPinData } from "@/components/map/MapView";
-import { geocodeAddress, GeocodeUnavailableError } from "@/lib/maps/geocode";
+import type { GeocodeResult } from "@/lib/maps/geocode";
 import { useCreateCheck } from "@/lib/query/hooks";
 
 type Coords = { lat: number; lng: number };
@@ -19,7 +20,6 @@ export function NewCheckForm() {
   // touched the map silently submitted somebody else's rooftop.
   const [coords, setCoords] = useState<Coords | null>(null);
   const [locating, setLocating] = useState(false);
-  const [searching, setSearching] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   // CON-05. A range rather than one figure because Indian household bills
@@ -29,28 +29,11 @@ export function NewCheckForm() {
   const [billLow, setBillLow] = useState("");
   const [billHigh, setBillHigh] = useState("");
 
-  const handleSearch = async () => {
-    const query = address.trim();
-    if (!query) return;
-    setSearching(true);
-    setNotice(null);
-    try {
-      const found = await geocodeAddress(query);
-      setCoords(found);
-      setNotice(found.formatted ? `Found: ${found.formatted}` : null);
-    } catch (err) {
-      // Geocoding is a separate Google API from Maps JavaScript and is
-      // currently not authorised on this key. The map itself still works,
-      // so the honest fallback is to say so and let the user place the pin
-      // by hand rather than invent a location for them.
-      setNotice(
-        err instanceof GeocodeUnavailableError
-          ? "Address search isn't available yet. Use your current location, or tap the map to place your pin."
-          : "We couldn't find that address. Try a nearby landmark, or tap the map to place your pin."
-      );
-    } finally {
-      setSearching(false);
-    }
+  const handleSuggestionPicked = (found: GeocodeResult) => {
+    setCoords(found);
+    // Say WHICH place matched. "Kukatpally, Hyderabad" and a bare pin are
+    // very different levels of confidence that the search worked.
+    setNotice(found.formatted ? `Found: ${found.formatted}` : null);
   };
 
   const handleUseCurrentLocation = () => {
@@ -127,27 +110,18 @@ export function NewCheckForm() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="relative flex-1">
-          <Search size={15} strokeWidth={1.75} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" aria-hidden="true" />
-          <input
-            type="text"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                void handleSearch();
-              }
-            }}
-            placeholder="Search an address or place…"
-            className="w-full rounded-[var(--radius-app)] border border-line bg-paper py-2 pl-9 pr-3 text-sm text-ink outline-none focus:border-blue"
-          />
-        </div>
-        <Button type="button" variant="secondary" onClick={handleSearch} disabled={searching || !address.trim()}>
-          {searching ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : "Search"}
-        </Button>
-      </div>
+      {/* Suggestions come from Google Places through our own backend, so
+          the public Maps key never needs Places or Geocoding permission.
+          Picking one moves the map and drops the pin; the pin stays
+          draggable afterwards, because a street address is rarely the
+          exact roof. */}
+      <AddressAutocomplete
+        value={address}
+        onValueChange={setAddress}
+        onSelect={handleSuggestionPicked}
+        onUnavailable={setNotice}
+        disabled={createCheck.isPending}
+      />
 
       <button
         type="button"

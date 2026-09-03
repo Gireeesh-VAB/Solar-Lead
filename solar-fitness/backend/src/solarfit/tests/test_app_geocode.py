@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from solarfit.db import get_session
 from solarfit.main import app
-from solarfit.providers import solar_api
+from solarfit.providers import places, solar_api
 
 POINT = {"type": "Point", "coordinates": [78.3953462, 17.4875418]}
 FORMATTED = "Kukatpally, Hyderabad, Telangana, India"
@@ -107,20 +107,23 @@ def test_provider_failure_is_503_not_a_not_found(client, auth):
 
 
 @pytest.mark.parametrize("address", ["", "   "])
-def test_blank_addresses_are_rejected_before_reaching_google(address, client, auth):
+def test_a_blank_address_is_an_empty_search_not_an_error(address, client, auth):
+    """An empty box is not a malformed request — it is a search for
+    nothing, which finds nothing. Google is never called either way: an
+    empty string is not worth a billable lookup on our key."""
     with patch.object(solar_api, "geocode_address_detailed") as geocoder:
         response = client.get("/app/geocode", params={"address": address}, headers=auth)
 
-    # Either way Google is never called — an empty string is not worth a
-    # billable lookup on our key.
     geocoder.assert_not_called()
+    assert response.status_code == 200
+    assert response.json()["found"] is False
 
-    if address == "":
-        assert response.status_code == 422  # min_length rejects it outright
-    else:
-        # Whitespace clears min_length, so the route trims and short-circuits.
-        assert response.status_code == 200
-        assert response.json()["found"] is False
+
+def test_supplying_neither_placeid_nor_address_is_a_caller_error(client, auth):
+    """Distinct from a blank one: sending no parameter at all is a bug in
+    the caller, not a customer searching for nothing."""
+    response = client.get("/app/geocode", headers=auth)
+    assert response.status_code == 422
 
 
 def test_an_over_long_address_is_refused(client, auth):
@@ -131,3 +134,108 @@ def test_an_over_long_address_is_refused(client, auth):
 
     assert response.status_code == 422
     geocoder.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Suggestions — the autocomplete half
+# ---------------------------------------------------------------------------
+
+
+def test_suggest_requires_auth(client):
+    assert client.get("/app/geocode/suggest", params={"q": "kukat"}).status_code == 401
+
+
+def test_suggest_returns_googles_own_predictions(client, auth):
+    predictions = [
+        ("ChIJ_place_1", "Kukatpally, Hyderabad, Telangana, India"),
+        ("ChIJ_place_2", "Kukatpally Housing Board Colony, Hyderabad"),
+    ]
+    with patch.object(places, "suggest_addresses", return_value=predictions) as suggester:
+        response = client.get(
+            "/app/geocode/suggest", params={"q": "kukat", "session": "tok-1"}, headers=auth
+        )
+
+    assert response.status_code == 200
+    body = response.json()["suggestions"]
+    assert [s["placeId"] for s in body] == ["ChIJ_place_1", "ChIJ_place_2"]
+    assert body[0]["description"] == "Kukatpally, Hyderabad, Telangana, India"
+    # The session token must reach Google, or every keystroke bills separately.
+    suggester.assert_called_once_with("kukat", session_token="tok-1")
+
+
+def test_suggest_with_no_matches_returns_an_empty_list(client, auth):
+    """A half-typed word Google cannot place yet is ordinary, not an error
+    — and never a fabricated suggestion."""
+    with patch.object(places, "suggest_addresses", return_value=[]):
+        response = client.get("/app/geocode/suggest", params={"q": "zzqq"}, headers=auth)
+
+    assert response.status_code == 200
+    assert response.json()["suggestions"] == []
+
+
+def test_suggest_does_not_call_google_for_a_blank_query(client, auth):
+    with patch.object(places, "suggest_addresses") as suggester:
+        response = client.get("/app/geocode/suggest", params={"q": "   "}, headers=auth)
+
+    suggester.assert_not_called()
+    assert response.status_code == 200
+    assert response.json()["suggestions"] == []
+
+
+def test_suggest_provider_failure_is_503(client, auth):
+    with patch.object(
+        places, "suggest_addresses", side_effect=places.PlacesError("REQUEST_DENIED")
+    ):
+        response = client.get("/app/geocode/suggest", params={"q": "kukat"}, headers=auth)
+
+    assert response.status_code == 503
+    assert "REQUEST_DENIED" not in response.text
+
+
+# ---------------------------------------------------------------------------
+# Resolving a picked suggestion
+# ---------------------------------------------------------------------------
+
+
+def test_geocode_resolves_a_place_id(client, auth):
+    with patch.object(places, "resolve_place", return_value=(POINT, FORMATTED)) as resolver:
+        response = client.get(
+            "/app/geocode", params={"placeId": "ChIJ_abc", "session": "tok-1"}, headers=auth
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["found"] is True
+    assert body["lat"] == pytest.approx(17.4875418)
+    assert body["formatted"] == FORMATTED
+    resolver.assert_called_once_with("ChIJ_abc", session_token="tok-1")
+
+
+def test_place_id_wins_over_a_typed_address(client, auth):
+    """The customer picked that specific place; the text in the box is
+    only whatever they happened to have typed at the time."""
+    with (
+        patch.object(places, "resolve_place", return_value=(POINT, FORMATTED)) as resolver,
+        patch.object(solar_api, "geocode_address_detailed") as geocoder,
+    ):
+        client.get(
+            "/app/geocode", params={"placeId": "ChIJ_abc", "address": "half typed"}, headers=auth
+        )
+
+    resolver.assert_called_once()
+    geocoder.assert_not_called()
+
+
+def test_an_unknown_place_id_is_found_false(client, auth):
+    with patch.object(places, "resolve_place", return_value=None):
+        response = client.get("/app/geocode", params={"placeId": "stale"}, headers=auth)
+
+    assert response.status_code == 200
+    assert response.json()["found"] is False
+
+
+def test_place_resolution_failure_is_503(client, auth):
+    with patch.object(places, "resolve_place", side_effect=places.PlacesError("boom")):
+        response = client.get("/app/geocode", params={"placeId": "ChIJ_abc"}, headers=auth)
+
+    assert response.status_code == 503
