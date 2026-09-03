@@ -24,10 +24,16 @@ export interface BindingConstraint {
   kind: ConstraintKind;
 }
 
+export type ConstraintStatus = "ok" | "estimated" | "insufficient_data" | "not_applicable";
+
 export interface CeilingLedgerEntry {
   label: string;
-  kwp: number;
+  /** Null when the constraint could not be evaluated. Deliberately NOT
+   *  defaulted to 0 — "we haven't checked this" and "this limits you to
+   *  nothing" are opposite claims, and a zero here reads as the second. */
+  kwp: number | null;
   kind: ConstraintKind;
+  status: ConstraintStatus;
   note?: string;
   isBinding?: boolean;
 }
@@ -52,6 +58,11 @@ export interface Assessment {
   bindingConstraint: BindingConstraint | null;
   reasons: string[];
   ceilingLedger: CeilingLedgerEntry[];
+  /** CON-04 context behind the recommendation. All optional — an older
+   *  assessment predating this may not carry them. */
+  usableAreaM2?: number | null;
+  maxTechnicalKwp?: number | null;
+  headroomKwp?: number | null;
   visionRefinement?: {
     applied: boolean;
     deltaKwp: number;

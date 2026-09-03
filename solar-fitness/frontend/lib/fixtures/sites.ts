@@ -148,17 +148,18 @@ const CONSTRAINT_LIBRARY: Record<Verdict, BindingConstraint[]> = {
 
 function ceilingLedgerFor(type: SiteType, capacityKwp: number, binding: BindingConstraint | null): CeilingLedgerEntry[] {
   const base: CeilingLedgerEntry[] = [
-    { label: "Available area ceiling", kwp: Number((capacityKwp * randFloat(1.05, 1.4)).toFixed(1)), kind: "physical" },
-    { label: "Sanctioned load ceiling", kwp: Number((capacityKwp * randFloat(0.9, 1.6)).toFixed(1)), kind: "regulatory" },
-    { label: "DISCOM net-metering ceiling", kwp: Number((capacityKwp * randFloat(0.85, 1.5)).toFixed(1)), kind: "regulatory" },
-    { label: "Commercial viability ceiling", kwp: Number((capacityKwp * randFloat(1.0, 1.8)).toFixed(1)), kind: "commercial" },
+    { label: "Available area ceiling", kwp: Number((capacityKwp * randFloat(1.05, 1.4)).toFixed(1)), kind: "physical", status: "ok" },
+    { label: "Sanctioned load ceiling", kwp: Number((capacityKwp * randFloat(0.9, 1.6)).toFixed(1)), kind: "regulatory", status: "ok" },
+    { label: "DISCOM net-metering ceiling", kwp: Number((capacityKwp * randFloat(0.85, 1.5)).toFixed(1)), kind: "regulatory", status: "ok" },
+    { label: "Commercial viability ceiling", kwp: Number((capacityKwp * randFloat(1.0, 1.8)).toFixed(1)), kind: "commercial", status: "ok" },
   ];
   if (type === "FLOATING") {
-    base.push({ label: "Water body surface-coverage cap (30%)", kwp: Number((capacityKwp * randFloat(1.0, 1.3)).toFixed(1)), kind: "regulatory" });
+    base.push({ label: "Water body surface-coverage cap (30%)", kwp: Number((capacityKwp * randFloat(1.0, 1.3)).toFixed(1)), kind: "regulatory", status: "ok" });
   }
   return base
     .map((e) => ({ ...e, isBinding: binding ? e.label.toLowerCase().includes(binding.name.split(" ")[0].toLowerCase()) : false }))
-    .sort((a, b) => a.kwp - b.kwp);
+    // Unevaluated ceilings sort last rather than as zero.
+    .sort((a, b) => (a.kwp ?? Infinity) - (b.kwp ?? Infinity));
 }
 
 function buildAssessment(site: Omit<Site, "latestAssessment">, index: number): Assessment {

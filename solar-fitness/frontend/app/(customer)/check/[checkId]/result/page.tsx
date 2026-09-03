@@ -8,6 +8,7 @@ import { VerdictChip } from "@/components/ui/VerdictChip";
 import { ConfidenceMeter } from "@/components/ui/ConfidenceMeter";
 import { BindingConstraintTag } from "@/components/ui/BindingConstraintTag";
 import { Button, Card } from "@/components/ui/Primitives";
+import { CalculationBreakdown } from "./CalculationBreakdown";
 import { ResultMap } from "./ResultMap";
 import { formatKwp } from "@/lib/utils";
 
@@ -64,6 +65,11 @@ export default async function ResultPage({ params }: { params: Promise<{ checkId
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">Why</p>
         <BindingConstraintTag constraint={assessment.bindingConstraint} />
       </Card>
+
+      {/* CON-04. The tag above names the deciding constraint; this says
+          what that actually means for this roof. Renders nothing when an
+          older assessment carries no ledger. */}
+      <CalculationBreakdown assessment={assessment} />
 
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">Location</p>

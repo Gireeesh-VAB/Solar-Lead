@@ -77,7 +77,9 @@ def list_assessments(
     already established the right to one (GET /app/admin/assessments'
     require_role("admin") gate), same discipline as
     repositories/sites.py::list_sites()."""
-    stmt = select(AssessmentRow).order_by(AssessmentRow.created_at.desc()).limit(limit).offset(offset)
+    stmt = (
+        select(AssessmentRow).order_by(AssessmentRow.created_at.desc()).limit(limit).offset(offset)
+    )
     if owner_org is not None:
         stmt = stmt.where(AssessmentRow.owner_org == owner_org)
     return list(session.scalars(stmt))
@@ -125,9 +127,43 @@ def binding_constraint_dict(row: AssessmentRow) -> dict:
     name = row.binding_constraint
     for ceiling in (row.capacity or {}).get("ceilings", []):
         if ceiling.get("constraint") == name:
-            return {"name": name, "reason": ceiling.get("reason", ""), "kind": ceiling.get("kind", "physical")}
-    detail = next((r for r in row.reasons if name.split(":")[-1] in r), row.reasons[0] if row.reasons else "")
+            return {
+                "name": name,
+                "reason": ceiling.get("reason", ""),
+                "kind": ceiling.get("kind", "physical"),
+            }
+    detail = next(
+        (r for r in row.reasons if name.split(":")[-1] in r), row.reasons[0] if row.reasons else ""
+    )
     return {"name": name, "reason": detail, "kind": "physical"}
+
+
+def ceiling_ledger(row: AssessmentRow) -> list[dict]:
+    """CON-04. Every ceiling the resolver weighed, as the frontend needs it.
+
+    These were always computed and stored in `capacity` — the ledger was
+    just dropped on the way out ("ceiling_ledger": [] was hardcoded), so
+    the customer saw a number and a constraint NAME with nothing behind
+    it. Nothing new is calculated here; this only stops discarding what
+    the resolver already decided.
+
+    A ceiling that could not be evaluated keeps `kwp: None` and its
+    "insufficient_data" status rather than being dropped or defaulted to
+    zero: "we could not check this" and "this limits you to 0 kWp" are
+    opposite claims, and a zero here would read as the second.
+    """
+    binding = row.binding_constraint
+    return [
+        {
+            "label": ceiling.get("constraint", ""),
+            "kwp": ceiling.get("ceiling_kwp"),
+            "kind": ceiling.get("kind", "physical"),
+            "status": ceiling.get("status", "ok"),
+            "note": ceiling.get("reason", ""),
+            "is_binding": ceiling.get("constraint") == binding,
+        }
+        for ceiling in (row.capacity or {}).get("ceilings", [])
+    ]
 
 
 def to_frontend_assessment_dict(row: AssessmentRow) -> dict:
@@ -144,7 +180,13 @@ def to_frontend_assessment_dict(row: AssessmentRow) -> dict:
         "confidence": confidence_label(row.score, row.confidence),
         "binding_constraint": binding_constraint_dict(row),
         "reasons": row.reasons,
-        "ceiling_ledger": [],
+        "ceiling_ledger": ceiling_ledger(row),
+        # Stored all along and never surfaced. The three together are what
+        # let a customer see WHY a number was chosen: what the roof could
+        # take, what they were recommended, and the gap between them.
+        "usable_area_m2": row.usable_area_m2,
+        "max_technical_kwp": (row.capacity or {}).get("max_technical_kwp"),
+        "headroom_kwp": (row.capacity or {}).get("headroom_kwp"),
         "panorama_url": row.panorama_url,
         "ml_suitability_score": row.ml_suitability_score,
         "cache": {"cache_hit": row.cache_hit},

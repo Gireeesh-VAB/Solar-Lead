@@ -72,6 +72,22 @@ class CacheProvenanceOut(_CamelModel):
     cache_hit: bool
 
 
+class CeilingLedgerOut(_CamelModel):
+    """One constraint the resolver weighed.
+
+    `kwp` stays nullable and `status` is carried through: a ceiling that
+    could not be evaluated is not a ceiling of zero, and flattening the
+    two would tell a customer they are limited to nothing when the truth
+    is that we have not checked yet."""
+
+    label: str
+    kwp: float | None = None
+    kind: str = "physical"
+    status: str = "ok"
+    note: str = ""
+    is_binding: bool = False
+
+
 class AssessmentOut(_CamelModel):
     id: str
     site_id: str
@@ -80,7 +96,12 @@ class AssessmentOut(_CamelModel):
     confidence: str
     binding_constraint: BindingConstraintOut | None
     reasons: list[str]
-    ceiling_ledger: list[dict] = []
+    ceiling_ledger: list[CeilingLedgerOut] = Field(default_factory=list)
+    # CON-04 context for "how we worked this out". All three were already
+    # stored on the row; only the plumbing to the frontend was missing.
+    usable_area_m2: float | None = None
+    max_technical_kwp: float | None = None
+    headroom_kwp: float | None = None
     panorama_url: str | None = None
     ml_suitability_score: float | None = None
     cache: CacheProvenanceOut
@@ -96,8 +117,14 @@ def _assessment_out(row) -> AssessmentOut:
         verdict=data["verdict"],
         capacity_kwp=data["capacity_kwp"],
         confidence=data["confidence"],
-        binding_constraint=BindingConstraintOut(**data["binding_constraint"]) if data["binding_constraint"] else None,
+        binding_constraint=BindingConstraintOut(**data["binding_constraint"])
+        if data["binding_constraint"]
+        else None,
         reasons=data["reasons"],
+        ceiling_ledger=[CeilingLedgerOut(**entry) for entry in data["ceiling_ledger"]],
+        usable_area_m2=data["usable_area_m2"],
+        max_technical_kwp=data["max_technical_kwp"],
+        headroom_kwp=data["headroom_kwp"],
         panorama_url=data["panorama_url"],
         ml_suitability_score=data["ml_suitability_score"],
         cache=CacheProvenanceOut(**data["cache"]),
@@ -341,7 +368,9 @@ def create_composite(
     user: Annotated[AuthenticatedUser, Depends(current_user)],
 ) -> CompositeSiteOut:
     if not user.owner_org:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "only customer accounts can create composite sites")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "only customer accounts can create composite sites"
+        )
     try:
         row = repo.create_composite_site(
             session,
@@ -467,11 +496,19 @@ def get_site_history(
     for v in repo.versions(session, site_id):
         kind = "created" if v.version_no == 1 else "boundary_edit"
         summary = (
-            f"Site created via {v.source}" if kind == "created" else f"Boundary changed by {v.actor} ({v.source})"
+            f"Site created via {v.source}"
+            if kind == "created"
+            else f"Boundary changed by {v.actor} ({v.source})"
         )
         superseded = None
         if kind == "boundary_edit":
-            superseded = [SupersededFieldOut(field="boundary", old_value="(previous version)", new_value=f"version {v.version_no}")]
+            superseded = [
+                SupersededFieldOut(
+                    field="boundary",
+                    old_value="(previous version)",
+                    new_value=f"version {v.version_no}",
+                )
+            ]
         events.append(
             HistoryEventOut(
                 id=str(v.id),
@@ -485,7 +522,9 @@ def get_site_history(
         )
 
     usn_rows = session.scalars(
-        select(usn_uploads_repo.UsnOcrUpload).where(usn_uploads_repo.UsnOcrUpload.site_id == site_id)
+        select(usn_uploads_repo.UsnOcrUpload).where(
+            usn_uploads_repo.UsnOcrUpload.site_id == site_id
+        )
     )
     for u in usn_rows:
         events.append(
@@ -500,7 +539,9 @@ def get_site_history(
         )
 
     survey_rows = session.scalars(
-        select(calibration_repo.CalibrationRecord).where(calibration_repo.CalibrationRecord.site_id == site_id)
+        select(calibration_repo.CalibrationRecord).where(
+            calibration_repo.CalibrationRecord.site_id == site_id
+        )
     )
     for c in survey_rows:
         events.append(
@@ -515,7 +556,9 @@ def get_site_history(
         )
 
     assessment_rows = session.scalars(
-        select(assessments_repo.AssessmentRow).where(assessments_repo.AssessmentRow.site_id == site_id)
+        select(assessments_repo.AssessmentRow).where(
+            assessments_repo.AssessmentRow.site_id == site_id
+        )
     )
     for a in assessment_rows:
         events.append(
