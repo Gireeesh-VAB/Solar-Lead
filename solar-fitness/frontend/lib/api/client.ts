@@ -478,3 +478,28 @@ export interface SolarLayout {
 export async function getCheckSolarLayout(checkId: string): Promise<SolarLayout> {
   return apiFetch(`/app/checks/${checkId}/solar-layout`);
 }
+
+// -----------------------------------------------------------------------------
+// OBS-04 — obstacles detected on a roof and applied to its exclusions, for
+// drawing over the satellite imagery.
+//
+// `detected` distinguishes "this roof genuinely has none" from "nothing has
+// looked yet": obstacle detection needs an OPENAI_API_KEY, and without one
+// the pipeline reports insufficient_data. Rendering an empty roof as "no
+// obstacles" in that case would be a lie of omission.
+// -----------------------------------------------------------------------------
+
+export interface RoofObstacle {
+  id: string;
+  polygon: { lat: number; lng: number }[];
+}
+
+export interface RoofObstacles {
+  detected: boolean;
+  reason: string | null;
+  obstacles: RoofObstacle[];
+}
+
+export async function getCheckObstacles(checkId: string): Promise<RoofObstacles> {
+  return apiFetch(`/app/checks/${checkId}/obstacles`);
+}

@@ -11,7 +11,7 @@
 
 import { Loader2 } from "lucide-react";
 import { MapView, type MapPinData } from "@/components/map/MapView";
-import { useCheckSolarLayout } from "@/lib/query/hooks";
+import { useCheckObstacles, useCheckSolarLayout } from "@/lib/query/hooks";
 
 export function ResultMap({
   checkId,
@@ -23,12 +23,14 @@ export function ResultMap({
   height?: number;
 }) {
   const { data, isLoading, isError } = useCheckSolarLayout(checkId);
+  const { data: obstacleData } = useCheckObstacles(checkId);
 
   const panels = data?.status === "ok" ? data.panels : undefined;
+  const obstacles = obstacleData?.obstacles ?? [];
 
   return (
     <div>
-      <MapView pins={[pin]} height={height} solarPanels={panels} />
+      <MapView pins={[pin]} height={height} solarPanels={panels} roofObstacles={obstacles} />
 
       {/* The overlay's own caption. Google's panel count is NOT the system
           size shown above — that is P2's figure, reached a different way,
@@ -47,6 +49,24 @@ export function ResultMap({
           </span>{" "}
           — indicative layout from the {data!.source}, drawn on satellite imagery. The system size
           above is our own assessment; a site survey confirms the final layout.
+        </p>
+      )}
+
+      {/* OBS-04. Only claim a clear roof when something actually looked:
+          detection needs an OPENAI_API_KEY, and reporting "no obstacles"
+          when the detector never ran would be a lie of omission. */}
+      {obstacles.length > 0 && (
+        <p className="mt-1 text-xs text-ink-faint">
+          <span className="font-medium text-ink-soft">
+            {obstacles.length} rooftop obstacle{obstacles.length === 1 ? "" : "s"}
+          </span>{" "}
+          shown in amber — these areas are excluded from the usable roof space.
+        </p>
+      )}
+      {obstacleData && !obstacleData.detected && obstacleData.reason && (
+        <p className="mt-1 text-xs text-ink-faint">
+          Rooftop obstacles (water tanks, vents, existing panels) haven&apos;t been surveyed for
+          this roof yet.
         </p>
       )}
 

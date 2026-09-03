@@ -36,6 +36,7 @@ from pydantic import Field
 from sqlalchemy.orm import Session
 
 from solarfit.auth_users import AuthenticatedUser, current_user
+from solarfit.config import get_settings
 from solarfit.db import get_session, session_scope
 from solarfit.domain.site import BILLING_LINKED_SITE_TYPES, RoofSiteType
 from solarfit.engine.panel_layout import fetch_panel_layout
@@ -225,6 +226,63 @@ def get_check_solar_layout(
             for p in layout.panels
         ],
     )
+
+
+class RoofObstacleOut(_CamelModel):
+    id: str
+    polygon: list[PanelCornerOut]
+
+
+class RoofObstaclesOut(_CamelModel):
+    """OBS-04. Obstacles detected on this roof and unioned into the site's
+    exclusions, so they can be drawn over the satellite imagery.
+
+    `detected` distinguishes "this roof genuinely has none" from "nothing
+    has looked yet" — the vision pipeline (OBS-01/02) needs an
+    OPENAI_API_KEY, and without one it reports insufficient_data and
+    finds nothing. Showing an empty roof as "no obstacles" in that case
+    would be a lie of omission.
+    """
+
+    detected: bool
+    reason: str | None = None
+    obstacles: list[RoofObstacleOut] = Field(default_factory=list)
+
+
+@router.get("/checks/{check_id}/obstacles", response_model=RoofObstaclesOut)
+def get_check_obstacles(
+    check_id: str,
+    session: Annotated[Session, Depends(get_session)],
+    user: Annotated[AuthenticatedUser, Depends(current_user)],
+) -> RoofObstaclesOut:
+    """The real obstacles applied to this roof — never a guess.
+
+    Nothing here infers an obstacle from elevation or imagery on the fly.
+    It reports what OBS-04 actually applied; an empty list means nothing
+    was detected, and `reason` says whether detection ever ran.
+    """
+    _site, _row = _owned_check_or_404(session, check_id, _individual_owner_org(user))
+    found = repo.applied_obstacles(session, check_id)
+
+    if not found:
+        vision_configured = bool(get_settings().openai_api_key)
+        return RoofObstaclesOut(
+            detected=vision_configured,
+            reason=(
+                None
+                if vision_configured
+                else "Rooftop obstacle detection is not configured on this deployment"
+            ),
+        )
+
+    obstacles: list[RoofObstacleOut] = []
+    for obstacle_id, polygon in found:
+        ring = ((polygon or {}).get("coordinates") or [[]])[0]
+        points = [PanelCornerOut(lat=lat, lng=lng) for lng, lat in ring]
+        if len(points) >= 3:
+            obstacles.append(RoofObstacleOut(id=obstacle_id, polygon=points))
+
+    return RoofObstaclesOut(detected=True, obstacles=obstacles)
 
 
 @router.post("/checks", response_model=SiteOut, status_code=status.HTTP_201_CREATED)

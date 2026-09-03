@@ -8,7 +8,11 @@ import {
   useMap,
 } from "@vis.gl/react-google-maps";
 import { MapPin } from "lucide-react";
-import { SolarPanelOverlay, type SolarPanelPolygon } from "./SolarPanelOverlay";
+import {
+  SolarPanelOverlay,
+  type RoofObstaclePolygon,
+  type SolarPanelPolygon,
+} from "./SolarPanelOverlay";
 import type { Verdict } from "@/lib/types";
 import { VERDICT_LABEL } from "@/lib/utils";
 
@@ -43,7 +47,16 @@ const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 
 // Zoom close enough that an individual rooftop fills a useful part of the
 // frame — this is a roof-assessment product, not a navigation one.
-const BUILDING_ZOOM = 19;
+//
+// A floor, not the final value: ZoomToBestImagery below asks Google what
+// the highest zoom with REAL satellite imagery is at this exact point and
+// goes there instead. Past that ceiling Google upscales its own tiles, so
+// zooming further only makes the roof blurrier.
+const BUILDING_ZOOM = 20;
+
+// Even where Google has more, this is as close as a rooftop needs; beyond
+// it the roof overflows the frame and the surrounding context is lost.
+const MAX_USEFUL_ZOOM = 21;
 const MULTI_PIN_ZOOM = 11;
 
 function pinIcon(color: string): google.maps.Symbol {
@@ -60,6 +73,45 @@ function pinIcon(color: string): google.maps.Symbol {
 /** Keeps the viewport following `center` when the parent moves it
  *  (address search, geolocation) without fighting the user's own panning:
  *  it only recentres when the target actually changes. */
+/** Zooms to the highest level Google actually has imagery for at `point`.
+ *
+ *  Satellite coverage depth varies street by street. A fixed zoom either
+ *  wastes real resolution where Google has it, or pushes past the tiles
+ *  it holds and shows an upscaled blur — which is exactly what a customer
+ *  trying to recognise their own roof cannot afford.
+ *
+ *  MaxZoomService is part of Maps JavaScript, already loaded for the map
+ *  itself, so this needs no extra key permission. If it fails the map
+ *  simply keeps the zoom it had. */
+function ZoomToBestImagery({ point }: { point: { lat: number; lng: number } | null }) {
+  const map = useMap();
+  const key = point ? `${point.lat.toFixed(6)},${point.lng.toFixed(6)}` : null;
+
+  useEffect(() => {
+    if (!map || !point || !google?.maps?.MaxZoomService) return;
+    let cancelled = false;
+
+    new google.maps.MaxZoomService()
+      .getMaxZoomAtLatLng(point)
+      .then((result) => {
+        if (cancelled || result.status !== google.maps.MaxZoomStatus.OK) return;
+        const best = Math.min(result.zoom, MAX_USEFUL_ZOOM);
+        // Never zoom OUT from the building framing — only sharpen it.
+        if (best > (map.getZoom() ?? 0)) map.setZoom(best);
+      })
+      .catch(() => {
+        // No imagery-depth answer available; the existing zoom stands.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, key]);
+
+  return null;
+}
+
 function ViewportSync({ center, zoom }: { center: { lat: number; lng: number } | null; zoom?: number }) {
   const map = useMap();
   const key = center ? `${center.lat.toFixed(6)},${center.lng.toFixed(6)}` : null;
@@ -84,6 +136,7 @@ export function MapView({
   onMove,
   center,
   solarPanels,
+  roofObstacles,
 }: {
   pins: MapPinData[];
   height?: number;
@@ -97,6 +150,8 @@ export function MapView({
   /** Google's real per-panel layout, drawn over the satellite imagery.
    *  Omitted or empty renders nothing — never a placeholder array. */
   solarPanels?: SolarPanelPolygon[];
+  /** OBS-04 obstacles applied to this roof. Same rule: empty draws nothing. */
+  roofObstacles?: RoofObstaclePolygon[];
 }) {
   const [dragPos, setDragPos] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -169,6 +224,9 @@ export function MapView({
           style={{ width: "100%", height: "100%" }}
         >
           <ViewportSync center={focus} zoom={zoom} />
+          {/* Only for a single rooftop — a portfolio of pins is a
+              different job and should stay zoomed out. */}
+          {pins.length <= 1 && <ZoomToBestImagery point={focus} />}
 
           {pins.map((p) => {
             const isDraggablePin = interactive && !!onMove && pins.length === 1;
@@ -200,7 +258,12 @@ export function MapView({
               Rendered only when panels actually came back — an absent
               layout shows the plain satellite view, never stand-in
               rectangles. */}
-          {solarPanels && solarPanels.length > 0 && <SolarPanelOverlay panels={solarPanels} />}
+          {((solarPanels?.length ?? 0) > 0 || (roofObstacles?.length ?? 0) > 0) && (
+            <SolarPanelOverlay
+              panels={solarPanels ?? []}
+              obstacles={roofObstacles ?? []}
+            />
+          )}
 
           {/* Roof-polygon drawing hooks in here. The drawing library is
               available on this key (verified), and PUT /app/sites/{id}/boundary

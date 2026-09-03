@@ -380,6 +380,39 @@ def get(session: Session, site_id: str | uuid.UUID) -> Site | None:
     return _to_domain(row) if row else None
 
 
+def applied_obstacles(session: Session, site_id: str | uuid.UUID) -> list[tuple[str, dict]]:
+    """OBS-04. Every obstacle union'd into this site's exclusions, as
+    (obstacle_id, GeoJSON polygon) pairs.
+
+    Walks the version history rather than one row: obstacles are applied
+    across successive versions, and applied_obstacle_polygons on each
+    version records only what THAT version contributed. Later versions win
+    on id, so an obstacle re-applied after a rejection reports its current
+    polygon.
+
+    Empty is the honest answer for a site whose obstacles have never been
+    detected — which is every site until the vision pipeline has an
+    OPENAI_API_KEY to run with.
+    """
+    try:
+        key = uuid.UUID(str(site_id))
+    except (ValueError, AttributeError, TypeError):
+        return []
+
+    versions = (
+        session.query(SiteVersionRow)
+        .filter(SiteVersionRow.site_id == key)
+        .order_by(SiteVersionRow.version_no.asc())
+        .all()
+    )
+    by_id: dict[str, dict] = {}
+    for version in versions:
+        for obstacle_id, polygon in (version.applied_obstacle_polygons or {}).items():
+            if polygon:
+                by_id[obstacle_id] = polygon
+    return list(by_id.items())
+
+
 def get_bill_range(session: Session, site_id: str | uuid.UUID) -> tuple[float | None, float | None]:
     """The customer's (lowest, highest) monthly bill, or (None, None).
 

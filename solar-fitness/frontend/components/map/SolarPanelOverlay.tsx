@@ -33,6 +33,12 @@ const PANEL_STROKE = "#cfd6e4";
 const PANEL_STROKE_WEIGHT = 1;
 const PANEL_HOVER_FILL = "#1d3a86";
 
+// Obstacles read as a warning, not as hardware: amber outline, light fill,
+// so they are obviously "keep clear" rather than "installed".
+const OBSTACLE_FILL = "#c2410c";
+const OBSTACLE_FILL_OPACITY = 0.3;
+const OBSTACLE_STROKE = "#fb923c";
+
 function describe(panel: SolarPanelPolygon): string {
   const bits: string[] = [];
   if (panel.capacityWatts) bits.push(`${panel.capacityWatts} W`);
@@ -43,11 +49,20 @@ function describe(panel: SolarPanelPolygon): string {
   return bits.join(" · ");
 }
 
+export interface RoofObstaclePolygon {
+  id: string;
+  polygon: { lat: number; lng: number }[];
+}
+
 export function SolarPanelOverlay({
   panels,
+  obstacles = [],
   visible = true,
 }: {
   panels: SolarPanelPolygon[];
+  /** OBS-04 obstacles applied to this roof. Empty renders nothing — an
+   *  obstacle is never inferred here from imagery or elevation. */
+  obstacles?: RoofObstaclePolygon[];
   visible?: boolean;
 }) {
   const map = useMap();
@@ -55,7 +70,25 @@ export function SolarPanelOverlay({
   const info = useRef<google.maps.InfoWindow | null>(null);
 
   useEffect(() => {
-    if (!map || panels.length === 0) return;
+    if (!map || (panels.length === 0 && obstacles.length === 0)) return;
+
+    // Drawn UNDER the panels (lower zIndex): where a panel sits beside a
+    // water tank the panel is the subject, and an obstacle outline that
+    // covered it would hide the thing the customer came to see.
+    const obstacleShapes = obstacles.map(
+      (obstacle) =>
+        new google.maps.Polygon({
+          paths: obstacle.polygon,
+          strokeColor: OBSTACLE_STROKE,
+          strokeOpacity: 0.95,
+          strokeWeight: 1.5,
+          fillColor: OBSTACLE_FILL,
+          fillOpacity: OBSTACLE_FILL_OPACITY,
+          clickable: false,
+          zIndex: 1,
+          map,
+        })
+    );
 
     const polygons = panels.map((panel) => {
       const polygon = new google.maps.Polygon({
@@ -85,16 +118,16 @@ export function SolarPanelOverlay({
       return polygon;
     });
 
-    drawn.current = polygons;
+    drawn.current = [...polygons, ...obstacleShapes];
     return () => {
       info.current?.close();
-      polygons.forEach((p) => {
+      [...polygons, ...obstacleShapes].forEach((p) => {
         google.maps.event.clearInstanceListeners(p);
         p.setMap(null);
       });
       drawn.current = [];
     };
-  }, [map, panels]);
+  }, [map, panels, obstacles]);
 
   // Toggling visibility reuses the existing polygons rather than
   // destroying and rebuilding 50+ of them.
