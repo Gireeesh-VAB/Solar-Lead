@@ -126,6 +126,11 @@ def get_panorama_grid_resolution(*, pack: str = "rooftop_v1") -> int:
     return int(load_pack(pack)["panorama_grid_resolution"])
 
 
+def get_panorama_enabled(*, pack: str = "rooftop_v1") -> bool:
+    """VIZ-05. Whether to generate a .glb at all — see the pack's note."""
+    return bool(load_pack(pack)["panorama_enabled"])
+
+
 def get_panorama_build_params(*, pack: str = "rooftop_v1") -> dict[str, float]:
     """VIZ-01. The 3D building-assembly tunables — ground estimation,
     height sanity bounds, ground-plane margin, and solar-panel mounting

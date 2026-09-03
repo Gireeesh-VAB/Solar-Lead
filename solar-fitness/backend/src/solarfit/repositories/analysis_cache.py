@@ -49,6 +49,7 @@ solarfit.packs.config_pack.get_cache_precision (frozen loader, Day 0),
 solarfit.db.session_scope (session factory, real since Day 1; renamed after the karthik+sameeksha db.py merge).
 """
 
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -65,6 +66,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from solarfit.db import Base, session_scope
 from solarfit.domain.assessment import AnalysisResult, MLScore, PanoramaResult, VisionRefinement
+
+logger = logging.getLogger(__name__)
 from solarfit.domain.site import Site
 from solarfit.packs.config_pack import get_cache_precision
 
@@ -83,7 +86,9 @@ class SiteAnalysisCache(Base):
     __tablename__ = "site_analysis_cache"
     __table_args__ = (UniqueConstraint("lat_rounded", "lng_rounded", name="uq_cache_latlng"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     lat_rounded: Mapped[float] = mapped_column(Numeric, nullable=False, index=True)
     lng_rounded: Mapped[float] = mapped_column(Numeric, nullable=False, index=True)
     boundary = mapped_column(Geometry("POLYGON", srid=4326), nullable=True)
@@ -102,7 +107,9 @@ def round_latlng(lat: float, lng: float, precision: int | None = None) -> tuple[
     return round(lat, p), round(lng, p)
 
 
-def _row_to_result(row: SiteAnalysisCache, *, cache_hit: bool, reused_from_analysis_id: str | None) -> AnalysisResult:
+def _row_to_result(
+    row: SiteAnalysisCache, *, cache_hit: bool, reused_from_analysis_id: str | None
+) -> AnalysisResult:
     """Maps a DB row to the frozen AnalysisResult contract. Fields the
     cache table doesn't own (usable_area_m2, capacity, engine_version,
     constraint_pack_version) are left None here — they're computed
@@ -211,7 +218,38 @@ def force_refresh(lat: float, lng: float, params: dict | None = None) -> None:
             session.delete(row)
 
 
-def get_or_create_analysis(lat: float, lng: float, site_type: str, params: dict[str, Any] | None = None) -> AnalysisResult:
+def _await_task(async_result, timeout_s: float, *, label: str, fallback: dict) -> dict:
+    """Wait for a dispatched Celery task, degrading instead of exploding.
+
+    Both VIS-04 and VIZ-03 promise that a failure in these steps never
+    blocks the pipeline, and both engines honour that internally — they
+    return an explicit "insufficient_data"/"not_generated" rather than
+    raising. But the WAIT happens out here, and a
+    celery.exceptions.TimeoutError raised by .get() bypasses those
+    contracts entirely: a slow DSM download was enough to take down a
+    customer's verdict and capacity along with it. Three real checks died
+    that way before this existed.
+
+    Anything that goes wrong on the way to an answer — the task timing
+    out, the worker being down, the broker unreachable — is the same
+    outcome from the caller's side: no refinement, no panorama, and an
+    assessment that still completes on the data it does have.
+    """
+    try:
+        return async_result.get(timeout=timeout_s)
+    except Exception:
+        logger.warning(
+            "%s task did not complete within %.0fs — continuing without it",
+            label,
+            timeout_s,
+            exc_info=True,
+        )
+        return fallback
+
+
+def get_or_create_analysis(
+    lat: float, lng: float, site_type: str, params: dict[str, Any] | None = None
+) -> AnalysisResult:
     """CACHE-02/03. See §12.1 for the reference shape this mirrors.
 
     VIS-05/VIZ-05: vision refinement and panorama generation run through
@@ -246,7 +284,7 @@ def get_or_create_analysis(lat: float, lng: float, site_type: str, params: dict[
         return cached
 
     from solarfit.engine.ml_score import score_with_ml_model
-    from solarfit.packs.config_pack import get_async_task_timeout_s
+    from solarfit.packs.config_pack import get_async_task_timeout_s, get_panorama_enabled
     from solarfit.providers.solar_api import resolve_via_solar_api
     from solarfit.providers.weather import fetch_weather
     from solarfit.workers.celery_app import generate_panorama_task, refine_vision_task
@@ -275,15 +313,31 @@ def get_or_create_analysis(lat: float, lng: float, site_type: str, params: dict[
     boundary = resolve_via_solar_api(site=geo_lookup_site, params=params)  # GEO
 
     # VIS-05/OBS-01/OBS-02 — real Celery dispatch, never inline.
-    refinement_dict = refine_vision_task.delay(lat, lng, boundary).get(timeout=timeout_s)
+    refinement_dict = _await_task(
+        refine_vision_task.delay(lat, lng, boundary),
+        timeout_s,
+        label="vision refinement",
+        fallback={"status": "insufficient_data", "obstacles": []},
+    )
 
     weather = fetch_weather(lat=lat, lng=lng)
 
-    # VIZ-05 — real Celery dispatch, never inline.
-    panorama_dict = generate_panorama_task.delay(boundary, weather, params).get(timeout=timeout_s)
-    panorama = PanoramaResult(**panorama_dict)
+    # VIZ-05 — real Celery dispatch, never inline, and only when the
+    # panorama is switched on at all (see the pack's panorama_enabled).
+    panorama = PanoramaResult(status="not_generated", reason="Panorama generation is disabled")
+    if get_panorama_enabled():
+        panorama = PanoramaResult(
+            **_await_task(
+                generate_panorama_task.delay(boundary, weather, params),
+                timeout_s,
+                label="panorama",
+                fallback={"status": "not_generated", "reason": "Panorama generation timed out"},
+            )
+        )
 
-    ml_score = score_with_ml_model(boundary=boundary, refinement=refinement_dict, weather=weather, params=params)  # ML
+    ml_score = score_with_ml_model(
+        boundary=boundary, refinement=refinement_dict, weather=weather, params=params
+    )  # ML
 
     try:
         return create(

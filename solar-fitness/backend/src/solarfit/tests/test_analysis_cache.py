@@ -7,11 +7,12 @@ tests with a fake DB, since the whole point of this layer is real
 PostGIS round-tripping.
 """
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy.exc import IntegrityError
 
+from solarfit.packs.config_pack import get_panorama_enabled
 from solarfit.repositories.analysis_cache import (
     create,
     find_by_key,
@@ -22,7 +23,9 @@ from solarfit.repositories.analysis_cache import (
 
 BOUNDARY = {
     "type": "Polygon",
-    "coordinates": [[[78.222, 17.111], [78.223, 17.111], [78.223, 17.112], [78.222, 17.112], [78.222, 17.111]]],
+    "coordinates": [
+        [[78.222, 17.111], [78.223, 17.111], [78.223, 17.112], [78.222, 17.112], [78.222, 17.111]]
+    ],
 }
 
 
@@ -155,7 +158,9 @@ def test_get_or_create_analysis_cache_miss_calls_the_full_pipeline_once(clean_ke
             "solarfit.workers.celery_app.refine_vision_task.delay",
             return_value=_ImmediateAsyncResult(_FAKE_REFINEMENT_DICT),
         ) as vis,
-        patch("solarfit.providers.weather.fetch_weather", return_value={"cloud_cover": 20}) as weather,
+        patch(
+            "solarfit.providers.weather.fetch_weather", return_value={"cloud_cover": 20}
+        ) as weather,
         patch(
             "solarfit.workers.celery_app.generate_panorama_task.delay",
             return_value=_ImmediateAsyncResult(_FAKE_PANORAMA_DICT),
@@ -171,12 +176,99 @@ def test_get_or_create_analysis_cache_miss_calls_the_full_pipeline_once(clean_ke
     geo.assert_called_once()
     vis.assert_called_once_with(lat, lng, BOUNDARY)  # VIS-05: dispatched, not called inline
     weather.assert_called_once()
-    viz.assert_called_once()  # VIZ-05: dispatched, not called inline
     ml.assert_called_once()
+    # VIZ-05 is gated on the pack's panorama_enabled, which is currently
+    # off — see the two tests below, which pin BOTH branches rather than
+    # letting this one silently track whichever way the flag points.
+    assert viz.call_count == (1 if get_panorama_enabled() else 0)
     # Obstacle classification/apply is no longer done here (moved to
     # orchestrate_assessment(), which has a real site to apply against) —
     # the raw detection just passes through untouched.
     assert result.vision_refinement.obstacles == []
+
+
+def test_panorama_is_dispatched_when_enabled(clean_key):
+    """VIZ-05 still works — the generator is switched off, not removed."""
+    lat, lng, _lat_r, _lng_r = clean_key
+
+    with (
+        patch("solarfit.providers.solar_api.resolve_via_solar_api", return_value=BOUNDARY),
+        patch(
+            "solarfit.workers.celery_app.refine_vision_task.delay",
+            return_value=_ImmediateAsyncResult(_FAKE_REFINEMENT_DICT),
+        ),
+        patch("solarfit.providers.weather.fetch_weather", return_value={"cloud_cover": 20}),
+        patch("solarfit.packs.config_pack.get_panorama_enabled", return_value=True),
+        patch(
+            "solarfit.workers.celery_app.generate_panorama_task.delay",
+            return_value=_ImmediateAsyncResult(_FAKE_PANORAMA_DICT),
+        ) as viz,
+        patch(
+            "solarfit.engine.ml_score.score_with_ml_model",
+            return_value=type("M", (), {"score": 0.42, "model_version": "v0"})(),
+        ),
+    ):
+        result = get_or_create_analysis(lat, lng, "ROOFTOP_RESIDENTIAL", params={})
+
+    viz.assert_called_once()
+    assert result.panorama is not None
+
+
+def test_panorama_is_not_dispatched_when_disabled(clean_key):
+    """Nothing renders a .glb since the 3D viewer was removed, so
+    generating one cost ~11 s and a billable DSM download per check — and
+    a slow download timed the whole assessment out."""
+    lat, lng, _lat_r, _lng_r = clean_key
+
+    with (
+        patch("solarfit.providers.solar_api.resolve_via_solar_api", return_value=BOUNDARY),
+        patch(
+            "solarfit.workers.celery_app.refine_vision_task.delay",
+            return_value=_ImmediateAsyncResult(_FAKE_REFINEMENT_DICT),
+        ),
+        patch("solarfit.providers.weather.fetch_weather", return_value={"cloud_cover": 20}),
+        patch("solarfit.packs.config_pack.get_panorama_enabled", return_value=False),
+        patch("solarfit.workers.celery_app.generate_panorama_task.delay") as viz,
+        patch(
+            "solarfit.engine.ml_score.score_with_ml_model",
+            return_value=type("M", (), {"score": 0.42, "model_version": "v0"})(),
+        ),
+    ):
+        result = get_or_create_analysis(lat, lng, "ROOFTOP_RESIDENTIAL", params={})
+
+    viz.assert_not_called()
+    # The assessment still completes — the panorama is simply absent.
+    assert result.cache_hit is False
+
+
+def test_a_panorama_timeout_does_not_fail_the_analysis(clean_key):
+    """The exact production failure: celery raised TimeoutError from
+    .get() and the customer got "We couldn't finish this check"."""
+    from celery.exceptions import TimeoutError as CeleryTimeoutError
+
+    lat, lng, _lat_r, _lng_r = clean_key
+    timing_out = MagicMock()
+    timing_out.get.side_effect = CeleryTimeoutError("The operation timed out.")
+
+    with (
+        patch("solarfit.providers.solar_api.resolve_via_solar_api", return_value=BOUNDARY),
+        patch(
+            "solarfit.workers.celery_app.refine_vision_task.delay",
+            return_value=_ImmediateAsyncResult(_FAKE_REFINEMENT_DICT),
+        ),
+        patch("solarfit.providers.weather.fetch_weather", return_value={"cloud_cover": 20}),
+        patch("solarfit.packs.config_pack.get_panorama_enabled", return_value=True),
+        patch("solarfit.workers.celery_app.generate_panorama_task.delay", return_value=timing_out),
+        patch(
+            "solarfit.engine.ml_score.score_with_ml_model",
+            return_value=type("M", (), {"score": 0.42, "model_version": "v0"})(),
+        ),
+    ):
+        result = get_or_create_analysis(lat, lng, "ROOFTOP_RESIDENTIAL", params={})
+
+    # Completed anyway, on the data it did have.
+    assert result.cache_hit is False
+    assert result.boundary is not None
 
 
 def test_get_or_create_analysis_cache_miss_runs_the_real_solar_api_provider(clean_key):
@@ -236,7 +328,9 @@ def test_get_or_create_analysis_recovers_from_concurrent_insert_race(clean_key):
     with (
         # First call (the initial check) sees a miss, same as the real race;
         # second call (inside the except handler) discovers the concurrent row.
-        patch("solarfit.repositories.analysis_cache.find_by_key", side_effect=[None, concurrent_hit]),
+        patch(
+            "solarfit.repositories.analysis_cache.find_by_key", side_effect=[None, concurrent_hit]
+        ),
         patch(
             "solarfit.repositories.analysis_cache.create",
             side_effect=IntegrityError("INSERT", {}, Exception("duplicate key value")),

@@ -80,6 +80,17 @@ async_task_timeout_s: 30
 # Placeholder. Read by Person 3's engine/panorama.py.
 panorama_grid_resolution: 24
 
+# VIZ-05 master switch. OFF: the 3D viewer was removed from the customer
+# result page (the mesh quality BASE-tier DSM supports was not good enough
+# to show anyone), so generating a .glb nobody renders cost ~11 s and a
+# billable DSM download on EVERY check — and when a slow download pushed
+# it past async_task_timeout_s the Celery timeout propagated and failed
+# the whole assessment. Three real checks died that way.
+#
+# The generator itself is untouched and still tested; flip this to true to
+# bring it back the moment a viewer wants it.
+panorama_enabled: false
+
 # VIZ-01 — 3D building assembly. The mesh is no longer the roof surface
 # alone: walls are extruded from the roof perimeter down to a ground
 # level estimated from the DSM, a ground plane is added beneath, and the
