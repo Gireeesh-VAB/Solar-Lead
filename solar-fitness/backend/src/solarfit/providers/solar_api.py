@@ -65,6 +65,7 @@ __all__ = [
     "extract_shading_estimate",
     "fetch_building_insights",
     "geocode_address",
+    "geocode_address_detailed",
     "resolve_via_solar_api",
 ]
 
@@ -225,6 +226,25 @@ def geocode_address(address: str, *, client: httpx.Client | None = None) -> dict
 
     Returns None rather than raising for ZERO_RESULTS: an address the
     geocoder does not recognise is ordinary user input, not a fault.
+
+    Kept as a pure GeoJSON accessor — callers that only want geometry get
+    exactly that, with no extra keys polluting the object. Use
+    geocode_address_detailed() when Google's own formatted address is
+    wanted too (the customer-facing search echoes it back so the user can
+    see WHICH place was matched).
+    """
+    found = geocode_address_detailed(address, client=client)
+    return found[0] if found else None
+
+
+def geocode_address_detailed(
+    address: str, *, client: httpx.Client | None = None
+) -> tuple[dict, str | None] | None:
+    """As geocode_address(), but also returns Google's formatted_address.
+
+    Same single HTTP call and the same error discipline; the only
+    difference is that the display string survives instead of being
+    discarded.
     """
     params = {"address": address, "key": _key("maps")}
     owns_client = client is None
@@ -245,12 +265,16 @@ def geocode_address(address: str, *, client: httpx.Client | None = None) -> dict
     # as "we couldn't find that address" — sending everyone hunting for a
     # geocoding problem that is really a billing one.
     if status != "OK":
-        raise SolarApiError(f"geocoding failed: {status} {payload.get('error_message', '')}".strip())
+        raise SolarApiError(
+            f"geocoding failed: {status} {payload.get('error_message', '')}".strip()
+        )
     if not payload.get("results"):
         return None
 
-    location = payload["results"][0]["geometry"]["location"]
-    return {"type": "Point", "coordinates": [float(location["lng"]), float(location["lat"])]}
+    best = payload["results"][0]
+    location = best["geometry"]["location"]
+    point = {"type": "Point", "coordinates": [float(location["lng"]), float(location["lat"])]}
+    return point, best.get("formatted_address")
 
 
 def fetch_building_insights(

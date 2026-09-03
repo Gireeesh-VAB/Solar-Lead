@@ -1,22 +1,25 @@
 /**
- * Address -> coordinates, via the Maps JavaScript API's own Geocoder.
+ * Address -> coordinates, via our own backend.
  *
- * Deliberately the JS geocoder rather than a server-side call to the REST
- * Geocoding API: the browser already loads Maps JavaScript for the map
- * itself, so this needs no extra key handling and no backend route.
+ * Previously this used the Maps JavaScript API's built-in Geocoder,
+ * because the browser already loads Maps JS for the map itself. That
+ * needed no backend route — but it did need the PUBLIC key to carry
+ * Geocoding permission, and that key is embedded in the bundle where
+ * anyone can read it. Google refused it outright (`REQUEST_DENIED: The
+ * webpage is not allowed to use the geocoder`), and the fix would have
+ * been to widen a key that anyone can copy and spend.
  *
- * Geocoding is a SEPARATE Google API from Maps JavaScript and is enabled
- * separately. On this project's key it is currently not authorised —
- * verified 2026-09-02, both REST (`REQUEST_DENIED`) and JS
- * (`GEOCODER_GEOCODE: REQUEST_DENIED: The webpage is not allowed to use
- * the geocoder`). That failure is surfaced as GeocodeUnavailableError so
- * the caller can tell the user to place the pin by hand instead of
- * fabricating a location. Nothing here needs to change when the API is
- * enabled — it simply starts succeeding.
+ * So the server geocodes instead, with its own key that never reaches the
+ * browser and can be IP-restricted. The public Maps key stays narrow —
+ * Maps JavaScript only, which is all the map needs.
+ *
+ * The exported shape is unchanged, so callers did not have to move.
  */
 
+import { apiFetch } from "@/lib/api/fetchClient";
+
 export class GeocodeUnavailableError extends Error {
-  constructor(message = "Geocoding is not enabled for this API key") {
+  constructor(message = "Address search is unavailable") {
     super(message);
     this.name = "GeocodeUnavailableError";
   }
@@ -28,67 +31,43 @@ export interface GeocodeResult {
   formatted?: string;
 }
 
-const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
-const SCRIPT_ID = "google-maps-js-api";
-
-/** Resolves once google.maps is on the page. Reuses the script tag
- *  @vis.gl/react-google-maps may already have added. */
-function loadMapsJs(): Promise<typeof google.maps> {
-  if (typeof window === "undefined") {
-    return Promise.reject(new GeocodeUnavailableError("Geocoding is browser-only"));
-  }
-  if (window.google?.maps?.Geocoder) return Promise.resolve(window.google.maps);
-  if (!API_KEY) return Promise.reject(new GeocodeUnavailableError("No Maps API key configured"));
-
-  return new Promise((resolve, reject) => {
-    const done = () => {
-      if (window.google?.maps?.Geocoder) resolve(window.google.maps);
-      else reject(new GeocodeUnavailableError("Maps JavaScript API failed to load"));
-    };
-
-    const existing = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
-    if (existing) {
-      existing.addEventListener("load", done, { once: true });
-      existing.addEventListener("error", () => reject(new GeocodeUnavailableError()), { once: true });
-      // Already finished loading before we attached the listener.
-      if (window.google?.maps?.Geocoder) resolve(window.google.maps);
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.id = SCRIPT_ID;
-    script.async = true;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${API_KEY}&libraries=geocoding&loading=async`;
-    script.addEventListener("load", done, { once: true });
-    script.addEventListener("error", () => reject(new GeocodeUnavailableError()), { once: true });
-    document.head.appendChild(script);
-  });
+interface GeocodeResponse {
+  found: boolean;
+  lat: number | null;
+  lng: number | null;
+  formatted: string | null;
 }
 
+/**
+ * Resolves a free-text address.
+ *
+ * Two failure modes, deliberately different types, because they need
+ * different words in front of the customer:
+ *
+ *   GeocodeUnavailableError — search itself is down or unconfigured.
+ *     Nothing the customer typed is wrong; tell them to place the pin.
+ *   Error — Google looked and found nothing. Their input is the thing to
+ *     change; suggest a nearby landmark.
+ */
 export async function geocodeAddress(address: string): Promise<GeocodeResult> {
-  const maps = await loadMapsJs();
-  const geocoder = new maps.Geocoder();
-
-  let response: google.maps.GeocoderResponse;
+  let response: GeocodeResponse;
   try {
-    response = await geocoder.geocode({ address });
+    response = await apiFetch<GeocodeResponse>("/app/geocode", { query: { address } });
   } catch (err) {
-    const message = String(err);
-    // REQUEST_DENIED means the API isn't enabled for this key — a
-    // configuration problem, not a bad address. The two need different
-    // messages, so they get different error types.
-    if (/REQUEST_DENIED|not allowed to use the geocoder|ApiNotActivated/i.test(message)) {
-      throw new GeocodeUnavailableError(message);
-    }
-    throw new Error(`No match for that address (${message})`);
+    // The backend answers 503 when its own key is denied or Google is
+    // unreachable — a configuration or outage problem, never a bad
+    // address. Anything else (network down, session expired) lands here
+    // too, and is equally not the customer's fault.
+    throw new GeocodeUnavailableError(err instanceof Error ? err.message : String(err));
   }
 
-  const best = response.results?.[0];
-  if (!best) throw new Error("No match for that address");
+  if (!response.found || response.lat === null || response.lng === null) {
+    throw new Error("No match for that address");
+  }
 
   return {
-    lat: best.geometry.location.lat(),
-    lng: best.geometry.location.lng(),
-    formatted: best.formatted_address,
+    lat: response.lat,
+    lng: response.lng,
+    formatted: response.formatted ?? undefined,
   };
 }

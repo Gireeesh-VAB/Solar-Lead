@@ -15,6 +15,7 @@ from solarfit.routers import (
     app_auth,
     app_calibration_ml,
     app_checks,
+    app_geocode,
     app_imports,
     app_jurisdictions,
     app_sites,
@@ -56,6 +57,7 @@ app.include_router(app_calibration_ml.router)
 app.include_router(app_usn.router)
 app.include_router(app_assessments.router)
 app.include_router(app_checks.router)
+app.include_router(app_geocode.router)
 app.include_router(artifacts.router)
 
 
