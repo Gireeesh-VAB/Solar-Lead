@@ -164,6 +164,39 @@ panorama_panel_gap_m: 0.035
 # biggest thing separating "array of panels" from "navy blob".
 panorama_panel_frame_m: 0.045
 
+# Panel packing. Lays real modules inside the usable roof polygon
+# (engine/area.py's compute_usable_roof) rather than multiplying its area
+# by a density constant.
+#
+# IMPORTANT: the polygon handed to the packer is ALREADY post-setback and
+# post-exclusion, and is deliberately PRE-utilisation. utilisation_factor
+# above is a statistical stand-in for exactly the walkways and row spacing
+# this section places explicitly — applying both would deduct the same
+# allowance twice.
+panel_packing:
+  # Fallbacks only. The Solar API reports panelHeight/WidthMeters and
+  # panelCapacityWatts per building, and those are preferred when present.
+  panel_length_m: 1.879
+  panel_width_m: 1.045
+  panel_watts: 400
+  # portrait = long side runs up the slope. Standard on flat Indian
+  # roofs: fewer rails, and row spacing is simpler to keep honest.
+  orientation: portrait
+  # Clamp gap between neighbouring modules in a row.
+  panel_gap_m: 0.02
+  # Floor on the inter-row gap. The real gap is computed from latitude and
+  # tilt so one row does not shade the next at winter noon; this stops a
+  # near-flat array packing rows edge to edge with no airflow.
+  min_row_gap_m: 0.30
+  # A walkway wide enough to carry a panel down.
+  maintenance_path_m: 0.90
+  rows_between_paths: 4
+  # Used only when the roof segment reports no pitch/azimuth of its own.
+  # 15 degrees suits Hyderabad's latitude; south-facing is optimal in the
+  # northern hemisphere.
+  default_tilt_deg: 15.0
+  default_azimuth_deg: 180.0
+
 # CON-07 — usable-area-to-capacity conversion, kWp per m^2 of usable roof
 # area, used by packs/universal.py. ~0.2 kWp/m2 (200 Wp/m2) is a typical
 # rooftop panel-density placeholder pending real panel-spec tuning.

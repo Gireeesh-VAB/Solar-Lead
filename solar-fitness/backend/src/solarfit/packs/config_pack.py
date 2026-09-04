@@ -154,6 +154,14 @@ def get_panorama_build_params(*, pack: str = "rooftop_v1") -> dict[str, float]:
     }
 
 
+def get_panel_packing_params(*, pack: str = "rooftop_v1") -> dict:
+    """Panel-packing geometry — module size, gaps, walkways, tilt.
+
+    Returned whole because the packer needs the entire set together, and
+    a half-applied spacing rule is worse than none."""
+    return dict(load_pack(pack)["panel_packing"])
+
+
 def get_capacity_density_kwp_per_m2(*, pack: str = "rooftop_v1") -> float:
     """CON-07/universal.py's area-to-kWp conversion for the usable-area
     ceiling and the minimum-viable-size gate."""
