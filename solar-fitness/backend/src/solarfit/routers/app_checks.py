@@ -40,7 +40,7 @@ from solarfit.config import get_settings
 from solarfit.db import get_session, session_scope
 from solarfit.domain.site import BILLING_LINKED_SITE_TYPES, RoofSiteType
 from solarfit.engine.panel_layout import fetch_panel_layout
-from solarfit.providers import solar_api
+from solarfit.providers import manual, solar_api
 from solarfit.providers.validation import GeometryRejected
 from solarfit.repositories import assessments as assessments_repo
 from solarfit.repositories import sites as repo
@@ -283,6 +283,61 @@ def get_check_obstacles(
             obstacles.append(RoofObstacleOut(id=obstacle_id, polygon=points))
 
     return RoofObstaclesOut(detected=True, obstacles=obstacles)
+
+
+class SaveCheckBoundaryRequest(_CamelModel):
+    points: list[PanelCornerOut] = Field(min_length=3)
+
+
+@router.put("/checks/{check_id}/boundary", response_model=SiteOut)
+def save_check_boundary(
+    check_id: str,
+    payload: SaveCheckBoundaryRequest,
+    session: Annotated[Session, Depends(get_session)],
+    user: Annotated[AuthenticatedUser, Depends(current_user)],
+) -> SiteOut:
+    """GEO-02. The customer's own traced roof outline.
+
+    A check-scoped twin of PUT /app/sites/{id}/boundary, and not a
+    duplicate for its own sake: that route authorises through
+    `user.owner_org`, which an individual signup does not have. This is
+    the same synthetic-owner_org reason every other route in this module
+    exists — without it a customer literally cannot correct their own
+    roof, which is what a 404 on save turned out to be.
+
+    Validation, versioning and provenance are identical: GEO-07/08 via
+    manual.resolve_manual, then a new SITE-05 version recorded as
+    `manual_polygon`. That outranks GEO-04's `solar_api` rectangle
+    (precedence 300 vs 100), so from here on every assessment measures
+    the traced roof instead of the bounding box.
+    """
+    _site, _row = _owned_check_or_404(session, check_id, _individual_owner_org(user))
+
+    boundary_geojson = {
+        "type": "Polygon",
+        # A GeoJSON ring must close; the UI sends the open path it edits.
+        "coordinates": [
+            [[p.lng, p.lat] for p in payload.points]
+            + [[payload.points[0].lng, payload.points[0].lat]]
+        ],
+    }
+    try:
+        validated = manual.resolve_manual(_site, {"boundary": boundary_geojson})
+    except GeometryRejected as exc:
+        # A self-intersecting or degenerate trace is the customer's input
+        # to fix, not a server fault — and never silently repaired.
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+
+    updated_site = repo.new_geometry_version(
+        session,
+        check_id,
+        boundary=validated,
+        actor=user.email,
+        source="manual_edit",
+        geometry_source="manual_polygon",
+    )
+    updated_row = session.get(repo.SiteRow, uuid.UUID(check_id))
+    return _site_out(session, updated_site, updated_row)
 
 
 @router.post("/checks", response_model=SiteOut, status_code=status.HTTP_201_CREATED)

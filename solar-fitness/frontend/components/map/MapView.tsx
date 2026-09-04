@@ -8,6 +8,7 @@ import {
   useMap,
 } from "@vis.gl/react-google-maps";
 import { MapPin } from "lucide-react";
+import { RoofBoundaryEditor, type LatLngPoint } from "./RoofBoundaryEditor";
 import {
   SolarPanelOverlay,
   type RoofObstaclePolygon,
@@ -138,6 +139,9 @@ export function MapView({
   solarPanels,
   roofObstacles,
   roofBoundary,
+  editableBoundary,
+  onBoundaryChange,
+  editorVersion,
 }: {
   pins: MapPinData[];
   height?: number;
@@ -155,6 +159,12 @@ export function MapView({
   roofObstacles?: RoofObstaclePolygon[];
   /** The detected roof footprint, outlined. */
   roofBoundary?: { lat: number; lng: number }[];
+  /** Turns the map into a roof-tracing surface, starting from this shape.
+   *  Supplying it replaces the read-only outline with an editable one. */
+  editableBoundary?: LatLngPoint[];
+  onBoundaryChange?: (points: LatLngPoint[]) => void;
+  /** Bump to discard edits and restart from `editableBoundary`. */
+  editorVersion?: number;
 }) {
   const [dragPos, setDragPos] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -261,7 +271,19 @@ export function MapView({
               Rendered only when panels actually came back — an absent
               layout shows the plain satellite view, never stand-in
               rectangles. */}
-          {((solarPanels?.length ?? 0) > 0 ||
+          {/* Tracing mode. The read-only outline is suppressed while
+              editing — two outlines of the same roof, one draggable and
+              one not, is only confusing. */}
+          {editableBoundary && onBoundaryChange && editableBoundary.length >= 3 && (
+            <RoofBoundaryEditor
+              initial={editableBoundary}
+              onChange={onBoundaryChange}
+              version={editorVersion}
+            />
+          )}
+
+          {!editableBoundary &&
+            ((solarPanels?.length ?? 0) > 0 ||
             (roofObstacles?.length ?? 0) > 0 ||
             (roofBoundary?.length ?? 0) > 0) && (
             <SolarPanelOverlay

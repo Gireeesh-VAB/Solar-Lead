@@ -167,6 +167,21 @@ export async function saveBoundary(siteId: string, points: { lat: number; lng: n
   return apiFetch(`/app/sites/${siteId}/boundary`, { method: "PUT", body: { points } });
 }
 
+/**
+ * GEO-02 — a customer's own traced roof outline.
+ *
+ * Check-scoped rather than reusing saveBoundary() above: /app/sites/*
+ * authorises through the user's owner_org, which an individual signup
+ * does not have, so that route 404s for exactly the people this screen
+ * is for. Same validation, versioning and provenance behind it.
+ */
+export async function saveCheckBoundary(
+  checkId: string,
+  points: { lat: number; lng: number }[]
+): Promise<Site> {
+  return apiFetch(`/app/checks/${checkId}/boundary`, { method: "PUT", body: { points } });
+}
+
 export async function createSite(input: {
   name: string;
   siteType: Site["siteType"];

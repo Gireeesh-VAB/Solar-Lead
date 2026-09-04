@@ -84,6 +84,7 @@ export default async function ResultPage({ params }: { params: Promise<{ checkId
           }}
           roofBoundary={check.boundary}
           boundaryIsApproximate={check.boundaryIsApproximate ?? true}
+          canEditBoundary={(check.boundary?.length ?? 0) >= 3}
           height={300}
         />
         <p className="mt-1.5 flex items-center gap-1 text-xs text-ink-faint">

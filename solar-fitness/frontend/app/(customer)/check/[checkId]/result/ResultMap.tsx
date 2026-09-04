@@ -9,7 +9,8 @@
 // if that call fails. The map paints immediately; panels appear when they
 // arrive, or never, and nothing else on the page notices.
 
-import { Loader2 } from "lucide-react";
+import Link from "next/link";
+import { Loader2, PenLine } from "lucide-react";
 import { MapView, type MapPinData } from "@/components/map/MapView";
 import { useCheckObstacles, useCheckSolarLayout } from "@/lib/query/hooks";
 
@@ -18,6 +19,7 @@ export function ResultMap({
   pin,
   roofBoundary,
   boundaryIsApproximate = true,
+  canEditBoundary = false,
   height = 300,
 }: {
   checkId: string;
@@ -28,6 +30,9 @@ export function ResultMap({
   /** Whether that outline is Google's bounding box rather than a traced
    *  roof. Changes what we are willing to claim about it. */
   boundaryIsApproximate?: boolean;
+  /** Offer the trace step. Only meaningful when there is a shape to
+   *  correct — with no boundary at all there is nothing to drag. */
+  canEditBoundary?: boolean;
   height?: number;
 }) {
   const { data, isLoading, isError } = useCheckSolarLayout(checkId);
@@ -69,6 +74,16 @@ export function ResultMap({
             <>The cyan outline is your surveyed roof. Panels are placed inside it.</>
           )}
         </p>
+      )}
+
+      {canEditBoundary && boundaryIsApproximate && (
+        <Link
+          href={`/check/${checkId}/boundary`}
+          className="mt-2 inline-flex items-center gap-1.5 rounded-[var(--radius-app)] border border-line bg-paper px-3 py-1.5 text-xs font-medium text-blue transition-colors hover:border-blue hover:bg-surface"
+        >
+          <PenLine size={13} strokeWidth={1.75} aria-hidden="true" />
+          Not quite right? Correct your roof outline
+        </Link>
       )}
 
       {panels && panels.length > 0 && (
