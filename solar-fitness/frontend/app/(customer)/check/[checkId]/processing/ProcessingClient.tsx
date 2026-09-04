@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/Primitives";
-import { ApiError } from "@/lib/api/fetchClient";
+import { CheckCircle2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ErrorState } from "@/components/ui/Primitives";
 import { useCompleteCheck } from "@/lib/query/hooks";
 
 const STEPS = [
@@ -22,54 +21,49 @@ export function ProcessingClient({ checkId }: { checkId: string }) {
   const completeCheck = useCompleteCheck(checkId);
   const [activeStep, setActiveStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (error || activeStep >= STEPS.length) return;
+    if (activeStep >= STEPS.length) return;
     const timer = setTimeout(() => setActiveStep((s) => s + 1), STEP_DURATION_MS);
     return () => clearTimeout(timer);
-  }, [activeStep, error]);
+  }, [activeStep]);
 
   useEffect(() => {
-    if (error || activeStep < STEPS.length) return;
+    if (activeStep < STEPS.length) return;
     let cancelled = false;
     completeCheck
       .mutateAsync()
       .then(() => {
         if (!cancelled) router.replace(`/check/${checkId}/result`);
       })
-      .catch((err) => {
+      // Without this the rejection was unhandled: no navigation, no state
+      // change, and the spinner above ran forever. The backend answers a
+      // location it can't assess with a 422 and a message written for the
+      // customer ("...draw the roof outline on the map to continue") — it
+      // just had nowhere to go.
+      .catch((err: unknown) => {
         if (cancelled) return;
-        setError(err instanceof ApiError ? err.message : "Something went wrong while checking this location.");
+        setError(err instanceof Error ? err.message : "Something went wrong.");
       });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStep, error]);
-
-  const retry = () => {
-    setError(null);
-    setActiveStep(STEPS.length); // skip the step animation on retry — it already played once
-  };
+  }, [activeStep, attempt]);
 
   if (error) {
     return (
-      <div className="mx-auto flex max-w-sm flex-col items-center gap-4 py-16 text-center">
-        <AlertTriangle size={32} strokeWidth={1.75} style={{ color: "var(--bad)" }} aria-hidden="true" />
-        <div>
-          <h1 className="text-lg font-semibold text-ink">We couldn&apos;t finish checking this location</h1>
-          <p role="alert" className="mt-1 text-sm text-ink-soft">
-            {error}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button type="button" variant="secondary" onClick={() => router.push("/check/new")}>
-            Check another location
-          </Button>
-          <Button type="button" onClick={retry}>
-            Try again
-          </Button>
-        </div>
+      <div className="mx-auto max-w-sm py-16">
+        <ErrorState
+          title="We couldn't finish this check"
+          description={error}
+          onRetry={() => {
+            setError(null);
+            setActiveStep(STEPS.length);
+            setAttempt((a) => a + 1);
+          }}
+        />
       </div>
     );
   }

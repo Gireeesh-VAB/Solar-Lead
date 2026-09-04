@@ -33,7 +33,12 @@ export function CeilingLedgerTable({ assessment }: { assessment: Assessment }) {
                 )}
               </td>
               <td className="py-2 pr-3 text-ink-soft">{CONSTRAINT_KIND_LABEL[entry.kind]}</td>
-              <td className="py-2 pr-3 text-right font-mono tabular text-ink">{formatKwp(entry.kwp)}</td>
+              <td className="py-2 pr-3 text-right font-mono tabular text-ink">
+                {/* A ceiling that could not be evaluated is not a ceiling
+                    of zero — showing 0 kWp would claim the opposite of
+                    what insufficient_data means. */}
+                {entry.kwp == null ? <span className="text-ink-faint">—</span> : formatKwp(entry.kwp)}
+              </td>
             </tr>
           ))}
         </tbody>

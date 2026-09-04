@@ -25,10 +25,12 @@ from typing import Protocol, runtime_checkable
 from solarfit.domain.site import GeometrySource, Site
 
 __all__ = [
+    "APPROXIMATE_SOURCES",
     "PRECEDENCE",
     "GeometryProvider",
     "ProviderNotRegistered",
     "get_provider",
+    "is_approximate",
     "outranks",
     "register",
     "registered_providers",
@@ -55,6 +57,28 @@ class ProviderNotRegistered(LookupError):
 # which beats a bulk file of unknown provenance, which beats a fully
 # automated remote lookup. Revisit once CAL-01's variance data shows
 # which sources actually agree with field measurement.
+# GEO-04's Solar API boundary is derived from the response's
+# `boundingBox` — a lat/lng RECTANGLE around the building, never a traced
+# outline. On a simple house it is close enough to be useful; on an
+# L-shaped or irregular roof it is not the roof, and treating it as one is
+# how panels end up placed beside a building rather than on it.
+#
+# Every other source is an actual traced polygon: a surveyor's field
+# measurement, an operator's manual trace, or an imported cadastral shape.
+APPROXIMATE_SOURCES: frozenset[str] = frozenset({"solar_api"})
+
+
+def is_approximate(source: GeometrySource | None) -> bool:
+    """Whether a boundary from `source` is a bounding box rather than a
+    traced roof outline.
+
+    None counts as approximate: a site with no recorded source has no
+    evidence anyone traced it, and the safe reading of missing provenance
+    is the weaker claim.
+    """
+    return source is None or source in APPROXIMATE_SOURCES
+
+
 PRECEDENCE: dict[GeometrySource, int] = {
     "field_measured": 400,
     "manual_polygon": 300,
@@ -83,8 +107,7 @@ def get_provider(provider_id: str) -> GeometryProvider:
         return _REGISTRY[provider_id]
     except KeyError as exc:
         raise ProviderNotRegistered(
-            f"no geometry provider registered as {provider_id!r}; "
-            f"registered: {sorted(_REGISTRY)}"
+            f"no geometry provider registered as {provider_id!r}; registered: {sorted(_REGISTRY)}"
         ) from exc
 
 

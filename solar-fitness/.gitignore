@@ -11,3 +11,6 @@ build/
 .DS_Store
 backend/db/migrations/versions/__pycache__/
 backend/infra/docker-compose.override.yml
+
+# VIZ-02 local artifact storage — generated .glb build output, never source.
+var/
