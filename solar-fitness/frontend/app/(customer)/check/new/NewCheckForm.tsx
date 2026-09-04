@@ -8,8 +8,58 @@ import { AddressAutocomplete } from "@/components/map/AddressAutocomplete";
 import { MapView, type MapPinData } from "@/components/map/MapView";
 import type { GeocodeResult } from "@/lib/maps/geocode";
 import { useCreateCheck } from "@/lib/query/hooks";
+import type { ConnectionType, RoofMaterial, RoofSlope, RoofType } from "@/lib/types";
 
 type Coords = { lat: number; lng: number };
+
+const CONNECTION_TYPE_LABEL: Record<ConnectionType, string> = {
+  SINGLE_PHASE: "Single phase",
+  THREE_PHASE: "Three phase",
+};
+
+// Last 12 calendar months, oldest first, as "YYYY-MM" — matches spec
+// section 9's Jan..Dec monthly consumption capture.
+function last12Months(): string[] {
+  const months: string[] = [];
+  const now = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  return months;
+}
+
+function monthLabel(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+}
+
+const ROOF_TYPE_LABEL: Record<RoofType, string> = {
+  RCC_CONCRETE: "RCC / concrete",
+  METAL_SHEET: "Metal sheet",
+  GI_SHEET: "GI sheet",
+  TILED: "Tiled roof",
+  ASBESTOS_SHEET: "Asbestos sheet",
+  GROUND_MOUNTED: "Ground-mounted",
+  TERRACE: "Terrace",
+  OTHER: "Other",
+};
+
+const ROOF_MATERIAL_LABEL: Record<RoofMaterial, string> = {
+  RCC: "RCC",
+  CONCRETE: "Concrete",
+  METAL: "Metal",
+  TILE: "Tile",
+  SHEET: "Sheet",
+  OTHER: "Other",
+};
+
+const ROOF_SLOPE_LABEL: Record<RoofSlope, string> = {
+  FLAT: "Flat",
+  LOW: "Low slope",
+  MEDIUM: "Medium slope",
+  HIGH: "High slope",
+};
 
 export function NewCheckForm() {
   const router = useRouter();
@@ -28,6 +78,30 @@ export function NewCheckForm() {
   // direction. The backend averages them.
   const [billLow, setBillLow] = useState("");
   const [billHigh, setBillHigh] = useState("");
+
+  // Roof Information (customer self-report at intake) — a rough
+  // description is enough to shape the initial feasibility check; the
+  // vendor's own in-person structural assessment is the source of truth
+  // once a survey happens, not these. All optional.
+  const [roofType, setRoofType] = useState<RoofType | "">("");
+  const [roofMaterial, setRoofMaterial] = useState<RoofMaterial | "">("");
+  const [roofSlope, setRoofSlope] = useState<RoofSlope | "">("");
+  const [roofConstructionYear, setRoofConstructionYear] = useState("");
+
+  // Electrical Information + Electricity Consumption (customer self-report,
+  // from the customer's own bill) — the vendor's own in-person electrical
+  // inspection is a separate, later capture on the vendor_jobs row.
+  const [electricityBoard, setElectricityBoard] = useState("");
+  const [consumerNumber, setConsumerNumber] = useState("");
+  const [connectionType, setConnectionType] = useState<ConnectionType | "">("");
+  const [sanctionedLoadKw, setSanctionedLoadKw] = useState("");
+  const [monthlyUnits, setMonthlyUnits] = useState<Record<string, string>>({});
+
+  // Battery Requirement (spec section 14) — customer's own interest/need.
+  const [batteryRequired, setBatteryRequired] = useState(false);
+  const [backupRequired, setBackupRequired] = useState(false);
+  const [requiredBackupHours, setRequiredBackupHours] = useState("");
+  const [criticalLoads, setCriticalLoads] = useState("");
 
   const handleSuggestionPicked = (found: GeocodeResult) => {
     setCoords(found);
@@ -71,7 +145,7 @@ export function NewCheckForm() {
     setSubmitError(null);
     try {
       // The existing create-check API is what persists the confirmed
-      // coordinates — POST /app/checks {address, lat, lng, siteType}.
+      // coordinates — POST /app/checks {address, lat, lng, siteType, ...}.
       const low = Number.parseFloat(billLow);
       const high = Number.parseFloat(billHigh);
       const check = await createCheck.mutateAsync({
@@ -84,6 +158,21 @@ export function NewCheckForm() {
         ...(Number.isFinite(low) && low > 0 && Number.isFinite(high) && high > 0
           ? { monthlyBillLowInr: low, monthlyBillHighInr: high }
           : {}),
+        roofType: roofType || undefined,
+        roofMaterial: roofMaterial || undefined,
+        roofSlope: roofSlope || undefined,
+        roofConstructionYear: roofConstructionYear ? Number(roofConstructionYear) : undefined,
+        electricityBoard: electricityBoard.trim() || undefined,
+        consumerNumber: consumerNumber.trim() || undefined,
+        connectionType: connectionType || undefined,
+        sanctionedLoadKw: sanctionedLoadKw ? Number(sanctionedLoadKw) : undefined,
+        monthlyConsumptionKwh: Object.entries(monthlyUnits)
+          .filter(([, units]) => units.trim() !== "")
+          .map(([month, units]) => ({ month, unitsKwh: Number(units) })),
+        batteryRequired,
+        backupRequired,
+        requiredBackupHours: requiredBackupHours ? Number(requiredBackupHours) : undefined,
+        criticalLoads: criticalLoads.trim() || undefined,
       });
       router.push(`/check/${check.id}/processing`);
     } catch (err) {
@@ -204,6 +293,204 @@ export function NewCheckForm() {
         <p className="mt-1.5 text-xs text-ink-faint">
           {billError ?? "Optional — skip it and we'll size by roof space alone."}
         </p>
+      </div>
+
+      <div className="space-y-2 rounded-[var(--radius-app)] border border-line bg-paper p-3">
+        <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">Roof details (optional, helps our estimate)</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label htmlFor="roof-type" className="mb-1 block text-xs text-ink-soft">
+              Roof type
+            </label>
+            <select
+              id="roof-type"
+              value={roofType}
+              onChange={(e) => setRoofType(e.target.value as RoofType | "")}
+              className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+            >
+              <option value="">Not sure</option>
+              {(Object.keys(ROOF_TYPE_LABEL) as RoofType[]).map((t) => (
+                <option key={t} value={t}>
+                  {ROOF_TYPE_LABEL[t]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="roof-material" className="mb-1 block text-xs text-ink-soft">
+              Roof material
+            </label>
+            <select
+              id="roof-material"
+              value={roofMaterial}
+              onChange={(e) => setRoofMaterial(e.target.value as RoofMaterial | "")}
+              className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+            >
+              <option value="">Not sure</option>
+              {(Object.keys(ROOF_MATERIAL_LABEL) as RoofMaterial[]).map((m) => (
+                <option key={m} value={m}>
+                  {ROOF_MATERIAL_LABEL[m]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="roof-slope" className="mb-1 block text-xs text-ink-soft">
+              Roof slope
+            </label>
+            <select
+              id="roof-slope"
+              value={roofSlope}
+              onChange={(e) => setRoofSlope(e.target.value as RoofSlope | "")}
+              className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+            >
+              <option value="">Not sure</option>
+              {(Object.keys(ROOF_SLOPE_LABEL) as RoofSlope[]).map((s) => (
+                <option key={s} value={s}>
+                  {ROOF_SLOPE_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="roof-construction-year" className="mb-1 block text-xs text-ink-soft">
+              Construction year
+            </label>
+            <input
+              id="roof-construction-year"
+              type="number"
+              min={1900}
+              max={2100}
+              placeholder="e.g. 2015"
+              value={roofConstructionYear}
+              onChange={(e) => setRoofConstructionYear(e.target.value)}
+              className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2 rounded-[var(--radius-app)] border border-line bg-paper p-3">
+        <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">Electricity connection (optional, from your bill)</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label htmlFor="electricity-board" className="mb-1 block text-xs text-ink-soft">
+              Electricity board
+            </label>
+            <input
+              id="electricity-board"
+              value={electricityBoard}
+              onChange={(e) => setElectricityBoard(e.target.value)}
+              placeholder="e.g. TSSPDCL"
+              className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+            />
+          </div>
+          <div>
+            <label htmlFor="consumer-number" className="mb-1 block text-xs text-ink-soft">
+              Consumer number
+            </label>
+            <input
+              id="consumer-number"
+              value={consumerNumber}
+              onChange={(e) => setConsumerNumber(e.target.value)}
+              className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+            />
+          </div>
+          <div>
+            <label htmlFor="connection-type" className="mb-1 block text-xs text-ink-soft">
+              Connection type
+            </label>
+            <select
+              id="connection-type"
+              value={connectionType}
+              onChange={(e) => setConnectionType(e.target.value as ConnectionType | "")}
+              className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+            >
+              <option value="">Not sure</option>
+              {(Object.keys(CONNECTION_TYPE_LABEL) as ConnectionType[]).map((c) => (
+                <option key={c} value={c}>
+                  {CONNECTION_TYPE_LABEL[c]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="sanctioned-load" className="mb-1 block text-xs text-ink-soft">
+              Sanctioned load (kW)
+            </label>
+            <input
+              id="sanctioned-load"
+              type="number"
+              min={0}
+              value={sanctionedLoadKw}
+              onChange={(e) => setSanctionedLoadKw(e.target.value)}
+              className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+            />
+          </div>
+        </div>
+        <div>
+          <p className="mb-1 text-xs text-ink-soft">Last 12 months&apos; consumption (kWh, from your bills — optional)</p>
+          <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+            {last12Months().map((month) => (
+              <div key={month}>
+                <label htmlFor={`consumption-${month}`} className="mb-0.5 block text-[10px] text-ink-faint">
+                  {monthLabel(month)}
+                </label>
+                <input
+                  id={`consumption-${month}`}
+                  type="number"
+                  min={0}
+                  value={monthlyUnits[month] ?? ""}
+                  onChange={(e) => setMonthlyUnits((prev) => ({ ...prev, [month]: e.target.value }))}
+                  className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-1.5 py-1 text-xs text-ink"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2 rounded-[var(--radius-app)] border border-line bg-paper p-3">
+        <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">Battery / backup (optional)</p>
+        <div className="flex flex-wrap gap-4">
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input type="checkbox" checked={batteryRequired} onChange={(e) => setBatteryRequired(e.target.checked)} />
+            Interested in battery storage
+          </label>
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input type="checkbox" checked={backupRequired} onChange={(e) => setBackupRequired(e.target.checked)} />
+            Need power backup
+          </label>
+        </div>
+        {backupRequired && (
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label htmlFor="backup-hours" className="mb-1 block text-xs text-ink-soft">
+                Required backup hours
+              </label>
+              <input
+                id="backup-hours"
+                type="number"
+                min={0}
+                value={requiredBackupHours}
+                onChange={(e) => setRequiredBackupHours(e.target.value)}
+                className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+              />
+            </div>
+            <div>
+              <label htmlFor="critical-loads" className="mb-1 block text-xs text-ink-soft">
+                Critical loads (what must stay on)
+              </label>
+              <input
+                id="critical-loads"
+                value={criticalLoads}
+                onChange={(e) => setCriticalLoads(e.target.value)}
+                placeholder="e.g. fridge, lights, Wi-Fi router"
+                className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {submitError && (

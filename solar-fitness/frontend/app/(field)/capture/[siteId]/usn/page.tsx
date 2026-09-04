@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getSiteServer as getSite } from "@/lib/api/serverFetch";
+import { getSiteServer as getSite, orRedirectToLogin } from "@/lib/api/serverFetch";
 import { UsnCaptureFlow } from "@/components/sites/UsnCaptureFlow";
 
 export async function generateMetadata({ params }: { params: Promise<{ siteId: string }> }): Promise<Metadata> {
@@ -11,7 +11,7 @@ export async function generateMetadata({ params }: { params: Promise<{ siteId: s
 
 export default async function FieldUsnPage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
-  const site = await getSite(siteId).catch(() => null);
+  const site = await orRedirectToLogin(getSite(siteId));
   if (!site) notFound();
   if (site.siteType !== "ROOFTOP_RESIDENTIAL" && site.siteType !== "ROOFTOP_CI") notFound();
   return (

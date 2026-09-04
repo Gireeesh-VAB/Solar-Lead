@@ -6,12 +6,22 @@ import type {
   AdminVendorListParams,
   AssessmentListParams,
   AuditLogListParams,
+  FinancialFeasibility,
+  GridFeasibility,
   NewCheckInput,
   NewVendorInput,
   SiteListParams,
   VendorJobListParams,
 } from "@/lib/api/client";
 import type { CustomerProfile } from "@/lib/fixtures/customer";
+import type {
+  BatteryAssessment,
+  ElectricalAssessment,
+  InstallationConstraints,
+  ObstacleSurveyItem,
+  SafetyAssessment,
+  StructuralAssessment,
+} from "@/lib/types";
 
 export function useSites(params: SiteListParams = {}) {
   return useQuery({
@@ -163,6 +173,73 @@ export function useSaveShadingNotes(jobId: string) {
   });
 }
 
+export function useSaveObstacleSurvey(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (obstacles: ObstacleSurveyItem[]) => api.saveObstacleSurvey(jobId, obstacles),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendor-job", jobId] });
+      qc.invalidateQueries({ queryKey: ["vendor-jobs"] });
+    },
+  });
+}
+
+export function useSaveStructuralAssessment(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (assessment: StructuralAssessment) =>
+      api.saveStructuralAssessment(jobId, assessment),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendor-job", jobId] });
+      qc.invalidateQueries({ queryKey: ["vendor-jobs"] });
+    },
+  });
+}
+
+export function useSaveElectricalAssessment(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (assessment: ElectricalAssessment) => api.saveElectricalAssessment(jobId, assessment),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendor-job", jobId] });
+      qc.invalidateQueries({ queryKey: ["vendor-jobs"] });
+    },
+  });
+}
+
+export function useSaveInstallationConstraints(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (constraints: InstallationConstraints) => api.saveInstallationConstraints(jobId, constraints),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendor-job", jobId] });
+      qc.invalidateQueries({ queryKey: ["vendor-jobs"] });
+    },
+  });
+}
+
+export function useSaveSafetyAssessment(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (assessment: SafetyAssessment) => api.saveSafetyAssessment(jobId, assessment),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendor-job", jobId] });
+      qc.invalidateQueries({ queryKey: ["vendor-jobs"] });
+    },
+  });
+}
+
+export function useSaveBatteryAssessment(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (assessment: BatteryAssessment) => api.saveBatteryAssessment(jobId, assessment),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendor-job", jobId] });
+      qc.invalidateQueries({ queryKey: ["vendor-jobs"] });
+    },
+  });
+}
+
 export function useVendorJobAction(jobId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -261,6 +338,56 @@ export function useVendorVerificationDecision() {
 
 export function useAllAssessments(params: AssessmentListParams = {}) {
   return useQuery({ queryKey: ["all-assessments", params], queryFn: () => api.listAllAssessments(params) });
+}
+
+export function useAdminAssessment(id: string) {
+  return useQuery({ queryKey: ["admin-assessment", id], queryFn: () => api.getAdminAssessment(id) });
+}
+
+export function useApproveAssessment(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { vendorId: string; deadlineDays?: number; payoutInr?: number }) =>
+      api.approveAssessment(id, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-assessment", id] });
+      qc.invalidateQueries({ queryKey: ["all-assessments"] });
+      qc.invalidateQueries({ queryKey: ["admin-vendors"] });
+    },
+  });
+}
+
+export function useRejectAssessment(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (reason: string) => api.rejectAssessment(id, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-assessment", id] });
+      qc.invalidateQueries({ queryKey: ["all-assessments"] });
+    },
+  });
+}
+
+export function useSaveGridFeasibility(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (feasibility: GridFeasibility) => api.saveGridFeasibility(id, feasibility),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-assessment", id] });
+      qc.invalidateQueries({ queryKey: ["all-assessments"] });
+    },
+  });
+}
+
+export function useSaveFinancialFeasibility(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (feasibility: FinancialFeasibility) => api.saveFinancialFeasibility(id, feasibility),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-assessment", id] });
+      qc.invalidateQueries({ queryKey: ["all-assessments"] });
+    },
+  });
 }
 
 export function useAuditLog(params: AuditLogListParams = {}) {

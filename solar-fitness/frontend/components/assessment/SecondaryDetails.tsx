@@ -60,12 +60,16 @@ export function GenerationEstimateCard({ assessment }: { assessment: Assessment 
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">Annual generation estimate</p>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <p className="font-mono tabular text-lg text-ink">{assessment.generation.p50AnnualKwh.toLocaleString("en-IN")} kWh</p>
-          <p className="text-xs text-ink-soft">P50</p>
+          <p className="font-mono tabular text-lg text-ink">
+            {assessment.generation.estimatedKwhPerYear != null ? `${Math.round(assessment.generation.estimatedKwhPerYear).toLocaleString("en-IN")} kWh` : "—"}
+          </p>
+          <p className="text-xs text-ink-soft">Estimated annual generation</p>
         </div>
         <div>
-          <p className="font-mono tabular text-lg text-ink">{assessment.generation.p90AnnualKwh.toLocaleString("en-IN")} kWh</p>
-          <p className="text-xs text-ink-soft">P90</p>
+          <p className="font-mono tabular text-lg text-ink">
+            {assessment.generation.performanceRatio != null ? `${Math.round(assessment.generation.performanceRatio * 100)}%` : "—"}
+          </p>
+          <p className="text-xs text-ink-soft">Performance ratio</p>
         </div>
       </div>
     </Card>

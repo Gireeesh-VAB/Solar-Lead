@@ -146,7 +146,11 @@ def test_post_assessment_returns_frontend_shaped_body(client, fake_pipeline, ass
         "kind": "regulatory",
     }
     assert "deltaKwp" not in str(body.get("visionRefinement"))
-    assert "generation" not in body
+    # generation is now persisted/exposed for real (see
+    # routers/assessments.py::GenerationEstimateOut) — this fixture's
+    # fake_pipeline never computed one, so it's present but null, not
+    # omitted the way it used to be entirely.
+    assert body["generation"] is None
     assert "id" in body
 
 

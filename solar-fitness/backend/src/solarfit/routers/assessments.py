@@ -42,7 +42,8 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
 
 from solarfit import __version__ as engine_version
 from solarfit.auth import current_org
@@ -73,6 +74,31 @@ class SiteNotFoundError(Exception):
     pass
 
 
+class GenerationEstimateOut(BaseModel):
+    """Persists engine/generation.py::estimate_generation_kwh()'s real
+    output — previously computed on every assessment (it feeds
+    fitness.score_fitness()) and then silently discarded, never stored
+    or exposed. Backs the admin review page's "System Sizing" panel.
+
+    camelCase aliasing (matching app_assessments.py's _CamelModel,
+    duplicated here rather than imported to avoid a routers/assessments.py
+    -> routers/app_assessments.py dependency the other direction doesn't
+    have) — this model nests inside AppAssessmentResponse, and a nested
+    model's OWN fields don't inherit the outer model's alias_generator,
+    so without this every other field on this response is camelCase
+    except these, silently."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    estimated_kwh_per_year: float | None
+    specific_yield_kwh_per_kwp: float | None
+    performance_ratio: float | None
+    method: str
+    method_notes: str
+    p50_kwh_per_year: float | None = None
+    p90_kwh_per_year: float | None = None
+
+
 class AssessmentResponse(BaseModel):
     site_id: str
     site_type: RoofSiteType
@@ -96,6 +122,7 @@ class AssessmentResponse(BaseModel):
     cache_hit: bool = False
     reused_from_analysis_id: str | None = None
     usn: UsnCapture | None = None
+    generation: GenerationEstimateOut | None = None
 
     engine_version: str  # API-04
     constraint_pack_version: str  # API-04
@@ -293,6 +320,7 @@ def orchestrate_assessment(site_id: str, owner_org: str | None = None) -> Assess
         usn=site.usn,
         engine_version=engine_version,
         constraint_pack_version=pack_version(),
+        generation=GenerationEstimateOut(**generation_estimate) if generation_estimate else None,
     )
 
 

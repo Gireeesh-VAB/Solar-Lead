@@ -161,6 +161,44 @@ class SiteRow(Base):
     # original keeps old checks correct when it does.
     monthly_bill_low_inr: Mapped[float | None] = mapped_column(Float, nullable=True)
     monthly_bill_high_inr: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Customer-reported roof basics (spec section 2, "Roof Information") —
+    # collected once at check/site creation. Deliberately customer
+    # self-report, not vendor-verified: a rough type/material/age is
+    # enough to shape the initial feasibility check, and the vendor's own
+    # in-person structural assessment (vendor_jobs.structural_assessment)
+    # is the source of truth once a survey happens, not these. Same
+    # "extra columns straight off the row, not the frozen Site contract"
+    # pattern as address/district/state/tags above.
+    roof_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    roof_material: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    roof_slope: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    roof_construction_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Customer-reported electrical connection + consumption (spec
+    # sections 8 "Electrical Information" and 9 "Electricity
+    # Consumption") — same customer-self-report / vendor-verifies-in-
+    # person split as the roof fields above. The vendor's own physical
+    # electrical inspection (meter/DB photos, earthing, lightning
+    # protection) lives on vendor_jobs.electrical_assessment instead —
+    # only a vendor standing at the panel can capture that.
+    electricity_board: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    consumer_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    connection_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    sanctioned_load_kw: Mapped[float | None] = mapped_column(Float, nullable=True)
+    contract_demand_kva: Mapped[float | None] = mapped_column(Float, nullable=True)
+    connected_load_kw: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # list[{month: "2026-01", unitsKwh: number}], newest-appended-last.
+    monthly_consumption_kwh: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+
+    # Battery Requirement (spec section 14) — customer's own interest/
+    # need, self-reported at check creation. The vendor's own physical
+    # assessment (room/location/ventilation/fire safety, plus their own
+    # capacity/technology recommendation from the actual site) lives on
+    # vendor_jobs.battery_assessment instead.
+    battery_required: Mapped[bool | None] = mapped_column(nullable=True)
+    backup_required: Mapped[bool | None] = mapped_column(nullable=True)
+    required_backup_hours: Mapped[float | None] = mapped_column(Float, nullable=True)
+    critical_loads: Mapped[str | None] = mapped_column(String, nullable=True)
 
     current_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
@@ -308,6 +346,21 @@ def create(
     usn_source: str | None = None,
     monthly_bill_low_inr: float | None = None,
     monthly_bill_high_inr: float | None = None,
+    roof_type: str | None = None,
+    roof_material: str | None = None,
+    roof_slope: str | None = None,
+    roof_construction_year: int | None = None,
+    electricity_board: str | None = None,
+    consumer_number: str | None = None,
+    connection_type: str | None = None,
+    sanctioned_load_kw: float | None = None,
+    contract_demand_kva: float | None = None,
+    connected_load_kw: float | None = None,
+    monthly_consumption_kwh: list[dict] | None = None,
+    battery_required: bool | None = None,
+    backup_required: bool | None = None,
+    required_backup_hours: float | None = None,
+    critical_loads: str | None = None,
     actor: str = "system",
 ) -> Site:
     """SITE-01. Create a site.
@@ -347,6 +400,21 @@ def create(
         usn_source=usn_source,
         monthly_bill_low_inr=monthly_bill_low_inr,
         monthly_bill_high_inr=monthly_bill_high_inr,
+        roof_type=roof_type,
+        roof_material=roof_material,
+        roof_slope=roof_slope,
+        roof_construction_year=roof_construction_year,
+        electricity_board=electricity_board,
+        consumer_number=consumer_number,
+        connection_type=connection_type,
+        sanctioned_load_kw=sanctioned_load_kw,
+        contract_demand_kva=contract_demand_kva,
+        connected_load_kw=connected_load_kw,
+        monthly_consumption_kwh=monthly_consumption_kwh or [],
+        battery_required=battery_required,
+        backup_required=backup_required,
+        required_backup_hours=required_backup_hours,
+        critical_loads=critical_loads,
         current_version=0,
     )
     session.add(row)

@@ -10,7 +10,10 @@ export const metadata: Metadata = {
 export default function VendorJobsPage() {
   return (
     <div className="space-y-6">
-      <PageHeader title="Job queue" description="Jobs assigned to you. Filter by status or sort by distance, deadline, or payout." />
+      <PageHeader
+        title="Job queue"
+        description="Jobs assigned to you after admin approval. Filter by status or sort by distance, deadline, or payout."
+      />
       <JobsListClient />
     </div>
   );

@@ -28,7 +28,9 @@ function requirementsFor(siteType: string): string[] {
   return base;
 }
 
-export const MOCK_VENDOR_JOBS: VendorJob[] = [
+type LegacyMockJob = Omit<VendorJob, "obstacleSurvey" | "structuralAssessment" | "electricalAssessment" | "installationConstraints" | "safetyAssessment" | "batteryAssessment">;
+
+const RAW_MOCK_VENDOR_JOBS: LegacyMockJob[] = [
   {
     id: "JOB-V-1001",
     siteId: s[0].id,
@@ -314,6 +316,16 @@ export const MOCK_VENDOR_JOBS: VendorJob[] = [
     distanceKm: 27.3,
   },
 ];
+
+export const MOCK_VENDOR_JOBS: VendorJob[] = RAW_MOCK_VENDOR_JOBS.map((j) => ({
+  ...j,
+  obstacleSurvey: [],
+  structuralAssessment: null,
+  electricalAssessment: null,
+  installationConstraints: null,
+  safetyAssessment: null,
+  batteryAssessment: null,
+}));
 
 export const MOCK_VENDOR_PROFILE: VendorProfile = {
   vendorId: "VEND-2201",

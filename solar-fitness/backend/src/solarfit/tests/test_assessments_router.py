@@ -155,7 +155,16 @@ def stub_pipeline(monkeypatch, make_site):
     monkeypatch.setattr(
         router_module.generation,
         "estimate_generation_kwh",
-        lambda site, kwp, params=None: {"performance_ratio": 0.8, "annual_kwh": kwp * 1400},
+        lambda site, kwp, params=None: {
+            "estimated_kwh_per_year": kwp * 1400,
+            "specific_yield_kwh_per_kwp": 1400 / 0.8,
+            "performance_ratio": 0.8,
+            "method": "fallback_constant",
+            "method_notes": "test stub",
+            "p50_kwh_per_year": None,
+            "p90_kwh_per_year": None,
+            "detailed_estimate": None,
+        },
     )
     monkeypatch.setattr(
         router_module.weather_provider,
