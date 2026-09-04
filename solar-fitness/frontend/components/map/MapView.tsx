@@ -182,6 +182,10 @@ export function MapView({
 
   const zoom = pins.length > 1 ? MULTI_PIN_ZOOM : BUILDING_ZOOM;
 
+  // True when the map is the thing being worked on rather than something
+  // being looked at: dropping a pin, or tracing a roof outline.
+  const isWorkingSurface = (interactive && !!onMove) || !!editableBoundary;
+
   const handleMapClick = useCallback(
     (e: { detail: { latLng: { lat: number; lng: number } | null } }) => {
       if (!interactive || !onMove) return;
@@ -228,7 +232,16 @@ export function MapView({
           defaultCenter={focus}
           defaultZoom={zoom}
           mapTypeId="satellite"
-          gestureHandling="greedy"
+          // "greedy" lets the map swallow every scroll and touch gesture.
+          // That is right when the map IS the task — placing a pin or
+          // dragging a roof corner — but on the result page it means
+          // scrolling down the page with the cursor over the map zooms
+          // the map instead, and the page appears stuck.
+          //
+          // "cooperative" hands ordinary scroll back to the page while
+          // keeping the map genuinely usable: drag still pans, and
+          // ctrl+scroll (or two fingers on a touchscreen) still zooms.
+          gestureHandling={isWorkingSurface ? "greedy" : "cooperative"}
           disableDefaultUI={false}
           mapTypeControl={false}
           streetViewControl={false}
