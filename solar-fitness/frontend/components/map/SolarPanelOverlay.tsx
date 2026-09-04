@@ -63,6 +63,7 @@ export function SolarPanelOverlay({
   panels,
   obstacles = [],
   roofBoundary,
+  clickable = true,
   visible = true,
 }: {
   panels: SolarPanelPolygon[];
@@ -73,6 +74,8 @@ export function SolarPanelOverlay({
    *  apparent panel offset can be read for what it is: the panels sit on
    *  THIS footprint, and tall buildings shift between imagery captures. */
   roofBoundary?: { lat: number; lng: number }[];
+  /** False on a static map — a popup is still interaction. */
+  clickable?: boolean;
   visible?: boolean;
 }) {
   const map = useMap();
@@ -123,10 +126,12 @@ export function SolarPanelOverlay({
         strokeWeight: PANEL_STROKE_WEIGHT,
         fillColor: PANEL_FILL,
         fillOpacity: PANEL_FILL_OPACITY,
-        clickable: true,
+        clickable,
         zIndex: 2,
         map,
       });
+
+      if (!clickable) return polygon;
 
       polygon.addListener("mouseover", () => polygon.setOptions({ fillColor: PANEL_HOVER_FILL }));
       polygon.addListener("mouseout", () => polygon.setOptions({ fillColor: PANEL_FILL }));
@@ -153,7 +158,7 @@ export function SolarPanelOverlay({
       });
       drawn.current = [];
     };
-  }, [map, panels, obstacles, roofBoundary]);
+  }, [map, panels, obstacles, roofBoundary, clickable]);
 
   // Toggling visibility reuses the existing polygons rather than
   // destroying and rebuilding 50+ of them.

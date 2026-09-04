@@ -113,6 +113,42 @@ function ZoomToBestImagery({ point }: { point: { lat: number; lng: number } | nu
   return null;
 }
 
+/** Forces a truly static map by setting the options on the map instance.
+ *
+ *  @vis.gl/react-google-maps does not forward several of these as props —
+ *  `fullscreenControl={false}` and `keyboardShortcuts={false}` were both
+ *  ignored, leaving "Toggle fullscreen view" and "Keyboard shortcuts"
+ *  buttons on a map that is supposed to be a picture. setOptions goes
+ *  straight to the Maps API, which does honour them.
+ *
+ *  Google's logo and the "Map Data" attribution are deliberately NOT
+ *  removed: their Terms require both to stay visible. */
+function StaticMapOptions({ enabled }: { enabled: boolean }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map || !enabled) return;
+    map.setOptions({
+      gestureHandling: "none",
+      draggable: false,
+      scrollwheel: false,
+      disableDoubleClickZoom: true,
+      disableDefaultUI: true,
+      keyboardShortcuts: false,
+      clickableIcons: false,
+      zoomControl: false,
+      fullscreenControl: false,
+      streetViewControl: false,
+      mapTypeControl: false,
+      rotateControl: false,
+      scaleControl: false,
+      panControl: false,
+    });
+  }, [map, enabled]);
+
+  return null;
+}
+
 function ViewportSync({ center, zoom }: { center: { lat: number; lng: number } | null; zoom?: number }) {
   const map = useMap();
   const key = center ? `${center.lat.toFixed(6)},${center.lng.toFixed(6)}` : null;
@@ -139,6 +175,7 @@ export function MapView({
   solarPanels,
   roofObstacles,
   roofBoundary,
+  staticView = false,
   editableBoundary,
   onBoundaryChange,
   editorVersion,
@@ -159,6 +196,11 @@ export function MapView({
   roofObstacles?: RoofObstaclePolygon[];
   /** The detected roof footprint, outlined. */
   roofBoundary?: { lat: number; lng: number }[];
+  /** Render as a picture, not a tool: no scroll, no drag, no controls,
+   *  nothing clickable. For places the map is shown as evidence rather
+   *  than used — the result page. Deliberately opt-IN, so the admin
+   *  portfolio map and the vendor capture screens keep their panning. */
+  staticView?: boolean;
   /** Turns the map into a roof-tracing surface, starting from this shape.
    *  Supplying it replaces the read-only outline with an editable one. */
   editableBoundary?: LatLngPoint[];
@@ -184,7 +226,7 @@ export function MapView({
 
   // True when the map is the thing being worked on rather than something
   // being looked at: dropping a pin, or tracing a roof outline.
-  const isWorkingSurface = (interactive && !!onMove) || !!editableBoundary;
+  const isWorkingSurface = !staticView && ((interactive && !!onMove) || !!editableBoundary);
 
   const handleMapClick = useCallback(
     (e: { detail: { latLng: { lat: number; lng: number } | null } }) => {
@@ -241,14 +283,21 @@ export function MapView({
           // "cooperative" hands ordinary scroll back to the page while
           // keeping the map genuinely usable: drag still pans, and
           // ctrl+scroll (or two fingers on a touchscreen) still zooms.
-          gestureHandling={isWorkingSurface ? "greedy" : "cooperative"}
-          disableDefaultUI={false}
+          // none: the map ignores scroll and drag entirely.
+          // greedy: the map IS the task, so it takes every gesture.
+          // cooperative: shown but usable — ordinary scroll belongs to the
+          //   page, ctrl+scroll and drag still work.
+          gestureHandling={staticView ? "none" : isWorkingSurface ? "greedy" : "cooperative"}
+          disableDefaultUI={staticView}
+          keyboardShortcuts={!staticView}
+          clickableIcons={!staticView}
           mapTypeControl={false}
           streetViewControl={false}
           fullscreenControl={false}
           onClick={handleMapClick}
           style={{ width: "100%", height: "100%" }}
         >
+          <StaticMapOptions enabled={staticView} />
           <ViewportSync center={focus} zoom={zoom} />
           {/* Only for a single rooftop — a portfolio of pins is a
               different job and should stay zoomed out. */}
@@ -303,6 +352,9 @@ export function MapView({
               panels={solarPanels ?? []}
               obstacles={roofObstacles ?? []}
               roofBoundary={roofBoundary}
+              // A panel that opens a popup is still interaction; a static
+              // map should not have any.
+              clickable={!staticView}
             />
           )}
 

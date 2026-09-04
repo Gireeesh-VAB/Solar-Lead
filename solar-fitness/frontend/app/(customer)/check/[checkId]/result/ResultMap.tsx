@@ -49,6 +49,7 @@ export function ResultMap({
         solarPanels={panels}
         roofObstacles={obstacles}
         roofBoundary={roofBoundary}
+        staticView
       />
 
       {/* The overlay's own caption. Google's panel count is NOT the system
