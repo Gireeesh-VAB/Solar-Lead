@@ -17,6 +17,7 @@ export function ResultMap({
   checkId,
   pin,
   roofBoundary,
+  boundaryIsApproximate = true,
   height = 300,
 }: {
   checkId: string;
@@ -24,6 +25,9 @@ export function ResultMap({
   /** The roof GEO-04 detected, from the check itself. Outlined on the map
    *  so the panels can be read as belonging to a specific footprint. */
   roofBoundary?: { lat: number; lng: number }[];
+  /** Whether that outline is Google's bounding box rather than a traced
+   *  roof. Changes what we are willing to claim about it. */
+  boundaryIsApproximate?: boolean;
   height?: number;
 }) {
   const { data, isLoading, isError } = useCheckSolarLayout(checkId);
@@ -54,9 +58,16 @@ export function ResultMap({
 
       {roofBoundary && roofBoundary.length >= 3 && (
         <p className="mt-1.5 text-xs text-ink-faint">
-          The cyan outline is the roof we detected — panels are placed inside it. On tall
-          buildings it can look slightly offset from the photo, because the satellite imagery
-          and the roof data were captured on different dates.
+          {boundaryIsApproximate ? (
+            <>
+              The cyan outline is an <span className="font-medium text-ink-soft">approximate</span>{" "}
+              area from satellite data — a rectangle around your building, not a traced roof. If
+              your roof is an L-shape or an unusual shape, the surveyor will measure it properly
+              and the layout will be corrected.
+            </>
+          ) : (
+            <>The cyan outline is your surveyed roof. Panels are placed inside it.</>
+          )}
         </p>
       )}
 

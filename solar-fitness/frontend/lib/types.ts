@@ -90,6 +90,13 @@ export interface Site {
   state: string;
   location: GeoPoint;
   boundary?: GeoPoint[];
+  /** GEO-09 provenance for `boundary`. "solar_api" means it is Google's
+   *  bounding RECTANGLE, not a traced roof outline. */
+  geometrySource?: string | null;
+  /** True when `boundary` is an approximate box rather than a traced
+   *  roof. Derived server-side so the UI need not know the enum. */
+  boundaryIsApproximate?: boolean;
+  geometryConfidence?: number | null;
   createdAt: string;
   updatedAt: string;
   latestAssessment: Assessment | null;

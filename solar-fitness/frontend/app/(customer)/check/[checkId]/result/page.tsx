@@ -83,6 +83,7 @@ export default async function ResultPage({ params }: { params: Promise<{ checkId
             verdict: assessment.verdict,
           }}
           roofBoundary={check.boundary}
+          boundaryIsApproximate={check.boundaryIsApproximate ?? true}
           height={300}
         />
         <p className="mt-1.5 flex items-center gap-1 text-xs text-ink-faint">

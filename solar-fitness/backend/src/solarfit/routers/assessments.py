@@ -52,11 +52,12 @@ from solarfit.domain.constraint import CapacityResult
 from solarfit.domain.site import RoofSiteType, UsnCapture
 from solarfit.engine import fitness, generation, resolver
 from solarfit.engine import ml_score as ml_score_engine
-from solarfit.engine.area import compute_usable_area_m2
+from solarfit.engine.area import compute_usable_roof
 from solarfit.engine.consumption import estimate_annual_consumption
 from solarfit.packs import config_pack, rooftop, universal
 from solarfit.packs.config_pack import pack_version
 from solarfit.providers import weather as weather_provider
+from solarfit.providers.base import outranks
 from solarfit.providers.validation import GeometryRejected
 from solarfit.repositories import analysis_cache as analysis_cache_repo
 from solarfit.repositories import calibration
@@ -192,8 +193,32 @@ def orchestrate_assessment(site_id: str, owner_org: str | None = None) -> Assess
     # read analysis.usable_area_m2 directly, which is always None, so
     # every real (non-mocked) assessment silently computed capacity
     # against a usable area of 0.0.
-    usable_site = site.model_copy(update={"boundary": analysis.boundary})
-    usable_area_m2 = compute_usable_area_m2(usable_site)
+    #
+    # GEO-01 precedence, applied here too. `analysis.boundary` is the
+    # cached Solar API geometry — a bounding RECTANGLE around the
+    # building, precedence 100. Overwriting the site's own boundary with
+    # it unconditionally meant a surveyor could trace the real roof
+    # (manual_polygon, 300) or field-measure it (400), have it stored and
+    # versioned through SITE-05, and the very next assessment would throw
+    # it away and measure Google's box instead.
+    #
+    # So the traced geometry wins when it STRICTLY outranks the cached
+    # one. Equal precedence keeps the old behaviour deliberately: when
+    # the site's own boundary is also solar_api, analysis.boundary is
+    # the better of the two, because it carries the VIS/OBS refinement
+    # the raw stored boundary does not.
+    if site.boundary and outranks(site.geometry_source, "solar_api"):
+        usable_site = site
+        boundary_used = site.geometry_source or "site"
+    else:
+        usable_site = site.model_copy(update={"boundary": analysis.boundary})
+        boundary_used = "solar_api"
+
+    usable_roof = compute_usable_roof(usable_site)
+    usable_area_m2 = usable_roof.area_m2
+    logger.info(
+        "Site %s: usable area %.1f m2 from the %s boundary", site_id, usable_area_m2, boundary_used
+    )
 
     # CON-05 — the customer's own bill, converted to annual units.
     consumption = estimate_annual_consumption(bill_low, bill_high)

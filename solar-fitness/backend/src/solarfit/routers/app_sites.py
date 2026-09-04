@@ -30,6 +30,7 @@ from solarfit.auth_users import AuthenticatedUser, current_user
 from solarfit.db import get_session
 from solarfit.domain.site import RoofSiteType, Site
 from solarfit.providers import manual, solar_api
+from solarfit.providers.base import is_approximate
 from solarfit.providers.validation import GeometryRejected
 from solarfit.repositories import assessments as assessments_repo
 from solarfit.repositories import calibration as calibration_repo
@@ -142,6 +143,13 @@ class SiteOut(_CamelModel):
     state: str
     location: GeoPointOut
     boundary: list[GeoPointOut] | None = None
+    # GEO-09 provenance for the boundary above. Exposed because the
+    # frontend cannot otherwise tell a traced roof from GEO-04's bounding
+    # RECTANGLE, and drawing a rectangle as though it were the roof is
+    # how panels end up beside a building instead of on it.
+    geometry_source: str | None = None
+    boundary_is_approximate: bool = True
+    geometry_confidence: float | None = None
     created_at: str
     updated_at: str
     latest_assessment: AssessmentOut | None = None
@@ -237,6 +245,11 @@ def _site_out(session: Session, site: Site, row: repo.SiteRow) -> SiteOut:
         state=row.state or "",
         location=GeoPointOut(lat=lat, lng=lng),
         boundary=_boundary_points(site),
+        geometry_source=site.geometry_source,
+        # A site with no boundary at all is not "approximate", it is
+        # absent — say False rather than implying a rough shape exists.
+        boundary_is_approximate=is_approximate(site.geometry_source) if site.boundary else False,
+        geometry_confidence=site.geometry_confidence,
         created_at=site.created_at.isoformat(),
         updated_at=row.updated_at.isoformat(),
         latest_assessment=_assessment_out(latest) if latest else None,
