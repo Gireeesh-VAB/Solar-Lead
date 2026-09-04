@@ -97,6 +97,28 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult> {
   return fetchPoint({ address });
 }
 
+interface ReverseGeocodeResponse {
+  found: boolean;
+  formatted: string | null;
+}
+
+/**
+ * Coordinates -> a human-readable address, or undefined if Google has
+ * nothing for that point. Never throws for "nothing found" — the caller
+ * always has real coordinates already (this only fills in the label), so
+ * a miss here should fall back quietly, not block anything.
+ */
+export async function reverseGeocode(lat: number, lng: number): Promise<string | undefined> {
+  try {
+    const response = await apiFetch<ReverseGeocodeResponse>("/app/geocode/reverse", {
+      query: { lat, lng },
+    });
+    return response.found ? (response.formatted ?? undefined) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function fetchPoint(query: Record<string, string | undefined>): Promise<GeocodeResult> {
   let response: GeocodeResponse;
   try {

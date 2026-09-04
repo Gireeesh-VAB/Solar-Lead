@@ -277,6 +277,39 @@ def geocode_address_detailed(
     return point, best.get("formatted_address")
 
 
+def reverse_geocode(lat: float, lng: float, *, client: httpx.Client | None = None) -> str | None:
+    """Coordinates -> Google's formatted_address, or None when nothing
+    covers that point.
+
+    Same endpoint as geocode_address_detailed(), just `latlng=` instead of
+    `address=` — Google's Geocoding API handles both directions. Used
+    after "use my current location" / a manual pin drop, so the address
+    text shown to the customer always names the point the pin is actually
+    on, not whatever they last typed."""
+    params = {"latlng": f"{lat},{lng}", "key": _key("maps")}
+    owns_client = client is None
+    client = client or httpx.Client(timeout=TIMEOUT_SECONDS)
+    try:
+        response = client.get(GEOCODE_URL, params=params)
+        response.raise_for_status()
+        payload = response.json()
+    finally:
+        if owns_client:
+            client.close()
+
+    status = payload.get("status")
+    if status == "ZERO_RESULTS":
+        return None
+    if status != "OK":
+        raise SolarApiError(
+            f"reverse geocoding failed: {status} {payload.get('error_message', '')}".strip()
+        )
+    results = payload.get("results")
+    if not results:
+        return None
+    return results[0].get("formatted_address")
+
+
 def fetch_building_insights(
     lat: float,
     lng: float,

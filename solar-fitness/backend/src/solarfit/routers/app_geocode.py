@@ -63,6 +63,11 @@ class GeocodeOut(_CamelModel):
     formatted: str | None = None
 
 
+class ReverseGeocodeOut(_CamelModel):
+    found: bool
+    formatted: str | None = None
+
+
 @router.get("/geocode/suggest", response_model=SuggestionsOut)
 def suggest(
     q: Annotated[str, Query(min_length=1, max_length=300)],
@@ -137,3 +142,27 @@ def geocode(
     # matched — "Kukatpally, Hyderabad" and a bare pin are very different
     # levels of confidence about whether the search worked.
     return GeocodeOut(found=True, lat=lat, lng=lng, formatted=formatted)
+
+
+@router.get("/geocode/reverse", response_model=ReverseGeocodeOut)
+def reverse_geocode(
+    user: Annotated[AuthenticatedUser, Depends(current_user)],
+    lat: Annotated[float, Query(ge=-90, le=90)],
+    lng: Annotated[float, Query(ge=-180, le=180)],
+) -> ReverseGeocodeOut:
+    """Coordinates -> a human-readable address.
+
+    Called after "use my current location" and after every pin drag/tap —
+    the address text shown to the customer must always name where the pin
+    actually is, never a stale search result left over from before the
+    pin moved.
+    """
+    try:
+        formatted = solar_api.reverse_geocode(lat, lng)
+    except solar_api.SolarApiError as exc:
+        logger.exception("Reverse geocoding unavailable for (%s, %s)", lat, lng)
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _UNAVAILABLE) from exc
+
+    if formatted is None:
+        return ReverseGeocodeOut(found=False)
+    return ReverseGeocodeOut(found=True, formatted=formatted)

@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Crosshair, Loader2 } from "lucide-react";
+import { Crosshair, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/Primitives";
 import { AddressAutocomplete } from "@/components/map/AddressAutocomplete";
 import { MapView, type MapPinData } from "@/components/map/MapView";
-import type { GeocodeResult } from "@/lib/maps/geocode";
+import { GeocodeUnavailableError, geocodeAddress, reverseGeocode, type GeocodeResult } from "@/lib/maps/geocode";
 import { useCreateCheck } from "@/lib/query/hooks";
 import type { ConnectionType, RoofMaterial, RoofSlope, RoofType } from "@/lib/types";
 
@@ -70,6 +70,7 @@ export function NewCheckForm() {
   // touched the map silently submitted somebody else's rooftop.
   const [coords, setCoords] = useState<Coords | null>(null);
   const [locating, setLocating] = useState(false);
+  const [searching, setSearching] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   // CON-05. A range rather than one figure because Indian household bills
@@ -110,6 +111,15 @@ export function NewCheckForm() {
     setNotice(found.formatted ? `Found: ${found.formatted}` : null);
   };
 
+  // Both "use my current location" and a manual pin move (drag/tap) change
+  // where the pin actually is — the address text must follow it every
+  // time, not just the first time, or it goes on showing wherever the
+  // customer last searched while the pin itself has moved somewhere else.
+  const relabelPin = async (lat: number, lng: number) => {
+    const formatted = await reverseGeocode(lat, lng);
+    setAddress(formatted ?? "Pinned location");
+  };
+
   const handleUseCurrentLocation = () => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setNotice("Your browser can't share a location. Tap the map to place your pin instead.");
@@ -118,9 +128,10 @@ export function NewCheckForm() {
     setLocating(true);
     setNotice(null);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        if (!address.trim()) setAddress("My current location");
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setCoords({ lat: latitude, lng: longitude });
+        await relabelPin(latitude, longitude);
         setLocating(false);
       },
       (err) => {
@@ -138,6 +149,32 @@ export function NewCheckForm() {
   const handleMapMove = (lat: number, lng: number) => {
     setCoords({ lat, lng });
     setNotice(null);
+    void relabelPin(lat, lng);
+  };
+
+  // AddressAutocomplete is suggestions-only by design (see its own
+  // docstring) — this is the explicit fallback for someone who typed a
+  // full address and wants to search it directly instead of picking from
+  // the dropdown.
+  const handleSearch = async () => {
+    const query = address.trim();
+    if (!query) return;
+    setSearching(true);
+    setNotice(null);
+    try {
+      const found = await geocodeAddress(query);
+      setCoords(found);
+      setAddress(found.formatted ?? query);
+      setNotice(found.formatted ? `Found: ${found.formatted}` : null);
+    } catch (err) {
+      setNotice(
+        err instanceof GeocodeUnavailableError
+          ? "Address search isn't available right now. Use your current location, or tap the map to place your pin."
+          : `Couldn't find "${query}". Try a different search, or tap the map instead.`
+      );
+    } finally {
+      setSearching(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -203,14 +240,28 @@ export function NewCheckForm() {
           the public Maps key never needs Places or Geocoding permission.
           Picking one moves the map and drops the pin; the pin stays
           draggable afterwards, because a street address is rarely the
-          exact roof. */}
-      <AddressAutocomplete
-        value={address}
-        onValueChange={setAddress}
-        onSelect={handleSuggestionPicked}
-        onUnavailable={setNotice}
-        disabled={createCheck.isPending}
-      />
+          exact roof. The Search button beside it is the fallback for
+          typing a full address and searching it directly, without
+          picking from the dropdown. */}
+      <div className="flex items-start gap-2">
+        <div className="flex-1">
+          <AddressAutocomplete
+            value={address}
+            onValueChange={setAddress}
+            onSelect={handleSuggestionPicked}
+            onUnavailable={setNotice}
+            disabled={createCheck.isPending}
+          />
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={handleSearch}
+          disabled={searching || createCheck.isPending || !address.trim()}
+        >
+          {searching ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Search size={15} strokeWidth={1.75} aria-hidden="true" />}
+        </Button>
+      </div>
 
       <button
         type="button"
