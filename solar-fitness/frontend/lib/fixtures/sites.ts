@@ -228,8 +228,11 @@ function buildAssessment(site: Omit<Site, "latestAssessment">, index: number): A
       verdict === "NOT_SUITABLE" || verdict === "INSUFFICIENT_DATA"
         ? undefined
         : {
-            p50AnnualKwh: Math.round(capacityKwp * randFloat(1350, 1550)),
-            p90AnnualKwh: Math.round(capacityKwp * randFloat(1200, 1350)),
+            estimatedKwhPerYear: Math.round(capacityKwp * randFloat(1350, 1550)),
+            specificYieldKwhPerKwp: Math.round(randFloat(1350, 1550)),
+            performanceRatio: Number(randFloat(0.75, 0.85, 2)),
+            method: "fallback_constant",
+            methodNotes: "mock fixture",
           },
     cache: {
       cacheHit,
@@ -270,6 +273,7 @@ function buildSite(index: number): Site {
           : null
         : null,
     tags: [pick(["priority", "shortlisted", "pilot-batch", "revisit", "field-verified"]), ...(rand() > 0.7 ? [pick(["escalated", "high-value"])] : [])],
+    monthlyConsumptionKwh: [],
   };
   return { ...base, latestAssessment: buildAssessment(base, index) };
 }

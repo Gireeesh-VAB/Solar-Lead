@@ -28,8 +28,7 @@ random verdict with a genuine run.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import Field
@@ -37,12 +36,11 @@ from sqlalchemy.orm import Session
 
 from solarfit.auth_users import AuthenticatedUser, current_user
 from solarfit.db import get_session, session_scope
-from solarfit.domain.site import BILLING_LINKED_SITE_TYPES, RoofSiteType
+from solarfit.domain.site import RoofSiteType
 from solarfit.providers import solar_api
 from solarfit.repositories import assessments as assessments_repo
 from solarfit.repositories import sites as repo
 from solarfit.repositories import users as users_repo
-from solarfit.repositories import vendors as vendors_repo
 from solarfit.routers.app_sites import SiteOut, _CamelModel, _site_out
 from solarfit.routers.assessments import SiteNotFoundError, orchestrate_assessment
 from solarfit.routers.sites import SiteCreate, create_site_core
@@ -52,32 +50,9 @@ router = APIRouter(prefix="/app", tags=["app-checks"])
 _DEFAULT_JURISDICTION = "IN-TG"  # same rationale as app_sites.py's own constant — no jurisdiction field on this form either
 _INDIVIDUAL_OWNER_ORG_PREFIX = "individual:"
 
-# A verdict of SUITABLE_SUBJECT_TO_SURVEY means the engine couldn't be
-# confident from imagery alone — this is the one point where a completed
-# check hands off to a vendor for an in-person survey. Requirements mirror
-# the vendor portal's own field-capture steps (boundary/panorama/USN/
-# shading); USN only applies to billing-linked site types, same condition
-# app_usn.py's routes gate on.
-_SURVEY_VERDICT = "SUITABLE_SUBJECT_TO_SURVEY"
-_BOUNDARY_REQ = "Capture boundary polygon"
-_USN_REQ = "Confirm USN via bill OCR"
-_PANORAMA_REQ = "Upload panorama photo"
-_SHADING_REQ = "Note shading obstructions"
-_SURVEY_DEADLINE_DAYS = 3
-_MIN_SURVEY_PAYOUT_INR = 800
-_PAYOUT_PER_KWP_INR = 350
-
 
 def _individual_owner_org(user: AuthenticatedUser) -> str:
     return f"{_INDIVIDUAL_OWNER_ORG_PREFIX}{user.id}"
-
-
-def _survey_requirements(site_type: str) -> list[str]:
-    requirements = [_BOUNDARY_REQ, _PANORAMA_REQ]
-    if site_type in BILLING_LINKED_SITE_TYPES:
-        requirements.append(_USN_REQ)
-    requirements.append(_SHADING_REQ)
-    return requirements
 
 
 # --------------------------------------------------------------------- #
@@ -85,11 +60,57 @@ def _survey_requirements(site_type: str) -> list[str]:
 # --------------------------------------------------------------------- #
 
 
+RoofType = Literal[
+    "RCC_CONCRETE", "METAL_SHEET", "GI_SHEET", "TILED", "ASBESTOS_SHEET", "GROUND_MOUNTED", "TERRACE", "OTHER"
+]
+RoofMaterial = Literal["RCC", "CONCRETE", "METAL", "TILE", "SHEET", "OTHER"]
+RoofSlope = Literal["FLAT", "LOW", "MEDIUM", "HIGH"]
+ConnectionType = Literal["SINGLE_PHASE", "THREE_PHASE"]
+
+
+class MonthlyConsumptionEntry(_CamelModel):
+    month: str = Field(min_length=1, max_length=16)  # "2026-01"
+    units_kwh: float = Field(ge=0)
+
+
 class NewCheckInput(_CamelModel):
     address: str = Field(min_length=1)
     lat: float
     lng: float
     site_type: RoofSiteType = "ROOFTOP_RESIDENTIAL"
+
+    # Roof Information (customer self-report at intake) — a rough
+    # description is enough to shape the initial feasibility check; the
+    # vendor's own in-person structural assessment is the source of
+    # truth once a survey happens, not these. All optional: a customer
+    # who doesn't know their roof material shouldn't be blocked from
+    # running a check.
+    roof_type: RoofType | None = None
+    roof_material: RoofMaterial | None = None
+    roof_slope: RoofSlope | None = None
+    roof_construction_year: int | None = Field(default=None, ge=1900, le=2100)
+
+    # Electrical Information + Electricity Consumption (customer
+    # self-report, everything on this section is on the customer's own
+    # bill) — the vendor's own in-person electrical inspection (meter/DB
+    # photos, earthing, lightning protection) is a separate, later
+    # capture on the vendor_jobs row, not here.
+    electricity_board: str | None = None
+    consumer_number: str | None = None
+    connection_type: ConnectionType | None = None
+    sanctioned_load_kw: float | None = Field(default=None, ge=0)
+    contract_demand_kva: float | None = Field(default=None, ge=0)
+    connected_load_kw: float | None = Field(default=None, ge=0)
+    monthly_consumption_kwh: list[MonthlyConsumptionEntry] = Field(default_factory=list)
+
+    # Battery Requirement (spec section 14) — customer's own interest/
+    # need. The vendor's own physical assessment (room/location/
+    # ventilation/fire safety) is a separate, later capture on the
+    # vendor_jobs row, not here.
+    battery_required: bool | None = None
+    backup_required: bool | None = None
+    required_backup_hours: float | None = Field(default=None, ge=0)
+    critical_loads: str | None = None
 
 
 class CustomerProfileOut(_CamelModel):
@@ -165,7 +186,27 @@ def create_check(
         centroid={"type": "Point", "coordinates": [payload.lng, payload.lat]},
     )
     try:
-        site, _note = create_site_core(core_payload, session, owner_org, address=payload.address)
+        site, _note = create_site_core(
+            core_payload,
+            session,
+            owner_org,
+            address=payload.address,
+            roof_type=payload.roof_type,
+            roof_material=payload.roof_material,
+            roof_slope=payload.roof_slope,
+            roof_construction_year=payload.roof_construction_year,
+            electricity_board=payload.electricity_board,
+            consumer_number=payload.consumer_number,
+            connection_type=payload.connection_type,
+            sanctioned_load_kw=payload.sanctioned_load_kw,
+            contract_demand_kva=payload.contract_demand_kva,
+            connected_load_kw=payload.connected_load_kw,
+            monthly_consumption_kwh=[e.model_dump(by_alias=False) for e in payload.monthly_consumption_kwh],
+            battery_required=payload.battery_required,
+            backup_required=payload.backup_required,
+            required_backup_hours=payload.required_backup_hours,
+            critical_loads=payload.critical_loads,
+        )
     except solar_api.SolarApiError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
 
@@ -182,13 +223,18 @@ def complete_check(
     """Runs the real engine (routers/assessments.py::orchestrate_assessment,
     unchanged) and persists the result — never a fabricated verdict.
 
-    A SUITABLE_SUBJECT_TO_SURVEY verdict also queues an unassigned vendor
-    job in the same transaction as the assessment save (repositories/
-    vendors.py::create_job()) — this is the only path that populates
-    vendor_jobs today, closing the "no frontend flow assigns a vendor to a
-    site" gap that repository's own docstring used to flag."""
+    Deliberately does NOT touch vendor_jobs. Customer -> Feasibility Check
+    -> Admin Review -> Admin Approval -> Vendor Access: a
+    SUITABLE_SUBJECT_TO_SURVEY (or SUITABLE) verdict lands the assessment
+    in the admin review queue (assessments_repo.save_assessment() sets
+    review_status="pending" for those verdicts) — a vendor job only ever
+    gets created once an admin explicitly approves and picks a vendor, via
+    routers/app_assessments.py::approve_assessment(). Previously this
+    endpoint created an unassigned vendor_jobs row itself with no admin
+    involved at all, and that row was permanently invisible to every
+    vendor anyway (see repositories/vendors.py::create_job()'s docstring)."""
     owner_org = _individual_owner_org(user)
-    site, row = _owned_check_or_404(session, check_id, owner_org)
+    site, _row = _owned_check_or_404(session, check_id, owner_org)
 
     try:
         response = orchestrate_assessment(check_id)
@@ -197,22 +243,6 @@ def complete_check(
 
     with session_scope() as assessment_session:
         assessments_repo.save_assessment(assessment_session, owner_org=owner_org, **response.model_dump())
-
-        if response.verdict == _SURVEY_VERDICT:
-            vendors_repo.create_job(
-                assessment_session,
-                site_id=check_id,
-                district=row.district or "Unassigned",
-                state=row.state or "Unassigned",
-                requirements=_survey_requirements(site.site_type),
-                payout_inr=max(
-                    _MIN_SURVEY_PAYOUT_INR,
-                    round((response.capacity.recommended_kwp or 3) * _PAYOUT_PER_KWP_INR),
-                ),
-                estimated_capacity_kwp=response.capacity.recommended_kwp,
-                deadline=datetime.now(UTC) + timedelta(days=_SURVEY_DEADLINE_DAYS),
-            )
-
         assessment_session.commit()
 
     updated_row = session.get(repo.SiteRow, uuid.UUID(check_id))

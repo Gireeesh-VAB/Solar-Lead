@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarClock, Loader2, MapPin } from "lucide-react";
-import { getCheckServer as getCheck } from "@/lib/api/serverFetch";
+import { getCheckServer as getCheck, orRedirectToLogin } from "@/lib/api/serverFetch";
 import { VERDICT_EXPLAINER } from "@/lib/fixtures/customer";
 import { VerdictChip } from "@/components/ui/VerdictChip";
 import { ConfidenceMeter } from "@/components/ui/ConfidenceMeter";
@@ -21,7 +21,7 @@ const POSITIVE_VERDICTS = new Set(["SUITABLE", "SUITABLE_SUBJECT_TO_SURVEY", "CO
 
 export default async function ResultPage({ params }: { params: Promise<{ checkId: string }> }) {
   const { checkId } = await params;
-  const check = await getCheck(checkId).catch(() => null);
+  const check = await orRedirectToLogin(getCheck(checkId));
   if (!check) notFound();
 
   const assessment = check.latestAssessment;

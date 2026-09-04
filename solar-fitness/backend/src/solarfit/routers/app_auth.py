@@ -1,15 +1,3 @@
-"""Owner: karthik (App Platform & Foundation).
-
-The first /app/* router — establishes the camelCase-response convention
-every later /app/* endpoint (omkar's, keerthana's) follows: response
-models use Pydantic's to_camel alias generator so JSON keys match
-lib/types.ts field-for-field (ownerOrg, not owner_org), rather than each
-router hand-renaming fields one at a time.
-
-POST /app/auth/signup and POST /app/auth/login are the only two /app/*
-routes that don't require current_user() — everything else does.
-"""
-
 from __future__ import annotations
 
 from datetime import datetime
@@ -124,6 +112,18 @@ def signup(
     except IntegrityError as exc:
         session.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "an account with this email already exists") from exc
+
+    # Explicit commit here, not left to get_session()'s post-yield teardown:
+    # FastAPI runs yield-dependency cleanup for sync (threadpool) routes
+    # after the response has already been sent to the client, so a fast
+    # client (e.g. a browser firing an immediate follow-up call with the
+    # new bearer token) can lose the race against the commit and see
+    # "invalid or expired token" on a brand-new, correctly-issued token —
+    # reproduced via a Playwright-driven signup immediately followed by a
+    # PATCH /app/customer/profile call. Committing before we return closes
+    # that window for the one flow guaranteed to have an immediate
+    # follow-up request (signup -> profile update -> home).
+    session.commit()
 
     token = create_access_token(str(row.id), row.role)
     return AuthResponse(token=token, user=_user_out(row))

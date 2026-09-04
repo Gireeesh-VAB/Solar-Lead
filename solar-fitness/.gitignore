@@ -11,3 +11,4 @@ build/
 .DS_Store
 backend/db/migrations/versions/__pycache__/
 backend/infra/docker-compose.override.yml
+certs/

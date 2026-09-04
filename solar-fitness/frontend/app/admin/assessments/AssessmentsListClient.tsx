@@ -1,19 +1,35 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useAllAssessments } from "@/lib/query/hooks";
-import { TableSkeleton, ErrorState, EmptyState, Button } from "@/components/ui/Primitives";
+import { TableSkeleton, ErrorState, EmptyState, Button, Badge } from "@/components/ui/Primitives";
 import { VerdictChip } from "@/components/ui/VerdictChip";
 import { ConfidenceMeter } from "@/components/ui/ConfidenceMeter";
 import { formatDate, formatKwp, VERDICT_LABEL } from "@/lib/utils";
 import type { Verdict } from "@/lib/types";
-import { ClipboardList } from "lucide-react";
+import type { ReviewStatus } from "@/lib/api/client";
+import { ClipboardList, ClipboardCheck } from "lucide-react";
 
 const PAGE_SIZE = 20;
+
+const REVIEW_STATUS_LABEL: Record<ReviewStatus, string> = {
+  pending: "Pending review",
+  approved: "Approved",
+  rejected: "Rejected",
+  not_applicable: "N/A",
+};
+
+function reviewTone(status: ReviewStatus): "neutral" | "blue" | "amber" {
+  if (status === "pending") return "amber";
+  if (status === "approved") return "blue";
+  return "neutral";
+}
 
 export function AssessmentsListClient() {
   const [q, setQ] = useState("");
   const [verdict, setVerdict] = useState("");
+  const [reviewStatus, setReviewStatus] = useState("");
   const [page, setPage] = useState(1);
   const assessments = useAllAssessments({ pageSize: 2000 });
 
@@ -24,8 +40,9 @@ export function AssessmentsListClient() {
       list = list.filter((row) => row.siteName.toLowerCase().includes(needle) || row.siteId.toLowerCase().includes(needle) || row.district.toLowerCase().includes(needle));
     }
     if (verdict) list = list.filter((row) => row.assessment.verdict === verdict);
+    if (reviewStatus) list = list.filter((row) => row.reviewStatus === reviewStatus);
     return list;
-  }, [assessments.data, q, verdict]);
+  }, [assessments.data, q, verdict, reviewStatus]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -61,6 +78,21 @@ export function AssessmentsListClient() {
             </option>
           ))}
         </select>
+        <select
+          value={reviewStatus}
+          onChange={(e) => {
+            setReviewStatus(e.target.value);
+            setPage(1);
+          }}
+          className="rounded-[var(--radius-app)] border border-line bg-paper px-2 py-1.5 text-sm text-ink"
+        >
+          <option value="">All review statuses</option>
+          {(Object.keys(REVIEW_STATUS_LABEL) as ReviewStatus[]).map((s) => (
+            <option key={s} value={s}>
+              {REVIEW_STATUS_LABEL[s]}
+            </option>
+          ))}
+        </select>
       </div>
 
       {assessments.isLoading && <TableSkeleton />}
@@ -81,11 +113,13 @@ export function AssessmentsListClient() {
                   <th scope="col" className="py-2 pr-3 font-medium text-right">Capacity</th>
                   <th scope="col" className="py-2 pr-3 font-medium">Confidence</th>
                   <th scope="col" className="py-2 pr-3 font-medium">Assessed</th>
+                  <th scope="col" className="py-2 pr-3 font-medium">Review</th>
+                  <th scope="col" className="py-2 pr-3 font-medium" />
                 </tr>
               </thead>
               <tbody>
                 {pageItems.map((row, i) => (
-                  <tr key={row.siteId} className={i % 2 === 1 ? "bg-surface" : undefined}>
+                  <tr key={row.assessment.id} className={i % 2 === 1 ? "bg-surface" : undefined}>
                     <td className="py-2.5 pr-3">
                       <p className="font-medium text-ink">{row.siteName}</p>
                       <p className="font-mono tabular text-xs text-ink-faint">{row.siteId}</p>
@@ -101,6 +135,20 @@ export function AssessmentsListClient() {
                       <ConfidenceMeter tier={row.assessment.confidence} />
                     </td>
                     <td className="py-2.5 pr-3 font-mono tabular text-xs text-ink-soft">{formatDate(row.assessment.assessedAt)}</td>
+                    <td className="py-2.5 pr-3">
+                      <Badge tone={reviewTone(row.reviewStatus)}>{REVIEW_STATUS_LABEL[row.reviewStatus]}</Badge>
+                    </td>
+                    <td className="py-2.5 pr-3 text-right">
+                      {row.reviewStatus !== "not_applicable" && (
+                        <Link
+                          href={`/admin/assessments/${row.assessment.id}`}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-blue hover:underline"
+                        >
+                          <ClipboardCheck size={12} strokeWidth={1.75} />
+                          {row.reviewStatus === "pending" ? "Review" : "View"}
+                        </Link>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

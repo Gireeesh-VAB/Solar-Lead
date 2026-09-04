@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
-import { getVendorJobServer as getVendorJob } from "@/lib/api/serverFetch";
+import { getVendorJobServer as getVendorJob, orRedirectToLogin } from "@/lib/api/serverFetch";
 import { Card, PageHeader } from "@/components/ui/Primitives";
 import { formatDate } from "@/lib/utils";
 import { DisputeAction } from "./DisputeAction";
@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function VendorSubmissionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const job = await getVendorJob(id).catch(() => null);
+  const job = await orRedirectToLogin(getVendorJob(id));
   if (!job || job.status !== "submitted") notFound();
 
   const variance = job.variancePct ?? 0;

@@ -62,6 +62,11 @@ class GeoPointOut(_CamelModel):
     lng: float
 
 
+class MonthlyConsumptionEntryOut(_CamelModel):
+    month: str
+    units_kwh: float
+
+
 class BindingConstraintOut(_CamelModel):
     name: str
     reason: str
@@ -121,6 +126,21 @@ class SiteOut(_CamelModel):
     usn_status: str
     usn: str | None = None
     tags: list[str]
+    roof_type: str | None = None
+    roof_material: str | None = None
+    roof_slope: str | None = None
+    roof_construction_year: int | None = None
+    electricity_board: str | None = None
+    consumer_number: str | None = None
+    connection_type: str | None = None
+    sanctioned_load_kw: float | None = None
+    contract_demand_kva: float | None = None
+    connected_load_kw: float | None = None
+    monthly_consumption_kwh: list[MonthlyConsumptionEntryOut] = []
+    battery_required: bool | None = None
+    backup_required: bool | None = None
+    required_backup_hours: float | None = None
+    critical_loads: str | None = None
 
 
 class CompositeSiteOut(_CamelModel):
@@ -216,6 +236,21 @@ def _site_out(session: Session, site: Site, row: repo.SiteRow) -> SiteOut:
         usn_status="confirmed" if site.usn else "not_started",
         usn=site.usn.usn if site.usn else None,
         tags=row.tags or [],
+        roof_type=row.roof_type,
+        roof_material=row.roof_material,
+        roof_slope=row.roof_slope,
+        roof_construction_year=row.roof_construction_year,
+        electricity_board=row.electricity_board,
+        consumer_number=row.consumer_number,
+        connection_type=row.connection_type,
+        sanctioned_load_kw=row.sanctioned_load_kw,
+        contract_demand_kva=row.contract_demand_kva,
+        connected_load_kw=row.connected_load_kw,
+        monthly_consumption_kwh=[MonthlyConsumptionEntryOut(**e) for e in (row.monthly_consumption_kwh or [])],
+        battery_required=row.battery_required,
+        backup_required=row.backup_required,
+        required_backup_hours=row.required_backup_hours,
+        critical_loads=row.critical_loads,
     )
 
 
@@ -415,6 +450,28 @@ def get_site(
     session: Annotated[Session, Depends(get_session)],
     user: Annotated[AuthenticatedUser, Depends(current_user)],
 ) -> SiteOut:
+    """Real gap this closes: this endpoint used to be strictly
+    owner_org-scoped, so an admin (owner_org=None) or a vendor
+    (owner_org=None, tracked by vendor_id instead) could never read a
+    customer's site at all — every vendor job detail page's `getSite()`
+    call was silently failing and falling back to district/state only.
+    Admins can read any site (matches every other admin-scoped GET in
+    this codebase); a vendor can read exactly the sites they have an
+    assigned job on, nothing else."""
+    if user.role in ("admin", "vendor"):
+        try:
+            site = repo.get(session, site_id)
+        except ValueError as exc:  # malformed UUID
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "site not found") from exc
+        allowed = site is not None and (
+            user.role == "admin"
+            or (user.vendor_id is not None and vendors_repo.vendor_has_job_for_site(session, user.vendor_id, site_id))
+        )
+        if not allowed:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "site not found")
+        row = session.get(repo.SiteRow, uuid.UUID(site.id))
+        return _site_out(session, site, row)
+
     site, row = _owned_row_or_404(session, site_id, user.owner_org or "")
     return _site_out(session, site, row)
 

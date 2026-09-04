@@ -231,6 +231,16 @@ def _complete_with_canned_verdict(client, headers, monkeypatch, db_session, site
     return created["id"]
 
 
+def _assessment_for_site(db_session, site_id):
+    from sqlalchemy import select
+
+    from solarfit.repositories.assessments import AssessmentRow
+
+    return db_session.scalars(
+        select(AssessmentRow).where(AssessmentRow.site_id == site_id).order_by(AssessmentRow.created_at.desc())
+    ).first()
+
+
 def _vendor_job_for_site(db_session, site_id):
     import uuid
 
@@ -243,39 +253,49 @@ def _vendor_job_for_site(db_session, site_id):
     ).first()
 
 
-def test_survey_verdict_queues_an_unassigned_vendor_job(client, make_auth_header, monkeypatch, db_session):
+def test_survey_verdict_enters_pending_admin_review_without_a_vendor_job(
+    client, make_auth_header, monkeypatch, db_session
+):
+    """Customer -> Feasibility Check -> Admin Review -> Admin Approval ->
+    Vendor Access: completing a check never creates a vendor job by
+    itself any more (that only happens via POST /app/admin/assessments/
+    {id}/approve) — it just puts the assessment in the review queue."""
     headers = make_auth_header(role="customer", owner_org=None)
     check_id = _complete_with_canned_verdict(
         client, headers, monkeypatch, db_session, "ROOFTOP_RESIDENTIAL", "SUITABLE_SUBJECT_TO_SURVEY"
     )
 
-    job = _vendor_job_for_site(db_session, check_id)
-    assert job is not None
-    assert job.vendor_id is None
-    assert job.status == "queued"
-    assert job.payout_inr > 0
-    assert job.estimated_capacity_kwp == 4.0
+    assessment = _assessment_for_site(db_session, check_id)
+    assert assessment is not None
+    assert assessment.review_status == "pending"
+    assert _vendor_job_for_site(db_session, check_id) is None
 
 
-def test_non_survey_verdict_does_not_queue_a_vendor_job(client, make_auth_header, monkeypatch, db_session):
+def test_suitable_verdict_also_enters_pending_admin_review(client, make_auth_header, monkeypatch, db_session):
     headers = make_auth_header(role="customer", owner_org=None)
     check_id = _complete_with_canned_verdict(
         client, headers, monkeypatch, db_session, "ROOFTOP_RESIDENTIAL", "SUITABLE"
     )
 
+    assessment = _assessment_for_site(db_session, check_id)
+    assert assessment.review_status == "pending"
+
+
+def test_non_eligible_verdict_is_not_applicable_for_review(client, make_auth_header, monkeypatch, db_session):
+    headers = make_auth_header(role="customer", owner_org=None)
+    check_id = _complete_with_canned_verdict(
+        client, headers, monkeypatch, db_session, "ROOFTOP_RESIDENTIAL", "NOT_SUITABLE"
+    )
+
+    assessment = _assessment_for_site(db_session, check_id)
+    assert assessment.review_status == "not_applicable"
     assert _vendor_job_for_site(db_session, check_id) is None
 
 
-def test_survey_job_requirements_include_usn_for_billing_linked_site_type(
-    client, make_auth_header, monkeypatch, db_session
-):
-    headers = make_auth_header(role="customer", owner_org=None)
-    check_id = _complete_with_canned_verdict(
-        client, headers, monkeypatch, db_session, "ROOFTOP_RESIDENTIAL", "SUITABLE_SUBJECT_TO_SURVEY"
-    )
+def test_survey_job_requirements_include_usn_for_billing_linked_site_type():
+    from solarfit.repositories.vendors import default_survey_requirements
 
-    job = _vendor_job_for_site(db_session, check_id)
-    assert job.requirements == [
+    assert default_survey_requirements("ROOFTOP_RESIDENTIAL") == [
         "Capture boundary polygon",
         "Upload panorama photo",
         "Confirm USN via bill OCR",
@@ -283,18 +303,12 @@ def test_survey_job_requirements_include_usn_for_billing_linked_site_type(
     ]
 
 
-def test_survey_job_requirements_omit_usn_for_non_billing_linked_site_type(
-    client, make_auth_header, monkeypatch, db_session
-):
+def test_survey_job_requirements_omit_usn_for_non_billing_linked_site_type():
     # ROOFTOP_GOVT is the one RoofSiteType not in BILLING_LINKED_SITE_TYPES
     # (only ROOFTOP_RESIDENTIAL/ROOFTOP_CI are — USN-05).
-    headers = make_auth_header(role="customer", owner_org=None)
-    check_id = _complete_with_canned_verdict(
-        client, headers, monkeypatch, db_session, "ROOFTOP_GOVT", "SUITABLE_SUBJECT_TO_SURVEY"
-    )
+    from solarfit.repositories.vendors import default_survey_requirements
 
-    job = _vendor_job_for_site(db_session, check_id)
-    assert job.requirements == [
+    assert default_survey_requirements("ROOFTOP_GOVT") == [
         "Capture boundary polygon",
         "Upload panorama photo",
         "Note shading obstructions",

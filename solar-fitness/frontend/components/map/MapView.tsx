@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
+import { APIProvider, AdvancedMarker, Map, Pin, type MapMouseEvent } from "@vis.gl/react-google-maps";
 import { MapPin } from "lucide-react";
 import type { Verdict } from "@/lib/types";
 import { VERDICT_LABEL, cn } from "@/lib/utils";
@@ -21,25 +22,123 @@ const VERDICT_COLOR: Record<Verdict, string> = {
   NOT_SUITABLE: "var(--bad)",
 };
 
-const HAS_MAPS_KEY = !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+const VERDICT_HEX: Record<Verdict, string> = {
+  SUITABLE: "#16a34a",
+  SUITABLE_SUBJECT_TO_SURVEY: "#d97706",
+  CONDITIONAL: "#d97706",
+  INSUFFICIENT_DATA: "#6b7280",
+  NOT_SUITABLE: "#dc2626",
+};
 
-// Google Maps key is not provisioned in this environment. HAS_MAPS_KEY stays
-// false, so this component renders a deterministic SVG "map preview" instead
-// of crashing or showing a blank box. When a key is added to .env.local,
-// swap in @vis.gl/react-google-maps here (dynamically imported) — the pin
-// data contract (MapPinData) stays the same either way.
-export function MapView({
+const MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+const HAS_MAPS_KEY = !!MAPS_API_KEY;
+
+// AdvancedMarkerElement requires the map to have a Map ID (vector or
+// raster). We don't have a real one provisioned in Google Cloud Console
+// for this project, so we use Google's own "DEMO_MAP_ID" — documented and
+// intended for exactly this (development/testing without a configured
+// Map ID). Styling then falls back to the default Google style.
+const MAP_ID = "DEMO_MAP_ID";
+
+const DEFAULT_CENTER = { lat: 20.5937, lng: 78.9629 }; // India, used when there are no pins yet
+const DEFAULT_ZOOM = 5;
+const SINGLE_PIN_ZOOM = 15;
+
+/** Wraps children in the Google Maps API context. Use this at the top of a
+ * page that needs both MapView (with `standalone={false}`) and other
+ * Maps-powered features (e.g. `useMapsLibrary("geocoding")`) sharing the
+ * same loaded API — nesting two APIProviders is not supported. Pages that
+ * only need the map itself can skip this and use MapView's default
+ * (`standalone={true}`), which wraps itself. */
+export function MapsProvider({ children }: { children: ReactNode }) {
+  if (!HAS_MAPS_KEY) return <>{children}</>;
+  return <APIProvider apiKey={MAPS_API_KEY}>{children}</APIProvider>;
+}
+
+function boundsCenterAndZoom(pins: MapPinData[]): { center: google.maps.LatLngLiteral; zoom: number } {
+  if (pins.length === 0) return { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM };
+  if (pins.length === 1) return { center: { lat: pins[0].lat, lng: pins[0].lng }, zoom: SINGLE_PIN_ZOOM };
+  const lats = pins.map((p) => p.lat);
+  const lngs = pins.map((p) => p.lng);
+  return {
+    center: {
+      lat: (Math.min(...lats) + Math.max(...lats)) / 2,
+      lng: (Math.min(...lngs) + Math.max(...lngs)) / 2,
+    },
+    zoom: 12,
+  };
+}
+
+function LiveMap({
   pins,
-  height = 420,
-  drawEnabled = false,
-  interactive = false,
+  height,
+  interactive,
   onMove,
 }: {
   pins: MapPinData[];
-  height?: number;
-  drawEnabled?: boolean;
-  /** When true (and onMove is provided), tapping/dragging the map repositions the pin. */
-  interactive?: boolean;
+  height: number;
+  interactive: boolean;
+  onMove?: (lat: number, lng: number) => void;
+}) {
+  const { center, zoom } = useMemo(() => boundsCenterAndZoom(pins), [pins]);
+
+  const handleClick = (event: MapMouseEvent) => {
+    if (!interactive || !onMove || !event.detail.latLng) return;
+    onMove(event.detail.latLng.lat, event.detail.latLng.lng);
+  };
+
+  return (
+    <div
+      style={{ height }}
+      className={cn("overflow-hidden rounded-[var(--radius-app)] border border-line", interactive && "cursor-crosshair")}
+    >
+      <Map
+        defaultCenter={center}
+        defaultZoom={zoom}
+        center={pins.length === 1 ? center : undefined}
+        gestureHandling="greedy"
+        disableDefaultUI={false}
+        mapId={MAP_ID}
+        onClick={handleClick}
+        style={{ width: "100%", height: "100%" }}
+      >
+        {pins.map((p) => (
+          <AdvancedMarker
+            key={p.id}
+            position={{ lat: p.lat, lng: p.lng }}
+            title={p.label}
+            draggable={interactive}
+            onDragEnd={(event) => {
+              const pos = event.latLng;
+              if (pos && onMove) onMove(pos.lat(), pos.lng());
+            }}
+          >
+            <Pin
+              background={p.verdict ? VERDICT_HEX[p.verdict] : "#2563eb"}
+              borderColor="#ffffff"
+              glyphColor="#ffffff"
+            />
+          </AdvancedMarker>
+        ))}
+      </Map>
+    </div>
+  );
+}
+
+// Deterministic SVG "map preview" fallback for when no Google Maps API key
+// is configured (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) — keeps the page usable
+// instead of crashing or showing a blank box.
+function FallbackMap({
+  pins,
+  height,
+  drawEnabled,
+  interactive,
+  onMove,
+}: {
+  pins: MapPinData[];
+  height: number;
+  drawEnabled: boolean;
+  interactive: boolean;
   onMove?: (lat: number, lng: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -78,15 +177,6 @@ export function MapView({
     const result = toLatLng(clientX, clientY);
     if (result) onMove(result.lat, result.lng);
   };
-
-  if (HAS_MAPS_KEY) {
-    // Real Google Maps integration point (not reached without an API key).
-    return (
-      <div style={{ height }} className="flex items-center justify-center rounded-[var(--radius-app)] border border-line bg-surface text-sm text-ink-soft">
-        Live Google Maps would render here (@vis.gl/react-google-maps).
-      </div>
-    );
-  }
 
   return (
     <div
@@ -156,4 +246,31 @@ export function MapView({
       </div>
     </div>
   );
+}
+
+export function MapView({
+  pins,
+  height = 420,
+  drawEnabled = false,
+  interactive = false,
+  onMove,
+  standalone = true,
+}: {
+  pins: MapPinData[];
+  height?: number;
+  drawEnabled?: boolean;
+  /** When true (and onMove is provided), tapping/dragging the map repositions the pin. */
+  interactive?: boolean;
+  onMove?: (lat: number, lng: number) => void;
+  /** Set to false when the caller already wraps the page in `<MapsProvider>`
+   * (e.g. to also use `useMapsLibrary` for geocoding/search) — avoids
+   * nesting a second, unsupported APIProvider. */
+  standalone?: boolean;
+}) {
+  if (!HAS_MAPS_KEY) {
+    return <FallbackMap pins={pins} height={height} drawEnabled={drawEnabled} interactive={interactive} onMove={onMove} />;
+  }
+
+  const map = <LiveMap pins={pins} height={height} interactive={interactive} onMove={onMove} />;
+  return standalone ? <MapsProvider>{map}</MapsProvider> : map;
 }

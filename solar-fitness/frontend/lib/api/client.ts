@@ -19,6 +19,19 @@ import type {
   CalibrationProposal,
   CompositeSite,
   ConfidenceTier,
+  BatteryAssessment,
+  ConnectionType,
+  ConstraintKind,
+  ElectricalAssessment,
+  GenerationEstimate,
+  InstallationConstraints,
+  MonthlyConsumptionEntry,
+  ObstacleSurveyItem,
+  RoofMaterial,
+  RoofSlope,
+  RoofType,
+  SafetyAssessment,
+  StructuralAssessment,
   FeatureFlag,
   HistoryEvent,
   ImportJob,
@@ -238,6 +251,39 @@ export async function saveShadingNotes(jobId: string, notes: string): Promise<Ve
   return apiFetch(`/app/vendor/jobs/${jobId}/shading-notes`, { method: "PATCH", body: { notes } });
 }
 
+export async function saveObstacleSurvey(jobId: string, obstacles: ObstacleSurveyItem[]): Promise<VendorJob> {
+  return apiFetch(`/app/vendor/jobs/${jobId}/obstacles`, { method: "PATCH", body: { obstacles } });
+}
+
+export async function saveStructuralAssessment(
+  jobId: string,
+  assessment: StructuralAssessment
+): Promise<VendorJob> {
+  return apiFetch(`/app/vendor/jobs/${jobId}/structural-assessment`, { method: "PATCH", body: assessment });
+}
+
+export async function saveElectricalAssessment(
+  jobId: string,
+  assessment: ElectricalAssessment
+): Promise<VendorJob> {
+  return apiFetch(`/app/vendor/jobs/${jobId}/electrical-assessment`, { method: "PATCH", body: assessment });
+}
+
+export async function saveInstallationConstraints(
+  jobId: string,
+  constraints: InstallationConstraints
+): Promise<VendorJob> {
+  return apiFetch(`/app/vendor/jobs/${jobId}/installation-constraints`, { method: "PATCH", body: constraints });
+}
+
+export async function saveSafetyAssessment(jobId: string, assessment: SafetyAssessment): Promise<VendorJob> {
+  return apiFetch(`/app/vendor/jobs/${jobId}/safety-assessment`, { method: "PATCH", body: assessment });
+}
+
+export async function saveBatteryAssessment(jobId: string, assessment: BatteryAssessment): Promise<VendorJob> {
+  return apiFetch(`/app/vendor/jobs/${jobId}/battery-assessment`, { method: "PATCH", body: assessment });
+}
+
 export async function getVendorProfile(): Promise<VendorProfile> {
   return apiFetch("/app/vendor/profile");
 }
@@ -347,26 +393,39 @@ export async function listAdminVendorPayouts(vendorId: string): Promise<PayoutEn
   return apiFetch(`/app/admin/vendors/${vendorId}/payouts`);
 }
 
+// Customer -> Feasibility Check -> Admin Review -> Admin Approval -> Vendor
+// Access. "pending" = awaiting admin action; "not_applicable" = verdict
+// (CONDITIONAL / INSUFFICIENT_DATA / NOT_SUITABLE) never leads to vendor
+// work, so there's nothing to review.
+export type ReviewStatus = "pending" | "approved" | "rejected" | "not_applicable";
+
 export interface AdminAssessmentRow {
   siteId: string;
   siteName: string;
+  address: string | null;
   district: string;
   state: string;
+  reviewStatus: ReviewStatus;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+  assignedVendorId: string | null;
+  vendorJobId: string | null;
   assessment: Assessment;
 }
 
 export interface AssessmentListParams {
   q?: string;
   verdict?: string;
+  reviewStatus?: ReviewStatus;
   page?: number;
   pageSize?: number;
 }
 
-// The backend's admin listing has no server-side search/pagination (just
-// limit/offset) and doesn't join site name/district/state — it only has
-// site_id. Fetch a generous page, then filter/paginate client-side the same
-// way the mock always did; siteName falls back to siteId (honest — this
-// endpoint has no site name to give) and district/state are empty.
+// The backend's admin listing has no server-side search/pagination — just
+// limit/offset. Fetch a generous page, then filter/paginate client-side the
+// same way the mock always did. siteName/address/district/state and the
+// review fields are now real (joined from the sites table server-side).
 interface RawCapacityResult {
   recommended_kwp: number | null;
 }
@@ -374,6 +433,10 @@ interface RawCapacityResult {
 interface RawAdminAssessment {
   id: string;
   siteId: string;
+  siteName: string;
+  address: string | null;
+  district: string;
+  state: string;
   verdict: string;
   confidence: ConfidenceTier;
   bindingConstraint: BindingConstraint;
@@ -384,14 +447,90 @@ interface RawAdminAssessment {
   cacheHit: boolean;
   engineVersion: string;
   createdAt: string;
+  generation: GenerationEstimate | null;
+  reviewStatus: ReviewStatus;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+  assignedVendorId: string | null;
+  vendorJobId: string | null;
+}
+
+interface RawChecklistItem {
+  label: string;
+  kwp: number | null;
+  kind: ConstraintKind;
+  note: string;
+  status: "ok" | "estimated" | "insufficient_data" | "not_applicable";
+  isBinding: boolean;
+}
+
+export type GridConnectionStatus =
+  | "not_started"
+  | "application_submitted"
+  | "under_review"
+  | "approved"
+  | "connected"
+  | "rejected";
+
+export interface GridFeasibility {
+  discom?: string | null;
+  distributionArea?: string | null;
+  netMeteringAvailable?: boolean | null;
+  grossMeteringAvailable?: boolean | null;
+  applicationRequired?: boolean | null;
+  gridApprovalRequired?: boolean | null;
+  transformerCapacityKva?: number | null;
+  maxPermissibleCapacityKwp?: number | null;
+  gridConnectionStatus: GridConnectionStatus;
+  applicationReference?: string | null;
+  notes?: string | null;
+}
+
+export interface FinancialFeasibility {
+  panelCostInr?: number | null;
+  inverterCostInr?: number | null;
+  mountingStructureCostInr?: number | null;
+  dcCableCostInr?: number | null;
+  acCableCostInr?: number | null;
+  protectionEquipmentCostInr?: number | null;
+  installationCostInr?: number | null;
+  civilWorkCostInr?: number | null;
+  transportationCostInr?: number | null;
+  otherChargesInr?: number | null;
+  totalProjectCostInr?: number | null;
+  subsidyApplicable?: boolean | null;
+  subsidyCategory?: string | null;
+  subsidyAmountInr?: number | null;
+  customerContributionInr?: number | null;
+  monthlySavingsInr?: number | null;
+  annualSavingsInr?: number | null;
+  paybackPeriodYears?: number | null;
+  tenYearSavingsInr?: number | null;
+  twentyYearSavingsInr?: number | null;
+  estimatedSystemLifetimeYears?: number | null;
+  notes?: string | null;
+}
+
+interface RawAdminAssessmentDetail extends RawAdminAssessment {
+  checklist: RawChecklistItem[];
+  gridFeasibility: GridFeasibility | null;
+  financialFeasibility: FinancialFeasibility | null;
 }
 
 function toAdminAssessmentRow(raw: RawAdminAssessment): AdminAssessmentRow {
   return {
     siteId: raw.siteId,
-    siteName: raw.siteId,
-    district: "",
-    state: "",
+    siteName: raw.siteName,
+    address: raw.address,
+    district: raw.district,
+    state: raw.state,
+    reviewStatus: raw.reviewStatus,
+    reviewedBy: raw.reviewedBy,
+    reviewedAt: raw.reviewedAt,
+    rejectionReason: raw.rejectionReason,
+    assignedVendorId: raw.assignedVendorId,
+    vendorJobId: raw.vendorJobId,
     assessment: {
       id: raw.id,
       siteId: raw.siteId,
@@ -403,10 +542,26 @@ function toAdminAssessmentRow(raw: RawAdminAssessment): AdminAssessmentRow {
       ceilingLedger: [],
       panoramaUrl: raw.panoramaUrl,
       mlSuitabilityScore: raw.mlSuitabilityScore,
+      generation: raw.generation ?? undefined,
       cache: { cacheHit: raw.cacheHit },
       assessedAt: raw.createdAt,
       modelVersion: raw.engineVersion,
     },
+  };
+}
+
+export interface AdminAssessmentDetail extends AdminAssessmentRow {
+  checklist: RawChecklistItem[];
+  gridFeasibility: GridFeasibility | null;
+  financialFeasibility: FinancialFeasibility | null;
+}
+
+function toAdminAssessmentDetail(raw: RawAdminAssessmentDetail): AdminAssessmentDetail {
+  return {
+    ...toAdminAssessmentRow(raw),
+    checklist: raw.checklist,
+    gridFeasibility: raw.gridFeasibility,
+    financialFeasibility: raw.financialFeasibility,
   };
 }
 
@@ -418,15 +573,61 @@ export async function listAllAssessments(
 
   if (params.q) {
     const q = params.q.toLowerCase();
-    items = items.filter((row) => row.siteId.toLowerCase().includes(q));
+    items = items.filter(
+      (row) => row.siteName.toLowerCase().includes(q) || row.siteId.toLowerCase().includes(q) || row.district.toLowerCase().includes(q)
+    );
   }
   if (params.verdict) items = items.filter((row) => row.assessment.verdict === params.verdict);
+  if (params.reviewStatus) items = items.filter((row) => row.reviewStatus === params.reviewStatus);
 
   const total = items.length;
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? total;
   const start = (page - 1) * pageSize;
   return { items: items.slice(start, start + pageSize), total };
+}
+
+export async function getAdminAssessment(id: string): Promise<AdminAssessmentDetail> {
+  const raw = await apiFetch<RawAdminAssessmentDetail>(`/app/admin/assessments/${id}`);
+  return toAdminAssessmentDetail(raw);
+}
+
+export async function approveAssessment(
+  id: string,
+  input: { vendorId: string; deadlineDays?: number; payoutInr?: number }
+): Promise<AdminAssessmentDetail> {
+  const raw = await apiFetch<RawAdminAssessmentDetail>(`/app/admin/assessments/${id}/approve`, {
+    method: "POST",
+    body: { vendorId: input.vendorId, deadlineDays: input.deadlineDays, payoutInr: input.payoutInr },
+  });
+  return toAdminAssessmentDetail(raw);
+}
+
+export async function rejectAssessment(id: string, reason: string): Promise<AdminAssessmentDetail> {
+  const raw = await apiFetch<RawAdminAssessmentDetail>(`/app/admin/assessments/${id}/reject`, {
+    method: "POST",
+    body: { reason },
+  });
+  return toAdminAssessmentDetail(raw);
+}
+
+export async function saveGridFeasibility(id: string, feasibility: GridFeasibility): Promise<AdminAssessmentDetail> {
+  const raw = await apiFetch<RawAdminAssessmentDetail>(`/app/admin/assessments/${id}/grid-feasibility`, {
+    method: "PATCH",
+    body: feasibility,
+  });
+  return toAdminAssessmentDetail(raw);
+}
+
+export async function saveFinancialFeasibility(
+  id: string,
+  feasibility: FinancialFeasibility
+): Promise<AdminAssessmentDetail> {
+  const raw = await apiFetch<RawAdminAssessmentDetail>(`/app/admin/assessments/${id}/financial-feasibility`, {
+    method: "PATCH",
+    body: feasibility,
+  });
+  return toAdminAssessmentDetail(raw);
 }
 
 export interface AuditLogListParams {
@@ -479,6 +680,21 @@ export interface NewCheckInput {
   lat: number;
   lng: number;
   siteType?: SiteType;
+  roofType?: RoofType;
+  roofMaterial?: RoofMaterial;
+  roofSlope?: RoofSlope;
+  roofConstructionYear?: number;
+  electricityBoard?: string;
+  consumerNumber?: string;
+  connectionType?: ConnectionType;
+  sanctionedLoadKw?: number;
+  contractDemandKva?: number;
+  connectedLoadKw?: number;
+  monthlyConsumptionKwh?: MonthlyConsumptionEntry[];
+  batteryRequired?: boolean;
+  backupRequired?: boolean;
+  requiredBackupHours?: number;
+  criticalLoads?: string;
 }
 
 export async function createCheck(input: NewCheckInput): Promise<Site> {

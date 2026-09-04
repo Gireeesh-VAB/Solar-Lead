@@ -52,12 +52,19 @@ __all__ = [
     "list_submissions",
     "list_vendors",
     "remove_job",
+    "set_battery_assessment",
+    "set_electrical_assessment",
+    "set_installation_constraints",
+    "set_obstacle_survey",
     "set_panorama_photo",
+    "set_safety_assessment",
     "set_shading_notes",
+    "set_structural_assessment",
     "set_verification_status",
     "update_availability",
     "update_job_status",
     "vendor_admin_stats",
+    "vendor_has_job_for_site",
 ]
 
 
@@ -133,6 +140,34 @@ class VendorJobRow(Base):
     dispute_reason: Mapped[str | None] = mapped_column(Text(), nullable=True)
     panorama_photo_data_url: Mapped[str | None] = mapped_column(Text(), nullable=True)
     shading_notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
+
+    # In-person survey data (spec sections 3 "Roof Layout/Obstacles" and 7
+    # "Structural Assessment") — only a vendor standing on the roof can
+    # capture these, so they live on the job, not the site, and are only
+    # ever written through the vendor's own capture endpoints
+    # (routers/app_vendor.py's set_obstacle_survey/set_structural_assessment).
+    # JSONB rather than new tables — same tradeoff this schema already
+    # makes for requirements/service_area/documents/capacity/vision_refinement:
+    # each item's shape is this feature's own concern, not a cross-team
+    # frozen contract, so it doesn't need a normalized table + migration
+    # every time a field is added.
+    obstacle_survey: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    structural_assessment: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Spec section 8's physical half (meter/DB photos, earthing, lightning
+    # protection) — the customer-reportable half (board/consumer number/
+    # sanctioned load) lives on sites instead, set at check creation.
+    electrical_assessment: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Spec sections 12 "Installation Constraints" and 13 "Safety
+    # Assessment" — both entirely vendor-in-person checks, same pattern.
+    installation_constraints: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    safety_assessment: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Spec section 14's physical half — battery room/location/
+    # ventilation/fire safety plus the vendor's own capacity/technology
+    # recommendation from the actual site. The customer's own interest/
+    # need (battery_required/backup_required/required_backup_hours/
+    # critical_loads) lives on sites instead.
+    battery_assessment: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -313,6 +348,33 @@ def get_accuracy_history(session: Session, vendor_id: str | uuid.UUID) -> list[V
 # --------------------------------------------------------------------- #
 
 
+# Survey-job defaults — shared by routers/app_assessments.py's admin
+# approve_assessment() (the only place a vendor_jobs row gets created now;
+# see that router's module docstring for why this moved out of
+# routers/app_checks.py::complete_check()).
+_BOUNDARY_REQ = "Capture boundary polygon"
+_USN_REQ = "Confirm USN via bill OCR"
+_PANORAMA_REQ = "Upload panorama photo"
+_SHADING_REQ = "Note shading obstructions"
+DEFAULT_SURVEY_DEADLINE_DAYS = 3
+MIN_SURVEY_PAYOUT_INR = 800
+PAYOUT_PER_KWP_INR = 350
+
+
+def default_survey_requirements(site_type: str) -> list[str]:
+    from solarfit.domain.site import BILLING_LINKED_SITE_TYPES
+
+    requirements = [_BOUNDARY_REQ, _PANORAMA_REQ]
+    if site_type in BILLING_LINKED_SITE_TYPES:
+        requirements.append(_USN_REQ)
+    requirements.append(_SHADING_REQ)
+    return requirements
+
+
+def default_survey_payout_inr(estimated_capacity_kwp: float | None) -> float:
+    return max(MIN_SURVEY_PAYOUT_INR, round((estimated_capacity_kwp or 3) * PAYOUT_PER_KWP_INR))
+
+
 def create_job(
     session: Session,
     *,
@@ -323,12 +385,21 @@ def create_job(
     payout_inr: float,
     estimated_capacity_kwp: float | None,
     deadline: datetime,
+    vendor_id: str | uuid.UUID | None = None,
+    status: str = "queued",
 ) -> VendorJobRow:
-    """Queues an unassigned (vendor_id=None) job — nothing here decides
-    which vendor picks it up, that's the existing accept flow. status
-    defaults to "queued" via the column default."""
+    """Creates a survey job. vendor_id=None (the default) was historically
+    "unassigned, pick this up later" but nothing ever implemented that
+    pickup path — GET /app/vendor/jobs only ever returns jobs already
+    scoped to the caller's own vendor_id, so an unassigned row was
+    permanently invisible. routers/app_assessments.py's approve_assessment()
+    is now the only caller that matters in practice, and it always passes
+    a real vendor_id (the admin's explicit choice) so the row is visible
+    to that vendor immediately."""
     row = VendorJobRow(
         site_id=uuid.UUID(str(site_id)),
+        vendor_id=uuid.UUID(str(vendor_id)) if vendor_id is not None else None,
+        status=status,
         district=district,
         state=state,
         deadline=deadline,
@@ -360,6 +431,17 @@ def list_jobs(
     else:
         stmt = stmt.order_by(VendorJobRow.deadline)
     return list(session.scalars(stmt))
+
+
+def vendor_has_job_for_site(session: Session, vendor_id: str | uuid.UUID, site_id: str | uuid.UUID) -> bool:
+    """GET /app/sites/{id} is owner_org-scoped (a vendor has none) — this
+    is the narrow exception that lets a vendor read the one site they
+    actually have an assigned job on, without opening site reads up to
+    every vendor for every site."""
+    stmt = select(VendorJobRow.id).where(
+        VendorJobRow.vendor_id == uuid.UUID(str(vendor_id)), VendorJobRow.site_id == uuid.UUID(str(site_id))
+    )
+    return session.scalars(stmt).first() is not None
 
 
 def get_job(session: Session, job_id: str | uuid.UUID, vendor_id: str | uuid.UUID) -> VendorJobRow | None:
@@ -427,6 +509,75 @@ def set_shading_notes(
     if row is None:
         return None
     row.shading_notes = notes
+    session.flush()
+    return row
+
+
+def set_obstacle_survey(
+    session: Session, job_id: str | uuid.UUID, vendor_id: str | uuid.UUID, *, obstacles: list[dict]
+) -> VendorJobRow | None:
+    """Replaces the whole list — the vendor's capture UI submits its
+    current in-memory list on every save, same replace-not-patch
+    semantics as update_availability()/set_shading_notes() above."""
+    row = get_job(session, job_id, vendor_id)
+    if row is None:
+        return None
+    row.obstacle_survey = obstacles
+    session.flush()
+    return row
+
+
+def set_structural_assessment(
+    session: Session, job_id: str | uuid.UUID, vendor_id: str | uuid.UUID, *, assessment: dict
+) -> VendorJobRow | None:
+    row = get_job(session, job_id, vendor_id)
+    if row is None:
+        return None
+    row.structural_assessment = assessment
+    session.flush()
+    return row
+
+
+def set_electrical_assessment(
+    session: Session, job_id: str | uuid.UUID, vendor_id: str | uuid.UUID, *, assessment: dict
+) -> VendorJobRow | None:
+    row = get_job(session, job_id, vendor_id)
+    if row is None:
+        return None
+    row.electrical_assessment = assessment
+    session.flush()
+    return row
+
+
+def set_installation_constraints(
+    session: Session, job_id: str | uuid.UUID, vendor_id: str | uuid.UUID, *, constraints: dict
+) -> VendorJobRow | None:
+    row = get_job(session, job_id, vendor_id)
+    if row is None:
+        return None
+    row.installation_constraints = constraints
+    session.flush()
+    return row
+
+
+def set_safety_assessment(
+    session: Session, job_id: str | uuid.UUID, vendor_id: str | uuid.UUID, *, assessment: dict
+) -> VendorJobRow | None:
+    row = get_job(session, job_id, vendor_id)
+    if row is None:
+        return None
+    row.safety_assessment = assessment
+    session.flush()
+    return row
+
+
+def set_battery_assessment(
+    session: Session, job_id: str | uuid.UUID, vendor_id: str | uuid.UUID, *, assessment: dict
+) -> VendorJobRow | None:
+    row = get_job(session, job_id, vendor_id)
+    if row is None:
+        return None
+    row.battery_assessment = assessment
     session.flush()
     return row
 
