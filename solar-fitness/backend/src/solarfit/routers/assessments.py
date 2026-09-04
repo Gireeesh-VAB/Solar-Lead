@@ -38,6 +38,7 @@ solarfit.packs.{universal,rooftop} + engine.resolver + engine.generation
 repositories.calibration (this person's own modules).
 """
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -61,6 +62,8 @@ from solarfit.repositories import analysis_cache as analysis_cache_repo
 from solarfit.repositories import calibration
 from solarfit.repositories import sites as sites_repo
 from solarfit.workers.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/assessments", tags=["assessments"])
 
@@ -224,8 +227,17 @@ def orchestrate_assessment(site_id: str, owner_org: str | None = None) -> Assess
 
     # ML-01 training-sample capture — wired in for real (was flagged
     # "not called by anything yet" when engine/ml_score.py was built).
+    # ML-01 is additive metadata by contract, so nothing here may fail the
+    # assessment. The weather lookup in particular is an external call
+    # that does go down (Open-Meteo timed out 1 call in 3 while this was
+    # written), and a training sample is not worth a customer's verdict.
+    weather = None
     if fitness_result.score is not None:
-        weather = weather_provider.fetch_weather(lat, lng)
+        try:
+            weather = weather_provider.fetch_weather(lat, lng)
+        except Exception:
+            logger.warning("Weather unavailable — skipping ML capture", exc_info=True)
+    if fitness_result.score is not None and weather is not None:
         ml_score_engine.record_training_sample(
             site.id,
             analysis.boundary,

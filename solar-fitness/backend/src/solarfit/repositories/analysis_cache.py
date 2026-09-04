@@ -320,7 +320,17 @@ def get_or_create_analysis(
         fallback={"status": "insufficient_data", "obstacles": []},
     )
 
-    weather = fetch_weather(lat=lat, lng=lng)
+    # A weather snapshot is metadata on the cache row, not an input to the
+    # verdict — engine/generation.py fetches its own and already degrades
+    # to a fallback constant when the provider is down. Letting a blip
+    # here raise took the whole assessment with it: measured 1 in 3
+    # Open-Meteo calls timing out, and the customer saw "We couldn't
+    # finish this check" because of a temperature lookup.
+    try:
+        weather = fetch_weather(lat=lat, lng=lng)
+    except Exception:
+        logger.warning("Weather unavailable — caching analysis without it", exc_info=True)
+        weather = None
 
     # VIZ-05 — real Celery dispatch, never inline, and only when the
     # panorama is switched on at all (see the pack's panorama_enabled).

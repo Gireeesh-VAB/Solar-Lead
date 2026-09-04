@@ -137,6 +137,7 @@ export function MapView({
   center,
   solarPanels,
   roofObstacles,
+  roofBoundary,
 }: {
   pins: MapPinData[];
   height?: number;
@@ -152,6 +153,8 @@ export function MapView({
   solarPanels?: SolarPanelPolygon[];
   /** OBS-04 obstacles applied to this roof. Same rule: empty draws nothing. */
   roofObstacles?: RoofObstaclePolygon[];
+  /** The detected roof footprint, outlined. */
+  roofBoundary?: { lat: number; lng: number }[];
 }) {
   const [dragPos, setDragPos] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -258,10 +261,13 @@ export function MapView({
               Rendered only when panels actually came back — an absent
               layout shows the plain satellite view, never stand-in
               rectangles. */}
-          {((solarPanels?.length ?? 0) > 0 || (roofObstacles?.length ?? 0) > 0) && (
+          {((solarPanels?.length ?? 0) > 0 ||
+            (roofObstacles?.length ?? 0) > 0 ||
+            (roofBoundary?.length ?? 0) > 0) && (
             <SolarPanelOverlay
               panels={solarPanels ?? []}
               obstacles={roofObstacles ?? []}
+              roofBoundary={roofBoundary}
             />
           )}
 

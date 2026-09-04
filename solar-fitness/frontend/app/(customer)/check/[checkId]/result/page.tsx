@@ -82,6 +82,7 @@ export default async function ResultPage({ params }: { params: Promise<{ checkId
             label: check.name,
             verdict: assessment.verdict,
           }}
+          roofBoundary={check.boundary}
           height={300}
         />
         <p className="mt-1.5 flex items-center gap-1 text-xs text-ink-faint">

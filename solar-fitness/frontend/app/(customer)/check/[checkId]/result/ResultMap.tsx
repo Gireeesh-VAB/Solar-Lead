@@ -16,10 +16,14 @@ import { useCheckObstacles, useCheckSolarLayout } from "@/lib/query/hooks";
 export function ResultMap({
   checkId,
   pin,
+  roofBoundary,
   height = 300,
 }: {
   checkId: string;
   pin: MapPinData;
+  /** The roof GEO-04 detected, from the check itself. Outlined on the map
+   *  so the panels can be read as belonging to a specific footprint. */
+  roofBoundary?: { lat: number; lng: number }[];
   height?: number;
 }) {
   const { data, isLoading, isError } = useCheckSolarLayout(checkId);
@@ -30,7 +34,13 @@ export function ResultMap({
 
   return (
     <div>
-      <MapView pins={[pin]} height={height} solarPanels={panels} roofObstacles={obstacles} />
+      <MapView
+        pins={[pin]}
+        height={height}
+        solarPanels={panels}
+        roofObstacles={obstacles}
+        roofBoundary={roofBoundary}
+      />
 
       {/* The overlay's own caption. Google's panel count is NOT the system
           size shown above — that is P2's figure, reached a different way,
@@ -39,6 +49,14 @@ export function ResultMap({
         <p className="mt-1.5 flex items-center gap-1.5 text-xs text-ink-faint">
           <Loader2 size={12} strokeWidth={1.75} className="animate-spin" aria-hidden="true" />
           Loading panel layout…
+        </p>
+      )}
+
+      {roofBoundary && roofBoundary.length >= 3 && (
+        <p className="mt-1.5 text-xs text-ink-faint">
+          The cyan outline is the roof we detected — panels are placed inside it. On tall
+          buildings it can look slightly offset from the photo, because the satellite imagery
+          and the roof data were captured on different dates.
         </p>
       )}
 
