@@ -23,7 +23,12 @@ from solarfit.engine.area import compute_usable_area_m2, compute_usable_roof
 from solarfit.engine.projection import to_metric
 
 ORIGIN_LNG, ORIGIN_LAT = 78.4867, 17.3850
-PARAMS = {"edge_setback_m": 0.5, "utilisation_factor": 0.7}
+PARAMS = {
+    "edge_setback_m": 0.5,
+    "parapet_setback_m": 0,
+    "obstacle_setback_m": 0,
+    "utilisation_factor": 0.7,
+}
 
 
 def _square_4326(side_m: float, *, offset_m: tuple[float, float] = (0.0, 0.0)) -> dict:

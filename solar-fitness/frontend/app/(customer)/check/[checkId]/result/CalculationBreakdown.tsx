@@ -9,10 +9,24 @@
 // recalculated in this component, and nothing is invented: an assessment
 // that carries no ledger renders nothing at all.
 
-import { useState } from "react";
-import { ChevronDown } from "lucide-react";
-import type { Assessment, CeilingLedgerEntry } from "@/lib/types";
+import { TechnicalDetails } from "@/components/ui/TechnicalDetails";
+import type { Assessment, CeilingLedgerEntry, ConditionCode } from "@/lib/types";
+import { humanizeLabel } from "@/lib/simpleLanguage";
 import { formatKwp } from "@/lib/utils";
+
+// Phase 6 — which condition codes are worth a homeowner's attention here.
+// WRONG_BUILDING_RETURNED already has its own amber banner higher up the
+// result page (page.tsx reads assessment.boundaryWarning directly); the
+// two MISSING_* codes only ever accompany an INSUFFICIENT_DATA verdict,
+// already explained by VERDICT_EXPLAINER — repeating them here would be
+// the same sentence twice.
+const CONDITION_LABEL: Partial<Record<ConditionCode, string>> = {
+  HIGH_SHADING: "Significant shading detected",
+  SHADING_DATA_UNAVAILABLE: "Shading couldn't be assessed",
+  GATE_FAILED: "A hard requirement wasn't met",
+  GATE_PENDING: "Awaiting confirmation",
+  NO_SOLAR_API_COVERAGE: "No automatic roof data at this location",
+};
 
 // Substation-level headroom. Real, and useful to a grid engineer, but
 // meaningless to a homeowner — and a 2,000 kWp row beside a 4 kWp
@@ -58,8 +72,6 @@ function statusNote(entry: CeilingLedgerEntry): string {
 }
 
 export function CalculationBreakdown({ assessment }: { assessment: Assessment }) {
-  const [open, setOpen] = useState(false);
-
   const ledger = (assessment.ceilingLedger ?? []).filter(
     (entry) => !HIDDEN_FROM_HOMEOWNERS.has(entry.label)
   );
@@ -68,10 +80,11 @@ export function CalculationBreakdown({ assessment }: { assessment: Assessment })
   const recommended = assessment.capacityKwp;
   const headroom = assessment.headroomKwp;
   const binding = assessment.bindingConstraint?.name ?? null;
+  const conditions = (assessment.conditions ?? []).filter((c) => CONDITION_LABEL[c.code]);
 
   // An older assessment predating the ledger has nothing to explain.
   // Rendering an empty shell would be worse than rendering nothing.
-  if (!usableArea && !maxKwp && ledger.length === 0) return null;
+  if (!usableArea && !maxKwp && ledger.length === 0 && conditions.length === 0) return null;
 
   const hasBill = ledger.some(
     (entry) => entry.label === "consumption_offset" && entry.status === "ok"
@@ -110,61 +123,69 @@ export function CalculationBreakdown({ assessment }: { assessment: Assessment })
         </p>
       )}
 
-      {ledger.length > 0 && (
-        <>
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            aria-expanded={open}
-            className="mt-3 flex items-center gap-1 text-xs font-medium text-blue hover:underline"
-          >
-            <ChevronDown
-              size={13}
-              strokeWidth={2}
-              className={`transition-transform ${open ? "rotate-180" : ""}`}
-              aria-hidden="true"
-            />
-            {open ? "Hide calculation details" : "View calculation details"}
-          </button>
+      {conditions.length > 0 && (
+        <ul className="mt-2.5 space-y-1">
+          {conditions.map((condition, i) => (
+            <li key={i} className="text-xs text-ink-soft">
+              <span className="font-medium text-ink">{CONDITION_LABEL[condition.code]}</span>
+              {": "}
+              {condition.message}
+            </li>
+          ))}
+        </ul>
+      )}
 
-          {open && (
-            <div className="mt-2.5 space-y-2 border-t border-line pt-2.5">
-              <p className="text-xs text-ink-faint">
-                We work out every limit that applies, then recommend the smallest.
-              </p>
-              {ledger.map((entry) => (
-                <div
-                  key={entry.label}
-                  className="flex items-start justify-between gap-3 text-sm"
-                >
-                  <div className="min-w-0">
-                    <p className="text-ink">
-                      {CONSTRAINT_LABEL[entry.label] ?? entry.label}
-                      {entry.isBinding && (
-                        <span
-                          className="ml-2 rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold uppercase"
-                          style={{ background: "var(--warn)", color: "#fff" }}
-                        >
-                          Deciding limit
-                        </span>
-                      )}
-                    </p>
-                    <p className="mt-0.5 text-xs text-ink-faint">{statusNote(entry)}</p>
+      {ledger.length > 0 && (
+        <TechnicalDetails label="Calculation details">
+          <div className="space-y-3.5">
+            <p className="text-xs text-ink-faint">
+              We work out every limit that applies, then recommend the smallest.
+            </p>
+            {(() => {
+              const maxKwpInLedger = Math.max(0, ...ledger.map((e) => e.kwp ?? 0));
+              return ledger.map((entry) => {
+                const barPct = maxKwpInLedger > 0 && entry.kwp != null ? (entry.kwp / maxKwpInLedger) * 100 : null;
+                return (
+                  <div key={entry.label}>
+                    <div className="flex items-start justify-between gap-3 text-sm">
+                      <div className="min-w-0">
+                        <p className="text-ink">
+                          {CONSTRAINT_LABEL[entry.label] ?? humanizeLabel(entry.label)}
+                          {entry.isBinding && (
+                            <span
+                              className="ml-2 rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold uppercase"
+                              style={{ background: "var(--warn)", color: "#fff" }}
+                            >
+                              Deciding limit
+                            </span>
+                          )}
+                        </p>
+                        <p className="mt-0.5 text-xs text-ink-faint">{statusNote(entry)}</p>
+                      </div>
+                      {/* Never 0 kWp for an unevaluated limit — that would
+                          claim the opposite of "we haven't checked yet". */}
+                      <span className="shrink-0 font-mono text-sm tabular-nums text-ink-soft">
+                        {entry.kwp == null ? "—" : formatKwp(entry.kwp)}
+                      </span>
+                    </div>
+                    {barPct != null && (
+                      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-2)]">
+                        <div
+                          className="h-full rounded-full transition-[width] duration-500"
+                          style={{ width: `${Math.max(barPct, 3)}%`, background: entry.isBinding ? "var(--amber)" : "var(--blue-soft)" }}
+                        />
+                      </div>
+                    )}
                   </div>
-                  {/* Never 0 kWp for an unevaluated limit — that would
-                      claim the opposite of "we haven't checked yet". */}
-                  <span className="shrink-0 font-mono text-sm tabular-nums text-ink-soft">
-                    {entry.kwp == null ? "—" : formatKwp(entry.kwp)}
-                  </span>
-                </div>
-              ))}
-              <p className="pt-1 text-[11px] text-ink-faint">
-                Estimates use our standard assumptions for panel density and electricity tariff. A
-                site survey confirms the final figures.
-              </p>
-            </div>
-          )}
-        </>
+                );
+              });
+            })()}
+            <p className="pt-1 text-[11px] text-ink-faint">
+              Estimates use our standard assumptions for panel density and electricity tariff. A
+              site survey confirms the final figures.
+            </p>
+          </div>
+        </TechnicalDetails>
       )}
     </div>
   );

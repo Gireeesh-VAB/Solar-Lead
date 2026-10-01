@@ -22,6 +22,25 @@ cache_precision: 5
 # projected CRS. Placeholder.
 edge_setback_m: 0.5
 
+# Stacks with edge_setback_m as one combined inward buffer on the roof
+# boundary. Deliberately a SEPARATE, independently-tunable coefficient
+# rather than folded into edge_setback_m — but applied the same
+# uniform-across-the-whole-boundary way: nothing in this pipeline's real
+# data sources reports where a parapet wall actually stands versus a
+# bare roof edge, so this is a documented simplification, not a claim
+# of per-edge parapet detection. 0.3m is a placeholder clearance for a
+# low parapet wall a technician still needs to step around.
+parapet_setback_m: 0.3
+
+# Real physical clearance around each detected obstacle (water tank,
+# HVAC unit, vent, ...) — buffers OUT the obstacle's own polygon before
+# it's subtracted from the usable roof, so a panel can't be installed
+# flush against an obstacle's base. Previously zero (obstacles were
+# only ever subtracted at their exact detected footprint). 0.3m is a
+# placeholder — a technician's minimum walk-around clearance, not a
+# structural or electrical code figure.
+obstacle_setback_m: 0.3
+
 # CON-07 — minimum viable system size, kWp, below which a site is gated
 # out regardless of other ceilings. Placeholder.
 minimum_viable_kwp: 1.0
@@ -51,6 +70,10 @@ auto_apply_confidence_threshold: 0.85
 # gets the full factor). Placeholder. Read by Person 2's engine/generation.py.
 shading_derate_factor: 1.0
 
+# GEN-04 — system loss % passed to PVGIS's PVcalc `loss` param (wiring,
+# cabling, soiling, inverter, etc.). 14% is PVGIS's own conventional default.
+pvgis_system_loss_pct: 14.0
+
 # VIS-04 — below this self-reported confidence, a vision-refinement
 # response is treated as insufficient_data rather than trusted.
 # Placeholder. Read by Person 3's providers/vision.py.
@@ -74,6 +97,21 @@ max_obstacle_area_fraction_of_boundary: 0.5
 # still synchronous, so this bounds how long one request can block.
 # Placeholder.
 async_task_timeout_s: 30
+
+# repositories/vendors.py::sweep_vendor_job_sla() — hours before a
+# vendor job's deadline at which it's flagged "sla_at_risk" (the
+# assigned vendor still owns it, this is only an early warning, not a
+# reassignment). 24h is a placeholder: enough runway for a vendor to
+# notice and act before a queued lead actually passes to someone else.
+vendor_sla_at_risk_window_hours: 24
+
+# repositories/vendors.py::sweep_vendor_job_sla() — days a reassigned
+# lead's fresh deadline is set out from the moment it passes to the
+# next eligible vendor. Deliberately separate from
+# ApproveAssessmentRequest.deadline_days (the admin's original offer
+# window) — the next vendor in line need not get the same runway.
+# Placeholder.
+vendor_lead_reassignment_extension_days: 2
 
 # VIZ-01 — points per side of the elevation grid sampled from the DSM
 # crop before triangulation; higher = finer mesh, more triangles.
@@ -197,6 +235,51 @@ panel_packing:
   default_tilt_deg: 15.0
   default_azimuth_deg: 180.0
 
+# GEO-04's real-outline upgrade — vectorising the Solar API building mask
+# (dataLayers maskUrl, a 0.1m-resolution binary raster) into a roof
+# polygon, instead of storing the boundingBox rectangle.
+roof_mask:
+  # Disconnected mask regions smaller than this are dropped as noise
+  # (an isolated pixel cluster from a neighbouring rooftop caught at the
+  # query radius edge, an antenna's own tiny mask blob) rather than kept
+  # as a second "building".
+  min_region_m2: 4.0
+  # Pixel-stairstep smoothing (Shapely simplify, preserve_topology=True).
+  # Small relative to a panel (~1m x 1.9m) — enough to remove raster
+  # staircasing along a straight edge without rounding off a real corner.
+  simplify_tolerance_m: 0.3
+  # How far the query pin may sit from the nearest mask region and still
+  # count as "this building" (the pin can legitimately land a little off
+  # the true roof edge). Beyond this, nothing in the mask is trusted to
+  # be the intended building and extraction reports "no match" rather
+  # than guessing.
+  max_pin_distance_m: 15.0
+
+# GEO-10 — /check/start's Locate-step roof-segment matching
+# (providers/solar_api.py::match_roof_segment). Solar API's per-segment
+# roofSegmentStats[] exposes only an axis-aligned boundingBox, never the
+# real plane outline, and that boundingBox is itself an independent
+# Google measurement from the same imagery capture as the rest of
+# roofSegmentStats — it can sit a few metres off from where the roof
+# looks like it is on the map tiles the customer taps against, purely
+# from Google's own geometry/imagery registration, not from any bug
+# here. A pin just outside the bbox by less than this tolerance still
+# counts as a genuine match ("tolerated_contains") instead of falling
+# all the way to "nearest" (and therefore "low" confidence).
+#
+# Deliberately far more conservative than roof_mask.max_pin_distance_m
+# above (15m) — that value governs a much coarser question ("is there
+# any building mask blob near the pin at all"), where this one governs
+# whether an already-generous rectangle should be trusted as a precise
+# match. 5m absorbs ordinary GPS/registration jitter without bridging
+# to a distinct neighbouring roof in dense rooftop rows. Raised from an
+# initial 3m to 5m on operator request after field testing; still
+# deliberately NOT widened to swallow every observed case — a
+# real-world offset can exceed even this (an investigated example
+# measured ~11m) and correctly falls back to "nearest" rather than
+# being forced to a confident match it hasn't earned.
+roof_segment_match_tolerance_m: 5.0
+
 # CON-07 — usable-area-to-capacity conversion, kWp per m^2 of usable roof
 # area, used by packs/universal.py. ~0.2 kWp/m2 (200 Wp/m2) is a typical
 # rooftop panel-density placeholder pending real panel-spec tuning.
@@ -290,6 +373,13 @@ fitness_verdict_thresholds:
   suitable_subject_to_survey: 0.55
   conditional: 0.35
 
+# Phase 6 — a present `shading` component at or below this raw score
+# (0..1, higher = less shaded) surfaces an explicit HIGH_SHADING
+# condition. Same 0.35 cutoff as the "conditional" verdict threshold is
+# a coincidence of both being "meaningfully below average", not a
+# derived relationship — tune independently.
+fitness_high_shading_threshold: 0.35
+
 # FIT-01 capacity_adequacy component — capacity.recommended_kwp is scored
 # against (this multiple x minimum_viable_kwp), clamped to [0, 1].
 # Placeholder.
@@ -310,10 +400,20 @@ fitness_confidence_weights:
   calibration_state: 0.15
 
 # FIT-04 imagery_recency sub-component — full confidence (1.0) at/below
-# this age in days, linearly decaying to 0.0 at
-# fitness_imagery_recency_zero_score_days. Placeholder.
+# this age in days, decaying to fitness_imagery_recency_floor_score by
+# fitness_imagery_recency_zero_score_days (the name predates the floor:
+# it now marks where the curve BOTTOMS OUT, not where it hits zero — old
+# imagery should still cost confidence, never enough on its own to read
+# as "no confidence at all"). Between the two, the curve steps through
+# fitness_imagery_recency_intermediate_points — (age_days, score) pairs
+# it passes through exactly, sorted ascending by age — rather than one
+# straight line all the way down. Placeholder.
 fitness_imagery_recency_full_score_days: 180
 fitness_imagery_recency_zero_score_days: 730
+fitness_imagery_recency_intermediate_points:
+  - [365, 0.90]
+  - [540, 0.80]
+fitness_imagery_recency_floor_score: 0.70
 
 # CAL-02 — field-survey vs. remote usable-area variance (fraction, e.g.
 # 0.15 = 15%) above which a calibration record is flagged and the remote
@@ -360,4 +460,39 @@ ml_cv_max_folds: 5
 # ML-01 — fraction of site_id groups held out as the final test split
 # for the promotion-vs-baseline comparison. Placeholder.
 ml_test_split_fraction: 0.2
+
+# FIN-01 — engine/financials.py's cost estimate, INR per kWp of
+# recommended capacity. A blended placeholder split (roughly current
+# Indian rooftop market rates as of writing, ~50-60k INR/kWp all-in),
+# NOT a real vendor quote — see FinancialFeasibilityOut's own docstring
+# for the distinction between this engine ESTIMATE and an admin-entered
+# real quote. Replace with region/vendor-specific pricing before this
+# drives anything but an indicative figure.
+installation_cost_inr_per_kwp:
+  panel: 28000.0
+  inverter: 8000.0
+  mounting_structure: 6000.0
+  electrical_material: 5000.0
+  installation_labor: 8000.0
+
+# FIN-01 — central subsidy scheme approximation (shaped after PM Surya
+# Ghar's structure: per-kWp amount, capped both per-kWp-capacity and in
+# absolute INR, residential-only). Placeholder rates — real scheme
+# amounts vary by state/revision and should replace this before a
+# customer-facing number is treated as a quote rather than an estimate.
+subsidy_scheme:
+  name: "Central Government Rooftop Solar Subsidy Scheme"
+  eligible_site_types: ["ROOFTOP_RESIDENTIAL"]
+  inr_per_kwp: 18000.0
+  max_capacity_kwp: 3.0
+  max_amount_inr: 78000.0
+
+# FIN-01 — annual panel output decay applied when projecting 10/20-year
+# savings from the current year's annual_savings_inr figure. Placeholder,
+# typical crystalline-silicon panel warranty degradation.
+panel_degradation_pct_per_year: 0.5
+
+# FIN-01 — assumed system lifetime for the "estimated_system_lifetime_
+# years" figure shown beside 10/20-year savings. Placeholder.
+system_lifetime_years: 25.0
 

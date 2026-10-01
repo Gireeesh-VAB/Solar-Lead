@@ -337,14 +337,6 @@ export const MOCK_VENDOR_PROFILE: VendorProfile = {
   },
   availability: true,
   accuracyScore: 87,
-  accuracyTrend: [
-    { label: "W1", score: 79 },
-    { label: "W2", score: 81 },
-    { label: "W3", score: 84 },
-    { label: "W4", score: 83 },
-    { label: "W5", score: 86 },
-    { label: "W6", score: 87 },
-  ],
   payoutMethod: {
     type: "UPI",
     maskedAccount: "sriven***@okhdfcbank",
@@ -356,6 +348,9 @@ export const MOCK_VENDOR_PROFILE: VendorProfile = {
     "insurance-coverage-2026.pdf",
   ],
   joinedAt: daysAgo(410),
+  legalName: "Sri Venkata Field Surveys Pvt Ltd",
+  contactPhone: "+91 98765 43210",
+  contactEmail: "vendor@test.local",
 };
 
 export const MOCK_VENDOR_PAYOUTS: PayoutEntry[] = [

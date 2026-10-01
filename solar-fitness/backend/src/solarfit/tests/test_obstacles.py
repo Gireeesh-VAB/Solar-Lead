@@ -98,7 +98,9 @@ def test_apply_or_flag_splits_by_confidence_threshold():
     _, kwargs = new_version.call_args
     assert kwargs["source"] == "obstacle_detection"
     assert kwargs["applied_obstacle_ids"] == [above.id]
-    assert kwargs["applied_obstacle_polygons"] == {above.id: above.bounding_polygon}
+    assert kwargs["applied_obstacle_polygons"] == {
+        above.id: {"polygon": above.bounding_polygon, "type": above.type, "confidence": above.confidence}
+    }
     recompute.assert_called_once()
     force_refresh.assert_called_once()
 

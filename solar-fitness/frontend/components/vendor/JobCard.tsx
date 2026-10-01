@@ -18,10 +18,10 @@ function deadlineLabel(deadline: string): string {
 
 export function JobCard({ job }: { job: VendorJob }) {
   return (
-    <Card className="flex flex-col gap-3 p-4">
+    <Card interactive className="flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <Link href={`/vendor/jobs/${job.id}`} className="font-medium text-ink hover:text-teal">
+          <Link href={`/vendor/jobs/${job.id}`} className="font-medium text-ink hover:text-brand">
             {job.siteName}
           </Link>
           <p className="mt-0.5 text-xs text-ink-soft">{siteTypeLabel(job.siteType)}</p>
@@ -42,7 +42,7 @@ export function JobCard({ job }: { job: VendorJob }) {
       </div>
 
       <div className="flex items-center justify-end border-t border-line pt-3">
-        <Link href={`/vendor/jobs/${job.id}`} className="text-sm text-teal hover:underline">
+        <Link href={`/vendor/jobs/${job.id}`} className="text-sm text-brand hover:underline">
           View job
         </Link>
       </div>

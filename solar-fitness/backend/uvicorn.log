@@ -1,345 +1,771 @@
-INFO:     Started server process [6724]
+INFO:     Started server process [3080137]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-INFO:     127.0.0.1:59213 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64345 - "OPTIONS /app/auth/signup HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64345 - "POST /app/auth/signup HTTP/1.1" 201 Created
-INFO:     127.0.0.1:64345 - "OPTIONS /app/customer/profile HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62758 - "PATCH /app/customer/profile HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51435 - "GET /app/checks HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62758 - "OPTIONS /app/checks HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64345 - "POST /app/checks HTTP/1.1" 201 Created
-INFO:     127.0.0.1:64345 - "OPTIONS /app/checks/5b37298d-9617-4325-848b-0023d3c0e3fd/complete HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50295 - "POST /app/checks/5b37298d-9617-4325-848b-0023d3c0e3fd/complete HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62308 - "GET /app/checks/5b37298d-9617-4325-848b-0023d3c0e3fd HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57011 - "OPTIONS /app/auth/signup HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57011 - "POST /app/auth/signup HTTP/1.1" 201 Created
-INFO:     127.0.0.1:57011 - "OPTIONS /app/customer/profile HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50640 - "PATCH /app/customer/profile HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59318 - "GET /app/checks HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50640 - "OPTIONS /app/checks HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57011 - "POST /app/checks HTTP/1.1" 201 Created
-INFO:     127.0.0.1:57011 - "OPTIONS /app/checks/ed8b4c6b-e742-48d8-a82a-6c3ab7e6504c/complete HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50640 - "POST /app/checks/ed8b4c6b-e742-48d8-a82a-6c3ab7e6504c/complete HTTP/1.1" 500 Internal Server Error
-ERROR:    Exception in ASGI application
-Traceback (most recent call last):
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\celery\backends\asynchronous.py", line 397, in _wait_for_pending
-    for _ in self.drain_events_until(
-             ~~~~~~~~~~~~~~~~~~~~~~~^
-            result.on_ready, timeout=timeout,
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-            on_interval=on_interval):
-            ^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\celery\backends\asynchronous.py", line 86, in drain_events_until
-    raise socket.timeout()
-TimeoutError
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
-    result = await app(  # type: ignore[func-returns-value]
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        self.scope, self.receive, self.send
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
-    return await self.app(scope, receive, send)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
-    await super().__call__(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\applications.py", line 96, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
-    raise exc
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
-    await self.app(scope, receive, _send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\cors.py", line 96, in __call__
-    await self.simple_response(scope, receive, send, request_headers=headers)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\cors.py", line 154, in simple_response
-    await self.app(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
-    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
-    await self.app(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\routing.py", line 670, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 2734, in app
-    await route.handle(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1780, in handle
-    await self.original_router.handle(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 2789, in handle
-    await included_router._handle_selected(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1800, in _handle_selected
-    await original_route.handle(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1279, in handle
-    await app(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 158, in app
-    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 144, in app
-    response = await f(request)
-               ^^^^^^^^^^^^^^^^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 706, in app
-    raw_response = await run_endpoint_function(
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<3 lines>...
-    )
-    ^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
-    return await run_in_threadpool(dependant.call, **values)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
-    return await anyio.to_thread.run_sync(func)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
-    return await get_async_backend().run_sync_in_worker_thread(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2641, in run_sync_in_worker_thread
-    return await future
-           ^^^^^^^^^^^^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1033, in run
-    result = context.run(func, *args)
-  File "D:\Solar lead\solar-fitness\backend\src\solarfit\routers\app_checks.py", line 194, in complete_check
-    response = orchestrate_assessment(check_id)
-  File "D:\Solar lead\solar-fitness\backend\src\solarfit\routers\assessments.py", line 137, in orchestrate_assessment
-    analysis = analysis_cache_repo.get_or_create_analysis(lat, lng, site.site_type, params={})
-  File "D:\Solar lead\solar-fitness\backend\src\solarfit\repositories\analysis_cache.py", line 278, in get_or_create_analysis
-    refinement_dict = refine_vision_task.delay(lat, lng, boundary).get(timeout=timeout_s)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\celery\result.py", line 253, in get
-    return self.backend.wait_for_pending(
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
-        self, timeout=timeout,
-        ^^^^^^^^^^^^^^^^^^^^^^
-    ...<5 lines>...
-        on_message=on_message,
-        ^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\celery\backends\asynchronous.py", line 298, in wait_for_pending
-    for _ in self._wait_for_pending(result, **kwargs):
-             ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\celery\backends\asynchronous.py", line 403, in _wait_for_pending
-    raise TimeoutError('The operation timed out.')
-celery.exceptions.TimeoutError: The operation timed out.
-INFO:     127.0.0.1:58645 - "OPTIONS /app/auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58645 - "POST /app/auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56902 - "GET /app/checks HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54264 - "POST /app/auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60391 - "OPTIONS /app/auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60391 - "POST /app/auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60391 - "OPTIONS /app/vendor/jobs HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60391 - "OPTIONS /app/vendor/earnings-summary HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57025 - "OPTIONS /app/vendor/profile HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56144 - "GET /app/vendor/jobs HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60391 - "GET /app/vendor/earnings-summary HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57025 - "GET /app/vendor/profile HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56025 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56032 - "GET /openapi.json HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49946 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49948 - "GET /openapi.json HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49953 - "GET /app/jurisdictions HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:49955 - "POST /app/auth/signup HTTP/1.1" 422 Unprocessable Content
-INFO:     127.0.0.1:49956 - "POST /app/auth/signup HTTP/1.1" 201 Created
-INFO:     127.0.0.1:49954 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60777 - "OPTIONS /app/auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60777 - "POST /app/auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57188 - "GET /app/checks HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63949 - "OPTIONS /app/checks HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63949 - "POST /app/checks HTTP/1.1" 201 Created
-INFO:     127.0.0.1:63949 - "OPTIONS /app/checks/a9491332-3637-43be-82c1-02ea3d2818fe/complete HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63949 - "POST /app/checks/a9491332-3637-43be-82c1-02ea3d2818fe/complete HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58509 - "GET /app/checks/a9491332-3637-43be-82c1-02ea3d2818fe HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56866 - "POST /app/checks HTTP/1.1" 201 Created
-INFO:     127.0.0.1:56866 - "OPTIONS /app/checks/e19e5f6c-1e3b-411a-ab29-2829437be3c6/complete HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56866 - "POST /app/checks/e19e5f6c-1e3b-411a-ab29-2829437be3c6/complete HTTP/1.1" 500 Internal Server Error
-ERROR:    Exception in ASGI application
-Traceback (most recent call last):
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
-    result = await app(  # type: ignore[func-returns-value]
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        self.scope, self.receive, self.send
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
-    return await self.app(scope, receive, send)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
-    await super().__call__(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\applications.py", line 96, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
-    raise exc
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
-    await self.app(scope, receive, _send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\cors.py", line 96, in __call__
-    await self.simple_response(scope, receive, send, request_headers=headers)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\cors.py", line 154, in simple_response
-    await self.app(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
-    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
-    await self.app(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\routing.py", line 670, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 2734, in app
-    await route.handle(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1780, in handle
-    await self.original_router.handle(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 2789, in handle
-    await included_router._handle_selected(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1800, in _handle_selected
-    await original_route.handle(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1279, in handle
-    await app(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 158, in app
-    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 144, in app
-    response = await f(request)
-               ^^^^^^^^^^^^^^^^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 706, in app
-    raw_response = await run_endpoint_function(
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<3 lines>...
-    )
-    ^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
-    return await run_in_threadpool(dependant.call, **values)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
-    return await anyio.to_thread.run_sync(func)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
-    return await get_async_backend().run_sync_in_worker_thread(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2641, in run_sync_in_worker_thread
-    return await future
-           ^^^^^^^^^^^^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1033, in run
-    result = context.run(func, *args)
-  File "D:\Solar lead\solar-fitness\backend\src\solarfit\routers\app_checks.py", line 194, in complete_check
-    response = orchestrate_assessment(check_id)
-  File "D:\Solar lead\solar-fitness\backend\src\solarfit\routers\assessments.py", line 137, in orchestrate_assessment
-    analysis = analysis_cache_repo.get_or_create_analysis(lat, lng, site.site_type, params={})
-  File "D:\Solar lead\solar-fitness\backend\src\solarfit\repositories\analysis_cache.py", line 275, in get_or_create_analysis
-    boundary = resolve_via_solar_api(site=geo_lookup_site, params=params)  # GEO
-  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\solar_api.py", line 442, in resolve_via_solar_api
-    raise GeometryRejected(
-    ...<2 lines>...
-    )
-solarfit.providers.validation.GeometryRejected: Solar API could not resolve a boundary (no_coverage): no building covered at this location
-INFO:     127.0.0.1:56874 - "POST /app/checks/e19e5f6c-1e3b-411a-ab29-2829437be3c6/complete HTTP/1.1" 500 Internal Server Error
-ERROR:    Exception in ASGI application
-Traceback (most recent call last):
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
-    result = await app(  # type: ignore[func-returns-value]
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        self.scope, self.receive, self.send
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
-    return await self.app(scope, receive, send)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
-    await super().__call__(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\applications.py", line 96, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
-    raise exc
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
-    await self.app(scope, receive, _send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\cors.py", line 96, in __call__
-    await self.simple_response(scope, receive, send, request_headers=headers)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\cors.py", line 154, in simple_response
-    await self.app(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
-    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
-    await self.app(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\routing.py", line 670, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 2734, in app
-    await route.handle(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1780, in handle
-    await self.original_router.handle(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 2789, in handle
-    await included_router._handle_selected(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1800, in _handle_selected
-    await original_route.handle(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1279, in handle
-    await app(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 158, in app
-    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 144, in app
-    response = await f(request)
-               ^^^^^^^^^^^^^^^^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 706, in app
-    raw_response = await run_endpoint_function(
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<3 lines>...
-    )
-    ^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
-    return await run_in_threadpool(dependant.call, **values)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
-    return await anyio.to_thread.run_sync(func)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
-    return await get_async_backend().run_sync_in_worker_thread(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2641, in run_sync_in_worker_thread
-    return await future
-           ^^^^^^^^^^^^
-  File "D:\Solar lead\solar-fitness\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1033, in run
-    result = context.run(func, *args)
-  File "D:\Solar lead\solar-fitness\backend\src\solarfit\routers\app_checks.py", line 194, in complete_check
-    response = orchestrate_assessment(check_id)
-  File "D:\Solar lead\solar-fitness\backend\src\solarfit\routers\assessments.py", line 137, in orchestrate_assessment
-    analysis = analysis_cache_repo.get_or_create_analysis(lat, lng, site.site_type, params={})
-  File "D:\Solar lead\solar-fitness\backend\src\solarfit\repositories\analysis_cache.py", line 275, in get_or_create_analysis
-    boundary = resolve_via_solar_api(site=geo_lookup_site, params=params)  # GEO
-  File "D:\Solar lead\solar-fitness\backend\src\solarfit\providers\solar_api.py", line 442, in resolve_via_solar_api
-    raise GeometryRejected(
-    ...<2 lines>...
-    )
-solarfit.providers.validation.GeometryRejected: Solar API could not resolve a boundary (no_coverage): no building covered at this location
+INFO:     Uvicorn running on https://0.0.0.0:8010 (Press CTRL+C to quit)
+INFO:     192.168.1.14:42292 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38906 - "GET /health HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64673 - "GET / HTTP/1.1" 404 Not Found
+INFO:     192.168.1.4:64673 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     192.168.1.14:37786 - "POST /app/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64693 - "OPTIONS /app/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64693 - "POST /app/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.1.14:50870 - "GET /app/checks HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64743 - "OPTIONS /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64745 - "OPTIONS /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64743 - "GET /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64743 - "OPTIONS /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=a7994e5b-2257-4129-b7da-458a04b256f6 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64743 - "GET /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=a7994e5b-2257-4129-b7da-458a04b256f6 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64745 - "GET /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64745 - "OPTIONS /app/geocode/reverse?lat=17.441760916753484&lng=78.3966976103227 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64750 - "OPTIONS /app/checks/resolve-building?lat=17.441761&lng=78.396698 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64745 - "GET /app/geocode/reverse?lat=17.441760916753484&lng=78.3966976103227 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64745 - "OPTIONS /app/geocode/suggest?q=1-66%2F4%2F6%2C+Sri+Rama+Colony%2C+Mas%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=a7994e5b-2257-4129-b7da-458a04b256f6 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64745 - "GET /app/geocode/suggest?q=1-66%2F4%2F6%2C+Sri+Rama+Colony%2C+Mas%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=a7994e5b-2257-4129-b7da-458a04b256f6 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64745 - "OPTIONS /app/geocode/reverse?lat=17.441789638942694&lng=78.39663192356171 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64754 - "OPTIONS /app/checks/resolve-building?lat=17.44179&lng=78.396632 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64745 - "GET /app/geocode/reverse?lat=17.441789638942694&lng=78.39663192356171 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64750 - "GET /app/checks/resolve-building?lat=17.441761&lng=78.396698 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64754 - "GET /app/checks/resolve-building?lat=17.44179&lng=78.396632 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "OPTIONS /app/checks HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "POST /app/checks HTTP/1.1" 201 Created
+INFO:     192.168.1.4:64807 - "OPTIONS /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "OPTIONS /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "POST /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete HTTP/1.1" 202 Accepted
+INFO:     192.168.1.4:64807 - "OPTIONS /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "POST /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete HTTP/1.1" 202 Accepted
+INFO:     192.168.1.4:64807 - "OPTIONS /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "OPTIONS /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "OPTIONS /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "OPTIONS /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "OPTIONS /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "OPTIONS /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "OPTIONS /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "OPTIONS /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64807 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete/d91086b8-1f7f-4db1-9e72-7732249fff41 HTTP/1.1" 200 OK
+INFO:     192.168.1.14:41902 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64865 - "OPTIONS /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64865 - "OPTIONS /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/obstacles HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64866 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.4:64865 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/obstacles HTTP/1.1" 200 OK
+INFO:     192.168.1.14:57204 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65015 - "OPTIONS /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65015 - "POST /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/complete HTTP/1.1" 202 Accepted
+INFO:     192.168.1.14:58524 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36 HTTP/1.1" 200 OK
+INFO:     192.168.1.14:58534 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36 HTTP/1.1" 200 OK
+INFO:     192.168.1.14:52112 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65102 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65103 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36/obstacles HTTP/1.1" 200 OK
+INFO:     192.168.1.14:52112 - "GET /app/checks/5c64c8d0-5e57-424b-81d2-9e498a02df36 HTTP/1.1" 200 OK
+INFO:     192.168.1.14:59550 - "GET /app/checks HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65106 - "OPTIONS /app/geocode/suggest?q=usa&session=ac484657-3206-46cf-a268-d881107f4f3f HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65106 - "GET /app/geocode/suggest?q=usa&session=ac484657-3206-46cf-a268-d881107f4f3f HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65111 - "OPTIONS /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65111 - "OPTIONS /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65113 - "GET /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65113 - "OPTIONS /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=ac484657-3206-46cf-a268-d881107f4f3f HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65113 - "GET /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=ac484657-3206-46cf-a268-d881107f4f3f HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65111 - "GET /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65120 - "OPTIONS /app/geocode?address=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65120 - "GET /app/geocode?address=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65120 - "OPTIONS /app/checks/resolve-building?lat=17.441808&lng=78.397087 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65120 - "GET /app/checks/resolve-building?lat=17.441808&lng=78.397087 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65124 - "OPTIONS /app/geocode/reverse?lat=31.54915983163554&lng=-99.68450534848989 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65124 - "OPTIONS /app/checks/resolve-building?lat=31.54916&lng=-99.684505 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65126 - "GET /app/geocode/reverse?lat=31.54915983163554&lng=-99.68450534848989 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65126 - "OPTIONS /app/geocode/suggest?q=G8X8%2BM5+Leaday%2C+TX%2C+USA&session=ac484657-3206-46cf-a268-d881107f4f3f HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65126 - "GET /app/geocode/suggest?q=G8X8%2BM5+Leaday%2C+TX%2C+USA&session=ac484657-3206-46cf-a268-d881107f4f3f HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65124 - "GET /app/checks/resolve-building?lat=31.54916&lng=-99.684505 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65140 - "GET /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65140 - "OPTIONS /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=de51f6a6-a91a-46a6-93fe-d8f8fd7914b4 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65140 - "GET /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=de51f6a6-a91a-46a6-93fe-d8f8fd7914b4 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65140 - "OPTIONS /app/geocode/reverse?lat=17.44082744294679&lng=78.38465829620363 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65142 - "OPTIONS /app/checks/resolve-building?lat=17.440827&lng=78.384658 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65140 - "GET /app/geocode/reverse?lat=17.44082744294679&lng=78.38465829620363 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65140 - "OPTIONS /app/geocode/suggest?q=Sree+Nivasam%2C+Plot+%23+12%2C+Shilpi+Valley%2C+Gafoor+Nagar%2C+Madhapur+Image+Hospitals+Lane%2C+Vittal+Rao+Nagar%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=de51f6a6-a91a-46a6-93fe-d8f8fd7914b4 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65140 - "GET /app/geocode/suggest?q=Sree+Nivasam%2C+Plot+%23+12%2C+Shilpi+Valley%2C+Gafoor+Nagar%2C+Madhapur+Image+Hospitals+Lane%2C+Vittal+Rao+Nagar%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=de51f6a6-a91a-46a6-93fe-d8f8fd7914b4 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65142 - "GET /app/checks/resolve-building?lat=17.440827&lng=78.384658 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65142 - "OPTIONS /app/geocode/reverse?lat=48.55008866972172&lng=-70.67784170379629 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65144 - "OPTIONS /app/checks/resolve-building?lat=48.550089&lng=-70.677842 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65142 - "GET /app/geocode/reverse?lat=48.55008866972172&lng=-70.67784170379629 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65142 - "OPTIONS /app/geocode/suggest?q=H82C%2B2V+Saint-Fulgence%2C+QC%2C+Canada&session=de51f6a6-a91a-46a6-93fe-d8f8fd7914b4 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65142 - "GET /app/geocode/suggest?q=H82C%2B2V+Saint-Fulgence%2C+QC%2C+Canada&session=de51f6a6-a91a-46a6-93fe-d8f8fd7914b4 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65144 - "GET /app/checks/resolve-building?lat=48.550089&lng=-70.677842 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65144 - "OPTIONS /app/geocode/reverse?lat=36.70896785993007&lng=-81.22471670379629 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65142 - "OPTIONS /app/checks/resolve-building?lat=36.708968&lng=-81.224717 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65144 - "GET /app/geocode/reverse?lat=36.70896785993007&lng=-81.22471670379629 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65144 - "OPTIONS /app/geocode/suggest?q=150+Watauga+Ln%2C+Elk+Creek%2C+VA+24326%2C+USA&session=de51f6a6-a91a-46a6-93fe-d8f8fd7914b4 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65144 - "GET /app/geocode/suggest?q=150+Watauga+Ln%2C+Elk+Creek%2C+VA+24326%2C+USA&session=de51f6a6-a91a-46a6-93fe-d8f8fd7914b4 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65142 - "GET /app/checks/resolve-building?lat=36.708968&lng=-81.224717 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65142 - "OPTIONS /app/geocode/reverse?lat=36.37355324123917&lng=-78.99449209442129 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65146 - "OPTIONS /app/checks/resolve-building?lat=36.373553&lng=-78.994492 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65142 - "GET /app/geocode/reverse?lat=36.37355324123917&lng=-78.99449209442129 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65142 - "OPTIONS /app/geocode/suggest?q=278+Shale+Cir%2C+Roxboro%2C+NC+27573%2C+USA&session=de51f6a6-a91a-46a6-93fe-d8f8fd7914b4 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65142 - "GET /app/geocode/suggest?q=278+Shale+Cir%2C+Roxboro%2C+NC+27573%2C+USA&session=de51f6a6-a91a-46a6-93fe-d8f8fd7914b4 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65146 - "GET /app/checks/resolve-building?lat=36.373553&lng=-78.994492 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65149 - "OPTIONS /app/geocode/reverse?lat=36.36657301085871&lng=-78.98539404144277 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65151 - "OPTIONS /app/checks/resolve-building?lat=36.366573&lng=-78.985394 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65149 - "GET /app/geocode/reverse?lat=36.36657301085871&lng=-78.98539404144277 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65149 - "OPTIONS /app/geocode/suggest?q=2044+Durham+Rd%2C+Roxboro%2C+NC+27573%2C+USA&session=de51f6a6-a91a-46a6-93fe-d8f8fd7914b4 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65149 - "GET /app/geocode/suggest?q=2044+Durham+Rd%2C+Roxboro%2C+NC+27573%2C+USA&session=de51f6a6-a91a-46a6-93fe-d8f8fd7914b4 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65151 - "GET /app/checks/resolve-building?lat=36.366573&lng=-78.985394 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65153 - "OPTIONS /app/geocode/reverse?lat=36.36664212512023&lng=-78.98513654937734 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65155 - "OPTIONS /app/checks/resolve-building?lat=36.366642&lng=-78.985137 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65153 - "GET /app/geocode/reverse?lat=36.36664212512023&lng=-78.98513654937734 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65155 - "GET /app/checks/resolve-building?lat=36.366642&lng=-78.985137 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "OPTIONS /app/checks HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "POST /app/checks HTTP/1.1" 201 Created
+INFO:     192.168.1.4:65158 - "OPTIONS /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "OPTIONS /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "POST /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete HTTP/1.1" 202 Accepted
+INFO:     192.168.1.4:65169 - "POST /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete HTTP/1.1" 202 Accepted
+INFO:     192.168.1.4:65158 - "OPTIONS /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65158 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/complete/3e239749-745e-4963-86d5-a074272f9d5d HTTP/1.1" 200 OK
+INFO:     192.168.1.14:59400 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65202 - "OPTIONS /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65203 - "OPTIONS /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/obstacles HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65202 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/obstacles HTTP/1.1" 200 OK
+INFO:     192.168.1.4:65203 - "GET /app/checks/e4324cb1-a6e7-4aca-b7cd-b387a7b7887d/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.26:64997 - "OPTIONS /app/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.1.26:64997 - "POST /app/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.1.14:34984 - "GET /app/checks HTTP/1.1" 200 OK
+INFO:     192.168.1.26:61887 - "OPTIONS /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:61887 - "OPTIONS /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:61887 - "GET /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:61887 - "OPTIONS /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=cf027c0d-0841-466b-a16e-1120adc0e9e5 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:61887 - "GET /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=cf027c0d-0841-466b-a16e-1120adc0e9e5 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:64879 - "GET /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:64879 - "OPTIONS /app/geocode/reverse?lat=19.442769804189506&lng=92.54736562500001 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:52927 - "OPTIONS /app/checks/resolve-building?lat=19.44277&lng=92.547366 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:64879 - "GET /app/geocode/reverse?lat=19.442769804189506&lng=92.54736562500001 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:64879 - "OPTIONS /app/geocode/suggest?q=7MFJCGVW%2B4W&session=cf027c0d-0841-466b-a16e-1120adc0e9e5 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:64879 - "GET /app/geocode/suggest?q=7MFJCGVW%2B4W&session=cf027c0d-0841-466b-a16e-1120adc0e9e5 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:52927 - "GET /app/checks/resolve-building?lat=19.44277&lng=92.547366 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:52927 - "OPTIONS /app/geocode/reverse?lat=18.79920151357051&lng=92.06396718750001 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:56099 - "OPTIONS /app/checks/resolve-building?lat=18.799202&lng=92.063967 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:52927 - "GET /app/geocode/reverse?lat=18.79920151357051&lng=92.06396718750001 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:52927 - "OPTIONS /app/geocode/suggest?q=7MCJQ3X7%2BMH&session=cf027c0d-0841-466b-a16e-1120adc0e9e5 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:52927 - "GET /app/geocode/suggest?q=7MCJQ3X7%2BMH&session=cf027c0d-0841-466b-a16e-1120adc0e9e5 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:56099 - "GET /app/checks/resolve-building?lat=18.799202&lng=92.063967 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:56468 - "GET /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:56468 - "OPTIONS /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=2e7b4c3f-10d5-4a47-b4b5-4403beeb948c HTTP/1.1" 200 OK
+INFO:     192.168.1.26:56468 - "GET /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=2e7b4c3f-10d5-4a47-b4b5-4403beeb948c HTTP/1.1" 200 OK
+INFO:     192.168.1.26:53075 - "OPTIONS /app/geocode/reverse?lat=35.00030658252093&lng=-101.6030249999999 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:53075 - "OPTIONS /app/checks/resolve-building?lat=35.000307&lng=-101.603025 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:53075 - "GET /app/geocode/reverse?lat=35.00030658252093&lng=-101.6030249999999 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:53075 - "OPTIONS /app/geocode/suggest?q=857W292W%2B4Q&session=2e7b4c3f-10d5-4a47-b4b5-4403beeb948c HTTP/1.1" 200 OK
+INFO:     192.168.1.26:53075 - "GET /app/geocode/suggest?q=857W292W%2B4Q&session=2e7b4c3f-10d5-4a47-b4b5-4403beeb948c HTTP/1.1" 200 OK
+INFO:     192.168.1.26:55116 - "GET /app/checks/resolve-building?lat=35.000307&lng=-101.603025 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:55116 - "OPTIONS /app/geocode/reverse?lat=32.29363681862618&lng=-83.3657203124999 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:53075 - "OPTIONS /app/checks/resolve-building?lat=32.293637&lng=-83.36572 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:55116 - "GET /app/geocode/reverse?lat=32.29363681862618&lng=-83.3657203124999 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:55116 - "OPTIONS /app/geocode/suggest?q=7JVM%2BFP+Hawkinsville%2C+GA%2C+USA&session=2e7b4c3f-10d5-4a47-b4b5-4403beeb948c HTTP/1.1" 200 OK
+INFO:     192.168.1.26:55116 - "GET /app/geocode/suggest?q=7JVM%2BFP+Hawkinsville%2C+GA%2C+USA&session=2e7b4c3f-10d5-4a47-b4b5-4403beeb948c HTTP/1.1" 200 OK
+INFO:     192.168.1.26:53075 - "GET /app/checks/resolve-building?lat=32.293637&lng=-83.36572 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:50060 - "OPTIONS /app/geocode/reverse?lat=32.28202735569222&lng=-83.47386697998037 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:54742 - "OPTIONS /app/checks/resolve-building?lat=32.282027&lng=-83.473867 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:50060 - "GET /app/geocode/reverse?lat=32.28202735569222&lng=-83.47386697998037 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:50060 - "OPTIONS /app/geocode/suggest?q=164+Broad+St%2C+Hawkinsville%2C+GA+31036%2C+USA&session=2e7b4c3f-10d5-4a47-b4b5-4403beeb948c HTTP/1.1" 200 OK
+INFO:     192.168.1.26:50060 - "GET /app/geocode/suggest?q=164+Broad+St%2C+Hawkinsville%2C+GA+31036%2C+USA&session=2e7b4c3f-10d5-4a47-b4b5-4403beeb948c HTTP/1.1" 200 OK
+INFO:     192.168.1.26:54742 - "GET /app/checks/resolve-building?lat=32.282027&lng=-83.473867 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:54742 - "OPTIONS /app/geocode/reverse?lat=32.282245046795474&lng=-83.46899608840933 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:50411 - "OPTIONS /app/checks/resolve-building?lat=32.282245&lng=-83.468996 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:54742 - "GET /app/geocode/reverse?lat=32.282245046795474&lng=-83.46899608840933 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:54742 - "OPTIONS /app/geocode/suggest?q=45+S+Lumpkin+St%2C+Hawkinsville%2C+GA+31036%2C+USA&session=2e7b4c3f-10d5-4a47-b4b5-4403beeb948c HTTP/1.1" 200 OK
+INFO:     192.168.1.26:54742 - "GET /app/geocode/suggest?q=45+S+Lumpkin+St%2C+Hawkinsville%2C+GA+31036%2C+USA&session=2e7b4c3f-10d5-4a47-b4b5-4403beeb948c HTTP/1.1" 200 OK
+INFO:     192.168.1.26:50411 - "GET /app/checks/resolve-building?lat=32.282245&lng=-83.468996 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:62941 - "OPTIONS /app/geocode/reverse?lat=32.28232668082449&lng=-83.4682879852294 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:62941 - "OPTIONS /app/checks/resolve-building?lat=32.282327&lng=-83.468288 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:62941 - "GET /app/geocode/reverse?lat=32.28232668082449&lng=-83.4682879852294 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:62941 - "OPTIONS /app/geocode/suggest?q=44+S+Lumpkin+St%2C+Hawkinsville%2C+GA+31036%2C+USA&session=2e7b4c3f-10d5-4a47-b4b5-4403beeb948c HTTP/1.1" 200 OK
+INFO:     192.168.1.26:62941 - "GET /app/geocode/suggest?q=44+S+Lumpkin+St%2C+Hawkinsville%2C+GA+31036%2C+USA&session=2e7b4c3f-10d5-4a47-b4b5-4403beeb948c HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50069 - "OPTIONS /app/auth/signup HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50069 - "POST /app/auth/signup HTTP/1.1" 201 Created
+INFO:     192.168.1.4:50069 - "OPTIONS /app/customer/profile HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50069 - "PATCH /app/customer/profile HTTP/1.1" 200 OK
+INFO:     192.168.1.14:43016 - "GET /app/checks HTTP/1.1" 200 OK
+INFO:     192.168.1.26:62941 - "OPTIONS /app/geocode/reverse?lat=32.2823051385184&lng=-83.46827591528883 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:52550 - "OPTIONS /app/checks/resolve-building?lat=32.282305&lng=-83.468276 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:62941 - "GET /app/geocode/reverse?lat=32.2823051385184&lng=-83.46827591528883 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:62640 - "GET /app/checks/resolve-building?lat=32.282327&lng=-83.468288 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:62640 - "OPTIONS /app/geocode/reverse?lat=32.28265888521239&lng=-83.46977795233717 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:62941 - "OPTIONS /app/checks/resolve-building?lat=32.282659&lng=-83.469778 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:62640 - "GET /app/geocode/reverse?lat=32.28265888521239&lng=-83.46977795233717 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:62640 - "OPTIONS /app/geocode/suggest?q=154+N+Dooley+St%2C+Hawkinsville%2C+GA+31036%2C+USA&session=2e7b4c3f-10d5-4a47-b4b5-4403beeb948c HTTP/1.1" 200 OK
+INFO:     192.168.1.26:62640 - "GET /app/geocode/suggest?q=154+N+Dooley+St%2C+Hawkinsville%2C+GA+31036%2C+USA&session=2e7b4c3f-10d5-4a47-b4b5-4403beeb948c HTTP/1.1" 200 OK
+INFO:     192.168.1.26:62640 - "OPTIONS /app/geocode/reverse?lat=32.28270423725287&lng=-83.46969212164869 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:64728 - "OPTIONS /app/checks/resolve-building?lat=32.282704&lng=-83.469692 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:62640 - "GET /app/geocode/reverse?lat=32.28270423725287&lng=-83.46969212164869 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:52550 - "GET /app/checks/resolve-building?lat=32.282305&lng=-83.468276 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50086 - "OPTIONS /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50086 - "OPTIONS /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50088 - "GET /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:62941 - "GET /app/checks/resolve-building?lat=32.282659&lng=-83.469778 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50088 - "OPTIONS /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=9853ef11-8594-4ad1-b8c7-e67c93c2a531 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50088 - "GET /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=9853ef11-8594-4ad1-b8c7-e67c93c2a531 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:64728 - "GET /app/checks/resolve-building?lat=32.282704&lng=-83.469692 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50086 - "GET /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50086 - "OPTIONS /app/geocode/reverse?lat=17.44258396389691&lng=78.39622413469928 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50091 - "OPTIONS /app/checks/resolve-building?lat=17.442584&lng=78.396224 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50086 - "GET /app/geocode/reverse?lat=17.44258396389691&lng=78.39622413469928 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50086 - "OPTIONS /app/geocode/suggest?q=Plot+No%3A+25%2C+49+avenue+1%2C+Road+No.+11%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=9853ef11-8594-4ad1-b8c7-e67c93c2a531 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50086 - "GET /app/geocode/suggest?q=Plot+No%3A+25%2C+49+avenue+1%2C+Road+No.+11%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=9853ef11-8594-4ad1-b8c7-e67c93c2a531 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50091 - "GET /app/checks/resolve-building?lat=17.442584&lng=78.396224 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50093 - "OPTIONS /app/checks HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "OPTIONS /app/checks HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50093 - "POST /app/checks HTTP/1.1" 201 Created
+INFO:     192.168.1.4:50093 - "OPTIONS /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/complete HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50093 - "OPTIONS /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/complete HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50093 - "POST /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/complete HTTP/1.1" 202 Accepted
+INFO:     192.168.1.4:50093 - "OPTIONS /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/complete/e3bc0386-39ce-49ce-b8f3-abcf631fe345 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50104 - "POST /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/complete HTTP/1.1" 202 Accepted
+INFO:     192.168.1.4:50093 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/complete/e3bc0386-39ce-49ce-b8f3-abcf631fe345 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "POST /app/checks HTTP/1.1" 201 Created
+INFO:     192.168.1.4:50093 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/complete/e3bc0386-39ce-49ce-b8f3-abcf631fe345 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "OPTIONS /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "OPTIONS /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "POST /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete HTTP/1.1" 202 Accepted
+INFO:     192.168.1.26:63699 - "POST /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete HTTP/1.1" 202 Accepted
+INFO:     192.168.1.26:63699 - "OPTIONS /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50093 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/complete/e3bc0386-39ce-49ce-b8f3-abcf631fe345 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50093 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/complete/e3bc0386-39ce-49ce-b8f3-abcf631fe345 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50093 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/complete/e3bc0386-39ce-49ce-b8f3-abcf631fe345 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50093 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/complete/e3bc0386-39ce-49ce-b8f3-abcf631fe345 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50093 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/complete/e3bc0386-39ce-49ce-b8f3-abcf631fe345 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50093 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/complete/e3bc0386-39ce-49ce-b8f3-abcf631fe345 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50093 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/complete/e3bc0386-39ce-49ce-b8f3-abcf631fe345 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50093 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/complete/e3bc0386-39ce-49ce-b8f3-abcf631fe345 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.14:53870 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50105 - "OPTIONS /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50105 - "OPTIONS /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/obstacles HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50120 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/obstacles HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50105 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.14:38422 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50130 - "OPTIONS /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/vendors HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50130 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/vendors HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50132 - "OPTIONS /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/enquiry HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50132 - "POST /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/enquiry HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50132 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/vendors HTTP/1.1" 200 OK
+INFO:     192.168.1.14:48500 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50132 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50135 - "GET /app/checks/04f48efe-ba23-4757-aca6-e0d8fcb7246b/obstacles HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:63699 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/7ad10f62-566a-422b-8dd0-855b5ccbf009 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:60973 - "POST /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete HTTP/1.1" 202 Accepted
+INFO:     192.168.1.26:60973 - "OPTIONS /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/238ae538-ff51-4f22-b5d7-f0f24b357c73 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:60973 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/238ae538-ff51-4f22-b5d7-f0f24b357c73 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:60973 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/238ae538-ff51-4f22-b5d7-f0f24b357c73 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:60973 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/238ae538-ff51-4f22-b5d7-f0f24b357c73 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:60973 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/238ae538-ff51-4f22-b5d7-f0f24b357c73 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:60973 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/complete/238ae538-ff51-4f22-b5d7-f0f24b357c73 HTTP/1.1" 200 OK
+INFO:     192.168.1.14:49728 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:59130 - "OPTIONS /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.26:50607 - "OPTIONS /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/obstacles HTTP/1.1" 200 OK
+INFO:     192.168.1.26:59130 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.26:50607 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/obstacles HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50218 - "OPTIONS /app/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50218 - "POST /app/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.1.14:40328 - "GET /app/checks HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50221 - "OPTIONS /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50221 - "OPTIONS /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50224 - "GET /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50224 - "OPTIONS /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=549a967f-3d49-40d6-b15e-e782f9a4f2b9 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50224 - "GET /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=549a967f-3d49-40d6-b15e-e782f9a4f2b9 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50224 - "OPTIONS /app/geocode/reverse?lat=17.44199685641244&lng=78.39699779877664 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50226 - "OPTIONS /app/checks/resolve-building?lat=17.441997&lng=78.396998 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50224 - "GET /app/geocode/reverse?lat=17.44199685641244&lng=78.39699779877664 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50224 - "OPTIONS /app/geocode/suggest?q=Plot+No.16%2C+Road+No.+36%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=549a967f-3d49-40d6-b15e-e782f9a4f2b9 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50224 - "GET /app/geocode/suggest?q=Plot+No.16%2C+Road+No.+36%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=549a967f-3d49-40d6-b15e-e782f9a4f2b9 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50221 - "GET /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50221 - "OPTIONS /app/geocode/reverse?lat=17.442145271589567&lng=78.39698706994058 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50224 - "OPTIONS /app/checks/resolve-building?lat=17.442145&lng=78.396987 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50221 - "GET /app/geocode/reverse?lat=17.442145271589567&lng=78.39698706994058 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50221 - "OPTIONS /app/geocode/suggest?q=6%2C+Masthan+Nagar%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=549a967f-3d49-40d6-b15e-e782f9a4f2b9 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50221 - "GET /app/geocode/suggest?q=6%2C+Masthan+Nagar%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=549a967f-3d49-40d6-b15e-e782f9a4f2b9 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50226 - "GET /app/checks/resolve-building?lat=17.441997&lng=78.396998 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50226 - "OPTIONS /app/geocode/reverse?lat=17.44223995017394&lng=78.3969548834324 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50221 - "OPTIONS /app/checks/resolve-building?lat=17.44224&lng=78.396955 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50226 - "GET /app/geocode/reverse?lat=17.44223995017394&lng=78.3969548834324 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50226 - "OPTIONS /app/geocode/suggest?q=19%2C+Road+No.+9%2C+Kakatiya+Hills%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=549a967f-3d49-40d6-b15e-e782f9a4f2b9 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50226 - "GET /app/geocode/suggest?q=19%2C+Road+No.+9%2C+Kakatiya+Hills%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=549a967f-3d49-40d6-b15e-e782f9a4f2b9 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50224 - "GET /app/checks/resolve-building?lat=17.442145&lng=78.396987 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50221 - "GET /app/checks/resolve-building?lat=17.44224&lng=78.396955 HTTP/1.1" 200 OK
+INFO:     192.168.1.14:39358 - "GET /app/checks/61bb6fc9-6190-45c1-940f-811b3432c44d HTTP/1.1" 401 Unauthorized
+INFO:     192.168.1.14:39358 - "GET /app/checks/61bb6fc9-6190-45c1-940f-811b3432c44d HTTP/1.1" 401 Unauthorized
+INFO:     192.168.1.14:35334 - "POST /app/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.1.14:35340 - "GET /app/checks/61bb6fc9-6190-45c1-940f-811b3432c44d HTTP/1.1" 404 Not Found
+INFO:     192.168.1.14:46308 - "POST /app/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.1.14:46316 - "GET /app/checks HTTP/1.1" 200 OK
+INFO:     192.168.1.14:47342 - "POST /app/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.1.14:47350 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50294 - "GET /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50294 - "OPTIONS /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=85d2ec3c-c65a-4b3f-96c6-320529cadc48 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50294 - "GET /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=85d2ec3c-c65a-4b3f-96c6-320529cadc48 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50294 - "OPTIONS /app/geocode/reverse?lat=17.441981503111364&lng=78.39699377546312 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50298 - "OPTIONS /app/checks/resolve-building?lat=17.441982&lng=78.396994 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50294 - "GET /app/geocode/reverse?lat=17.441981503111364&lng=78.39699377546312 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50294 - "OPTIONS /app/geocode/suggest?q=Plot+No.16%2C+Road+No.+36%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=85d2ec3c-c65a-4b3f-96c6-320529cadc48 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50294 - "GET /app/geocode/suggest?q=Plot+No.16%2C+Road+No.+36%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=85d2ec3c-c65a-4b3f-96c6-320529cadc48 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50294 - "OPTIONS /app/geocode/reverse?lat=17.44221308193201&lng=78.39697902331353 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50300 - "OPTIONS /app/checks/resolve-building?lat=17.442213&lng=78.396979 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50294 - "GET /app/geocode/reverse?lat=17.44221308193201&lng=78.39697902331353 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50294 - "OPTIONS /app/geocode/suggest?q=19%2C+Road+No.+9%2C+Kakatiya+Hills%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=85d2ec3c-c65a-4b3f-96c6-320529cadc48 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50294 - "GET /app/geocode/suggest?q=19%2C+Road+No.+9%2C+Kakatiya+Hills%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=85d2ec3c-c65a-4b3f-96c6-320529cadc48 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50298 - "GET /app/checks/resolve-building?lat=17.441982&lng=78.396994 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50298 - "OPTIONS /app/geocode/reverse?lat=17.44223995017394&lng=78.39694683680536 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50294 - "OPTIONS /app/checks/resolve-building?lat=17.44224&lng=78.396947 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50298 - "GET /app/geocode/reverse?lat=17.44223995017394&lng=78.39694683680536 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50300 - "GET /app/checks/resolve-building?lat=17.442213&lng=78.396979 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50294 - "GET /app/checks/resolve-building?lat=17.44224&lng=78.396947 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50296 - "GET /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50448 - "OPTIONS /app/checks/resolve-building?lat=17.44224&lng=78.396947 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50534 - "OPTIONS /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50536 - "OPTIONS /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50534 - "GET /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50534 - "OPTIONS /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=86077551-4fbe-47c3-a5c5-ca7fa98e3908 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50534 - "GET /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=86077551-4fbe-47c3-a5c5-ca7fa98e3908 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50534 - "OPTIONS /app/geocode/reverse?lat=17.441966149808994&lng=78.396972317791 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50538 - "OPTIONS /app/checks/resolve-building?lat=17.441966&lng=78.396972 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50534 - "GET /app/geocode/reverse?lat=17.441966149808994&lng=78.396972317791 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50534 - "OPTIONS /app/geocode/suggest?q=Plot+No%3A+25%2C+15%2C+Madhapur+Rd%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=86077551-4fbe-47c3-a5c5-ca7fa98e3908 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50534 - "GET /app/geocode/suggest?q=Plot+No%3A+25%2C+15%2C+Madhapur+Rd%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=86077551-4fbe-47c3-a5c5-ca7fa98e3908 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50534 - "OPTIONS /app/geocode/reverse?lat=17.44211456501111&lng=78.3969361079693 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50540 - "OPTIONS /app/checks/resolve-building?lat=17.442115&lng=78.396936 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50534 - "GET /app/geocode/reverse?lat=17.44211456501111&lng=78.3969361079693 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50534 - "OPTIONS /app/geocode/suggest?q=Plot+No.16%2C+Road+No.+36%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=86077551-4fbe-47c3-a5c5-ca7fa98e3908 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50534 - "GET /app/geocode/suggest?q=Plot+No.16%2C+Road+No.+36%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=86077551-4fbe-47c3-a5c5-ca7fa98e3908 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50536 - "GET /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50536 - "OPTIONS /app/geocode/reverse?lat=17.44226681841191&lng=78.3969374490738 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50534 - "OPTIONS /app/checks/resolve-building?lat=17.442267&lng=78.396937 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50536 - "GET /app/geocode/reverse?lat=17.44226681841191&lng=78.3969374490738 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50536 - "OPTIONS /app/geocode/suggest?q=19%2C+Road+No.+9%2C+Kakatiya+Hills%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=86077551-4fbe-47c3-a5c5-ca7fa98e3908 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50538 - "GET /app/checks/resolve-building?lat=17.441966&lng=78.396972 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50536 - "GET /app/geocode/suggest?q=19%2C+Road+No.+9%2C+Kakatiya+Hills%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=86077551-4fbe-47c3-a5c5-ca7fa98e3908 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50540 - "GET /app/checks/resolve-building?lat=17.442115&lng=78.396936 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50534 - "GET /app/checks/resolve-building?lat=17.442267&lng=78.396937 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50625 - "GET /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50625 - "OPTIONS /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=9044ef63-2c1d-4fbb-bd7c-b30b643ebf85 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50625 - "GET /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=9044ef63-2c1d-4fbb-bd7c-b30b643ebf85 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50625 - "OPTIONS /app/geocode/reverse?lat=17.44193032543178&lng=78.3969910932541 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50629 - "OPTIONS /app/checks/resolve-building?lat=17.44193&lng=78.396991 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50625 - "GET /app/geocode/reverse?lat=17.44193032543178&lng=78.3969910932541 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50625 - "OPTIONS /app/geocode/suggest?q=Plot+13%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=9044ef63-2c1d-4fbb-bd7c-b30b643ebf85 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50625 - "GET /app/geocode/suggest?q=Plot+13%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=9044ef63-2c1d-4fbb-bd7c-b30b643ebf85 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50625 - "OPTIONS /app/geocode/reverse?lat=17.44204419574931&lng=78.39699645767213 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50631 - "OPTIONS /app/checks/resolve-building?lat=17.442044&lng=78.396996 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50625 - "GET /app/geocode/reverse?lat=17.44204419574931&lng=78.39699645767213 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50625 - "OPTIONS /app/geocode/suggest?q=Plot+No.16%2C+Road+No.+36%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=9044ef63-2c1d-4fbb-bd7c-b30b643ebf85 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50625 - "GET /app/geocode/suggest?q=Plot+No.16%2C+Road+No.+36%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=9044ef63-2c1d-4fbb-bd7c-b30b643ebf85 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50625 - "OPTIONS /app/geocode/reverse?lat=17.442256582893158&lng=78.39693476686479 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50633 - "OPTIONS /app/checks/resolve-building?lat=17.442257&lng=78.396935 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50625 - "GET /app/geocode/reverse?lat=17.442256582893158&lng=78.39693476686479 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50625 - "OPTIONS /app/geocode/suggest?q=19%2C+Road+No.+9%2C+Kakatiya+Hills%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=9044ef63-2c1d-4fbb-bd7c-b30b643ebf85 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50625 - "GET /app/geocode/suggest?q=19%2C+Road+No.+9%2C+Kakatiya+Hills%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=9044ef63-2c1d-4fbb-bd7c-b30b643ebf85 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50629 - "GET /app/checks/resolve-building?lat=17.44193&lng=78.396991 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50627 - "GET /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50631 - "GET /app/checks/resolve-building?lat=17.442044&lng=78.396996 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50633 - "GET /app/checks/resolve-building?lat=17.442257&lng=78.396935 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "OPTIONS /app/checks HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "POST /app/checks HTTP/1.1" 201 Created
+INFO:     192.168.1.4:50635 - "OPTIONS /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "OPTIONS /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "POST /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete HTTP/1.1" 202 Accepted
+INFO:     192.168.1.4:50635 - "OPTIONS /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50648 - "POST /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete HTTP/1.1" 202 Accepted
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50635 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50649 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/complete/d38efb22-869f-4088-8618-fed347ac5840 HTTP/1.1" 200 OK
+INFO:     192.168.1.14:43502 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50669 - "OPTIONS /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50668 - "OPTIONS /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/obstacles HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50669 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/obstacles HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50668 - "GET /app/checks/c73b24de-f65c-41cb-9416-f05173b8486b/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50671 - "GET /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50671 - "OPTIONS /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=5b375b12-1314-4df1-9a51-1b2b85a83ce8 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50671 - "GET /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=5b375b12-1314-4df1-9a51-1b2b85a83ce8 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50671 - "OPTIONS /app/geocode/reverse?lat=17.44198022366957&lng=78.39700450429918 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50673 - "OPTIONS /app/checks/resolve-building?lat=17.44198&lng=78.397005 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50671 - "GET /app/geocode/reverse?lat=17.44198022366957&lng=78.39700450429918 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50671 - "OPTIONS /app/geocode/suggest?q=Plot+13%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=5b375b12-1314-4df1-9a51-1b2b85a83ce8 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50671 - "GET /app/geocode/suggest?q=Plot+13%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=5b375b12-1314-4df1-9a51-1b2b85a83ce8 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50673 - "GET /app/checks/resolve-building?lat=17.44198&lng=78.397005 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50704 - "OPTIONS /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50706 - "OPTIONS /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50704 - "GET /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50704 - "OPTIONS /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=7b39067b-993a-4ab6-b1a0-4262f7b23f3c HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50704 - "GET /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=7b39067b-993a-4ab6-b1a0-4262f7b23f3c HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50706 - "GET /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.14:39158 - "GET /app/checks HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50728 - "GET /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50728 - "OPTIONS /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=38015f75-4084-442f-8c06-3e0bc75fdd18 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50728 - "GET /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=38015f75-4084-442f-8c06-3e0bc75fdd18 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50728 - "OPTIONS /app/geocode/reverse?lat=17.44197382646035&lng=78.39696293005944 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50732 - "OPTIONS /app/checks/resolve-building?lat=17.441974&lng=78.396963 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50728 - "GET /app/geocode/reverse?lat=17.44197382646035&lng=78.39696293005944 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50728 - "OPTIONS /app/geocode/suggest?q=Plot+No%3A+25%2C+15%2C+Madhapur+Rd%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=38015f75-4084-442f-8c06-3e0bc75fdd18 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50728 - "GET /app/geocode/suggest?q=Plot+No%3A+25%2C+15%2C+Madhapur+Rd%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=38015f75-4084-442f-8c06-3e0bc75fdd18 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50730 - "GET /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50732 - "GET /app/checks/resolve-building?lat=17.441974&lng=78.396963 HTTP/1.1" 200 OK
+INFO:     192.168.1.14:44566 - "POST /app/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.1.14:43892 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964 HTTP/1.1" 200 OK
+INFO:     192.168.1.26:49485 - "OPTIONS /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.26:50974 - "OPTIONS /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/obstacles HTTP/1.1" 200 OK
+INFO:     192.168.1.26:49485 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.26:50974 - "GET /app/checks/4629025c-9b0a-4662-8e27-1f0a98c7a964/obstacles HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50787 - "GET /app/geocode/reverse?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50787 - "OPTIONS /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=da2b91d1-a263-4be1-9ea2-23a69c59a38d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50787 - "GET /app/geocode/suggest?q=23%2C+Madhapur+Rd%2C+Kavuri+Hills+Phase+3%2C+Kavuri+Hills%2C+Jubilee+Hills%2C+Hyderabad%2C+Telangana+500081%2C+India&session=da2b91d1-a263-4be1-9ea2-23a69c59a38d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50787 - "OPTIONS /app/geocode/reverse?lat=17.442137594945436&lng=78.39689453372957 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50791 - "OPTIONS /app/checks/resolve-building?lat=17.442138&lng=78.396895 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50787 - "GET /app/geocode/reverse?lat=17.442137594945436&lng=78.39689453372957 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50787 - "OPTIONS /app/geocode/suggest?q=17%2C+Road+No.+9%2C+Kakatiya+Hills%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=da2b91d1-a263-4be1-9ea2-23a69c59a38d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50787 - "GET /app/geocode/suggest?q=17%2C+Road+No.+9%2C+Kakatiya+Hills%2C+Guttala_Begumpet%2C+Kavuri+Hills%2C+Madhapur%2C+Hyderabad%2C+Telangana+500081%2C+India&session=da2b91d1-a263-4be1-9ea2-23a69c59a38d HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50789 - "GET /app/checks/resolve-building?lat=17.441851&lng=78.396975 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50791 - "GET /app/checks/resolve-building?lat=17.442138&lng=78.396895 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50793 - "OPTIONS /app/checks/resolve-building?lat=17.442137594945436&lng=78.39689453372957 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50793 - "GET /app/checks/resolve-building?lat=17.442137594945436&lng=78.39689453372957 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50795 - "OPTIONS /app/checks HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50795 - "POST /app/checks HTTP/1.1" 201 Created
+INFO:     192.168.1.4:50795 - "OPTIONS /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50795 - "OPTIONS /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50806 - "POST /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete HTTP/1.1" 202 Accepted
+INFO:     192.168.1.4:50795 - "POST /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete HTTP/1.1" 202 Accepted
+INFO:     192.168.1.4:50795 - "OPTIONS /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete/f923703f-3e40-4c77-8569-4a26259503a2 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50795 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete/f923703f-3e40-4c77-8569-4a26259503a2 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50795 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete/f923703f-3e40-4c77-8569-4a26259503a2 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50795 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete/f923703f-3e40-4c77-8569-4a26259503a2 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50795 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete/f923703f-3e40-4c77-8569-4a26259503a2 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50795 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete/f923703f-3e40-4c77-8569-4a26259503a2 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50795 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete/f923703f-3e40-4c77-8569-4a26259503a2 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50795 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete/f923703f-3e40-4c77-8569-4a26259503a2 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50795 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete/f923703f-3e40-4c77-8569-4a26259503a2 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50795 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete/f923703f-3e40-4c77-8569-4a26259503a2 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50795 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete/f923703f-3e40-4c77-8569-4a26259503a2 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50795 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete/f923703f-3e40-4c77-8569-4a26259503a2 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50795 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete/f923703f-3e40-4c77-8569-4a26259503a2 HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50795 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/complete/f923703f-3e40-4c77-8569-4a26259503a2 HTTP/1.1" 200 OK
+INFO:     192.168.1.14:59418 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50808 - "OPTIONS /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50808 - "OPTIONS /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/obstacles HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50808 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50822 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/obstacles HTTP/1.1" 200 OK
+INFO:     192.168.1.14:37502 - "POST /app/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.1.14:37506 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b HTTP/1.1" 200 OK
+INFO:     192.168.1.14:52792 - "POST /app/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.1.14:52798 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b HTTP/1.1" 200 OK
+INFO:     192.168.1.14:38022 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50867 - "OPTIONS /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50868 - "OPTIONS /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/obstacles HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50867 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/solar-layout HTTP/1.1" 200 OK
+INFO:     192.168.1.4:50868 - "GET /app/checks/72966b03-e25b-4fb0-81dd-e3059a73419b/obstacles HTTP/1.1" 200 OK

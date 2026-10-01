@@ -24,6 +24,7 @@ from solarfit.db import get_session
 from solarfit.domain import schemas
 from solarfit.domain.site import RoofSiteType, Site
 from solarfit.engine.area import boundary_area_m2, compute_usable_area_m2
+from solarfit.packs import config_pack
 from solarfit.providers import manual, solar_api, validation
 from solarfit.providers.validation import GeometryRejected
 from solarfit.repositories import sites as repo
@@ -122,6 +123,8 @@ def create_site_core(
     tags: list[str] | None = None,
     monthly_bill_low_inr: float | None = None,
     monthly_bill_high_inr: float | None = None,
+    highest_consumption_kwh: float | None = None,
+    lowest_consumption_kwh: float | None = None,
     roof_type: str | None = None,
     roof_material: str | None = None,
     roof_slope: str | None = None,
@@ -163,6 +166,7 @@ def create_site_core(
     imagery_quality = None
     imagery_date = None
     resolution_note = None
+    competing_buildings_nearby: int | None = None
 
     # GEO-04 + SHADE-01. Only when the caller gave an address and no
     # geometry — a supplied boundary always wins, since every other
@@ -217,6 +221,60 @@ def create_site_core(
                     "outline — trace it (GEO-02) or field-measure it (GEO-06) "
                     "to supersede this"
                 )
+
+            # GEO-04's real-outline upgrade: vectorise the Solar API's own
+            # building mask instead of settling for the rectangle above.
+            # A second, billed Data Layers call — worth it exactly once per
+            # site creation, never repeated on every later assessment. Any
+            # failure (no mask at this location/quality tier, a download
+            # error, nothing vectorisable) falls back to the rectangle
+            # already stored above; extract_roof_polygon_from_mask() never
+            # raises, so this can never block site creation the rectangle
+            # path already handles.
+            mask_result = solar_api.extract_roof_polygon_from_mask(
+                float(centroid["coordinates"][1]), float(centroid["coordinates"][0])
+            )
+            # A real, independent signal for "is the pin near more than
+            # one building" — the mask's own disconnected-region count,
+            # not a guess. Recorded regardless of whether a polygon was
+            # selected: a customer whose pin sits between two buildings
+            # is entitled to know that even when neither region was
+            # close enough to trust as theirs.
+            competing_buildings_nearby = mask_result.competing_regions
+            if mask_result.polygon is not None:
+                # Same disagreement guard as routers/app_checks.py::
+                # resolve_building_at_point() — _select_building_region()
+                # picks whichever mask region is nearest the query point,
+                # independent of (and not cross-checked against) Building
+                # Insights' own building match. Only trust it when it's
+                # close enough to agree; otherwise a dense block can hand
+                # a customer their neighbour's real-but-wrong outline
+                # instead of their own building's coarser rectangle.
+                mask_centroid = solar_api.polygon_centroid(mask_result.polygon)
+                disagreement_m = solar_api.centroid_disagreement_m(mask_centroid, centroid)
+                max_disagreement_m = float(config_pack.get_roof_mask_params()["max_pin_distance_m"])
+                if disagreement_m is not None and disagreement_m > max_disagreement_m:
+                    resolution_note = (
+                        f"{resolution_note or ''} building mask found a region "
+                        f"{disagreement_m:.1f}m from the resolved building centre — "
+                        "too far to trust as the same building, kept the rectangle."
+                    ).strip()
+                else:
+                    boundary = mask_result.polygon
+                    geometry_source = "solar_api_mask"
+                    # The mask region nearest the query point can legitimately
+                    # be a different structure than Building Insights resolved
+                    # (see solar_api.polygon_centroid()'s docstring) — recompute
+                    # from the boundary actually being stored, never leave the
+                    # earlier Building Insights centroid attached to this
+                    # different shape.
+                    centroid = mask_centroid or centroid
+                    resolution_note = (
+                        "boundary vectorised from the Solar API's own building mask — "
+                        "a real outline, not a bounding box. Still fully automated: "
+                        "trace it (GEO-02) or field-measure it (GEO-06) for a "
+                        "human-verified shape."
+                    )
         elif centroid is None:
             # No coverage AND no location: nothing to store at all.
             raise HTTPException(
@@ -318,6 +376,7 @@ def create_site_core(
         imagery_quality=imagery_quality,
         imagery_date=imagery_date,
         geometry_confidence=confidence,
+        competing_buildings_nearby=competing_buildings_nearby,
         shading=shading,
         address=address,
         district=district,
@@ -327,6 +386,8 @@ def create_site_core(
         usn_source=payload.usn_source,
         monthly_bill_low_inr=monthly_bill_low_inr,
         monthly_bill_high_inr=monthly_bill_high_inr,
+        highest_consumption_kwh=highest_consumption_kwh,
+        lowest_consumption_kwh=lowest_consumption_kwh,
         roof_type=roof_type,
         roof_material=roof_material,
         roof_slope=roof_slope,

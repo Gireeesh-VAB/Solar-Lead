@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Sun } from "lucide-react";
 import { SignupForm } from "@/components/forms/SignupForm";
+import { BackButton } from "@/components/ui/BackButton";
 
 export const metadata: Metadata = {
   title: "Sign up",
@@ -11,7 +12,10 @@ export const metadata: Metadata = {
 
 export default function SignupPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-paper px-4">
+    <main className="relative flex min-h-screen items-center justify-center bg-paper px-4">
+      <div className="absolute left-4 top-4">
+        <BackButton fallbackHref="/login" />
+      </div>
       <div className="w-full max-w-sm rounded-[var(--radius-app)] border border-line bg-surface p-6">
         <div className="mb-6 flex items-center gap-2">
           <Sun size={22} strokeWidth={1.75} className="text-amber" aria-hidden="true" />

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 from sqlalchemy.exc import IntegrityError
@@ -17,9 +17,11 @@ from solarfit.auth_users import (
     hash_password,
     verify_password,
 )
-from solarfit.db import get_session
+from solarfit.db import get_session, session_scope
+from solarfit.repositories import audit as audit_repo
 from solarfit.repositories import users as users_repo
 from solarfit.repositories.users import UserRow
+from solarfit.routers.common import actor_audit_fields, request_audit_meta
 
 router = APIRouter(prefix="/app/auth", tags=["app-auth"])
 
@@ -52,6 +54,11 @@ class SignupRequest(_CamelModel):
 class LoginRequest(_CamelModel):
     email: str = Field(pattern=_EMAIL_PATTERN, max_length=255)
     password: str
+
+
+class ChangePasswordRequest(_CamelModel):
+    current_password: str
+    new_password: str = Field(min_length=MIN_PASSWORD_LENGTH)
 
 
 class UserOut(_CamelModel):
@@ -130,7 +137,9 @@ def signup(
 
 
 @router.post("/login", response_model=AuthResponse)
-def login(payload: LoginRequest, session: Annotated[Session, Depends(get_session)]) -> AuthResponse:
+def login(
+    payload: LoginRequest, request: Request, session: Annotated[Session, Depends(get_session)]
+) -> AuthResponse:
     allowed, _remaining = check_rate_limit(f"login:{payload.email}", LOGIN_RATE_LIMIT_PER_MINUTE)
     if not allowed:
         raise HTTPException(
@@ -145,9 +154,37 @@ def login(payload: LoginRequest, session: Annotated[Session, Depends(get_session
     # real account, the same anti-enumeration reasoning auth.py already
     # applies to unknown-vs-revoked API keys.
     if row is None or not verify_password(payload.password, row.password_hash):
+        # Own transaction, committed before raising: get_session()'s
+        # teardown rolls back on any exception out of this function (see
+        # db.py::session_scope), which would otherwise silently discard
+        # the very audit row a failed-login attempt exists to record.
+        with session_scope() as audit_session:
+            audit_repo.write_audit_log(
+                audit_session,
+                actor=payload.email,
+                action="auth.login_failed",
+                target=payload.email,
+                details=f"failed login attempt for {payload.email}",
+                actor_id=str(row.id) if row is not None else None,
+                actor_type=row.role if row is not None else None,
+                actor_role=row.role if row is not None else None,
+                entity_type="user",
+                entity_id=str(row.id) if row is not None else payload.email,
+                **request_audit_meta(request),
+            )
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid email or password")
 
     users_repo.touch_last_login(session, row.id)
+    audit_repo.write_audit_log(
+        session,
+        **actor_audit_fields(AuthenticatedUser(id=str(row.id), email=row.email, role=row.role, name=row.name)),
+        action="auth.login",
+        target=str(row.id),
+        details=f"{row.email} logged in",
+        entity_type="user",
+        entity_id=str(row.id),
+        **request_audit_meta(request),
+    )
     token = create_access_token(str(row.id), row.role)
     return AuthResponse(token=token, user=_user_out(row))
 
@@ -161,3 +198,36 @@ def me(
     if row is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid or expired token")
     return _user_out(row)
+
+
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+def change_password(
+    payload: ChangePasswordRequest,
+    request: Request,
+    user: Annotated[AuthenticatedUser, Depends(current_user)],
+    session: Annotated[Session, Depends(get_session)],
+) -> None:
+    """Role-agnostic — any authenticated user (vendor Settings page is
+    the first caller, but nothing here is vendor-specific).
+
+    Note this does NOT invalidate the bearer token already in the
+    caller's browser: auth is fully stateless (no session/revocation
+    store — see auth_users.py's module docstring), so an old token stays
+    valid until it naturally expires regardless of a password change.
+    That's an existing property of the whole auth system, not something
+    this endpoint could fix on its own.
+    """
+    row = users_repo.get_by_id(session, user.id)
+    if row is None or not verify_password(payload.current_password, row.password_hash):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "current password is incorrect")
+    users_repo.update_password(session, user.id, password_hash=hash_password(payload.new_password))
+    audit_repo.write_audit_log(
+        session,
+        **actor_audit_fields(user),
+        action="auth.password_changed",
+        target=user.id,
+        details=f"{user.email} changed their password",
+        entity_type="user",
+        entity_id=user.id,
+        **request_audit_meta(request),
+    )

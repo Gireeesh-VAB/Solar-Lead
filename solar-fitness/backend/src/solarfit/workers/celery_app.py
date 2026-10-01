@@ -29,6 +29,15 @@ celery_app.conf.beat_schedule = {
         "task": "solarfit.usn.purge_expired_uploads",
         "schedule": crontab(hour=3, minute=0),
     },
+    # The time-bound lead engine (repositories/vendors.py::
+    # sweep_vendor_job_sla(), via workers/tasks_vendors.py). Every 15
+    # minutes — frequent enough that a vendor missing a deadline gets
+    # flagged/reassigned promptly, infrequent enough not to hammer the
+    # DB with a full open-jobs scan.
+    "sweep-vendor-sla": {
+        "task": "solarfit.vendors.sweep_sla",
+        "schedule": crontab(minute="*/15"),
+    },
 }
 
 
@@ -57,6 +66,7 @@ def refine_vision_task(lat: float, lng: float, boundary: dict, radius_meters: fl
         refine_vision_task.delay(lat, lng, boundary)
     """
     from solarfit.domain.assessment import VisionRefinement
+    from solarfit.providers.obstacle_detectors import detect_obstacles, get_configured_detectors
     from solarfit.providers.vision import (
         crop_to_boundary,
         fetch_rgb_imagery,
@@ -77,6 +87,19 @@ def refine_vision_task(lat: float, lng: float, boundary: dict, radius_meters: fl
         return VisionRefinement(status="insufficient_data").model_dump()
 
     result = refine_with_vision_model(cropped, boundary)
+
+    # Phase 7 — the pluggable seam (providers/obstacle_detectors.py).
+    # get_configured_detectors() returns [] until a second, genuinely
+    # independent detector exists, so this is a no-op today; once one is
+    # registered, its obstacles merge in here with no other pipeline
+    # change (engine/obstacles.py's threshold split already applies
+    # uniformly regardless of Obstacle.source).
+    extra_detectors = get_configured_detectors()
+    if extra_detectors and result.status == "ok":
+        result = result.model_copy(
+            update={"obstacles": [*result.obstacles, *detect_obstacles(cropped, boundary, detectors=extra_detectors)]}
+        )
+
     return result.model_dump()
 
 
@@ -117,3 +140,28 @@ def generate_panorama_task(boundary: dict, weather: dict | None = None, params: 
 
     result = generate_panorama(boundary, weather, params)
     return result.model_dump()
+
+
+# Tasks defined in SEPARATE modules only get registered with
+# `celery_app` once that module is actually imported. Some FastAPI
+# request path importing it transitively (e.g. routers/app_checks.py
+# imports tasks_assessments to call .delay()) is enough to make
+# DISPATCH work — but a worker started with `celery -A
+# solarfit.workers.celery_app worker` only ever imports THIS file, and
+# would receive a message for a task it has never heard of (Celery's
+# NotRegistered error, the task silently never running). That failure
+# mode is exactly as real for a task that's ONLY ever fired by Celery
+# Beat's schedule (tasks_usn.py's purge job, tasks_vendors.py's SLA
+# sweep — beat only needs the task NAME string to schedule a message;
+# the WORKER consuming that message still needs the task registered) as
+# for one a request also dispatches — confirmed neither tasks_usn nor
+# tasks_vendors was imported anywhere reachable by the worker process
+# before this fix, so both had this bug regardless of how they're
+# triggered. These imports — after every task above them is already
+# registered, so there's nothing left for either to shadow — are what
+# make the worker register them too.
+from solarfit.workers import (
+    tasks_assessments,  # noqa: F401
+    tasks_usn,  # noqa: F401
+    tasks_vendors,  # noqa: F401
+)

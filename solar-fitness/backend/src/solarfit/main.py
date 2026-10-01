@@ -9,18 +9,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from solarfit.config import get_settings
 from solarfit.routers import (
     app_admin_engine,
+    app_admin_installations,
     app_admin_platform,
     app_admin_vendors,
     app_assessments,
     app_auth,
     app_calibration_ml,
     app_checks,
+    app_financials,
     app_geocode,
     app_imports,
     app_jurisdictions,
+    app_notifications,
     app_sites,
     app_usn,
     app_vendor,
+    app_vendor_installations,
     artifacts,
     assessments,
     imports,
@@ -52,12 +56,16 @@ app.include_router(app_admin_platform.router)
 app.include_router(app_admin_engine.router)
 app.include_router(app_vendor.router)
 app.include_router(app_admin_vendors.router)
+app.include_router(app_admin_installations.router)
+app.include_router(app_vendor_installations.router)
 app.include_router(app_jurisdictions.router)
 app.include_router(app_calibration_ml.router)
 app.include_router(app_usn.router)
 app.include_router(app_assessments.router)
 app.include_router(app_checks.router)
+app.include_router(app_financials.router)
 app.include_router(app_geocode.router)
+app.include_router(app_notifications.router)
 app.include_router(artifacts.router)
 
 

@@ -15,15 +15,20 @@ on a result page, which is what makes it worth raising over.
 import math
 
 import pytest
-from shapely.geometry import Polygon, box
+from shapely.geometry import MultiPolygon, Polygon, box
 
 from solarfit.engine.panel_packing import (
+    PackedLayout,
+    PackedPanel,
     assert_not_double_derated,
     pack_panels,
+    pack_panels_best_orientation,
     row_gap_m,
+    select_for_target_capacity,
     solar_noon_altitude_deg,
     to_wgs84_rings,
 )
+from solarfit.engine.panel_validation import validate_layout
 
 HYDERABAD_LAT = 17.385
 PANEL_L, PANEL_W = 1.879, 1.045
@@ -36,6 +41,12 @@ def _square(side: float) -> Polygon:
 def _l_shape() -> Polygon:
     """A 20 x 20 m roof with a 10 x 10 m bite out of one corner."""
     return Polygon([(0, 0), (20, 0), (20, 10), (10, 10), (10, 20), (0, 20)])
+
+
+def _multi_square() -> MultiPolygon:
+    """Two disjoint 10x10 squares — the MultiPolygon shape a real setback/
+    exclusion difference can produce for an irregular roof."""
+    return MultiPolygon([_square(10.0), box(20.0, 0.0, 30.0, 10.0)])
 
 
 # ---------------------------------------------------------------------------
@@ -206,6 +217,51 @@ def test_rings_come_back_as_drawable_coordinates():
 
 
 # ---------------------------------------------------------------------------
+# Capping a full layout at the customer's recommended capacity — not the
+# roof's technical maximum (CON-07: don't fill a roof nobody asked to fill)
+# ---------------------------------------------------------------------------
+
+
+def test_selection_stops_at_the_target_not_the_full_roof():
+    full = pack_panels(_square(20.0), latitude_deg=HYDERABAD_LAT, tilt_deg=15.0)
+    assert full.count > 3  # the square roof comfortably fits more than this
+
+    target_kwp = 3 * full.panel_watts / 1000.0  # room for exactly 3 panels
+    selected = select_for_target_capacity(full, target_kwp)
+
+    assert selected.count == 3
+    assert selected.count < full.count
+
+
+def test_selection_keeps_every_panel_when_the_target_exceeds_the_roof():
+    full = pack_panels(_square(20.0), latitude_deg=HYDERABAD_LAT, tilt_deg=15.0)
+    selected = select_for_target_capacity(full, target_kwp=full.kwp * 10)
+
+    assert selected.count == full.count
+
+
+def test_selection_is_empty_without_a_target():
+    full = pack_panels(_square(20.0), latitude_deg=HYDERABAD_LAT, tilt_deg=15.0)
+
+    assert select_for_target_capacity(full, None).count == 0
+    assert select_for_target_capacity(full, 0).count == 0
+    assert select_for_target_capacity(full, -5).count == 0
+
+
+def test_selected_panels_are_still_the_real_footprints():
+    """A selection is a subset, not a re-pack — every kept panel must still
+    be one of the originally packed, roof-contained footprints."""
+    roof = _square(20.0)
+    full = pack_panels(roof, latitude_deg=HYDERABAD_LAT, tilt_deg=15.0)
+    selected = select_for_target_capacity(full, target_kwp=full.kwp / 2)
+
+    kept_footprints = {id(p) for p in selected.panels}
+    assert kept_footprints.issubset({id(p) for p in full.panels})
+    for panel in selected.panels:
+        assert roof.contains(panel.footprint)
+
+
+# ---------------------------------------------------------------------------
 # The double-derate guard
 # ---------------------------------------------------------------------------
 
@@ -245,3 +301,118 @@ def test_a_packed_layout_is_smaller_than_the_density_estimate():
 
     density_estimate = roof.area * 0.2
     assert layout.kwp < density_estimate
+
+
+# ---------------------------------------------------------------------------
+# Regression: the new fields are additive, not a behaviour change
+# ---------------------------------------------------------------------------
+
+
+def test_a_plain_rectangle_is_unaffected_by_the_new_fields():
+    layout = pack_panels(_square(20.0), latitude_deg=HYDERABAD_LAT, tilt_deg=15.0, azimuth_deg=180.0)
+
+    assert layout.count > 0
+    assert layout.rejected_count == 0
+    assert layout.orientation == "portrait"
+
+
+# ---------------------------------------------------------------------------
+# rejected_count — geometry rejections tracked, not just accepted panels
+# ---------------------------------------------------------------------------
+
+
+def test_rejected_count_tracks_candidates_that_failed_containment():
+    """The L-shape's notch necessarily produces candidate rectangles that
+    straddle the missing corner and get rejected by working.contains()."""
+    layout = pack_panels(_l_shape(), latitude_deg=HYDERABAD_LAT, tilt_deg=10.0, azimuth_deg=180.0)
+
+    assert layout.rejected_count > 0
+
+
+def test_rejected_count_is_zero_for_a_plain_rectangle():
+    """A plain axis-aligned rectangle's bounding box IS the shape itself,
+    so every candidate the x/y loop's own bounds admit is automatically
+    contained — rejections only happen for a concave shape like the L."""
+    layout = pack_panels(_square(20.0), latitude_deg=HYDERABAD_LAT, tilt_deg=15.0, azimuth_deg=180.0)
+
+    assert layout.count > 0
+    assert layout.rejected_count == 0
+
+
+# ---------------------------------------------------------------------------
+# pack_panels_best_orientation — tries both, keeps the better one
+# ---------------------------------------------------------------------------
+
+
+def test_pack_panels_reports_its_own_orientation_on_the_layout():
+    landscape = pack_panels(
+        _square(20.0), latitude_deg=HYDERABAD_LAT, params={"orientation": "landscape"}
+    )
+    portrait = pack_panels(
+        _square(20.0), latitude_deg=HYDERABAD_LAT, params={"orientation": "portrait"}
+    )
+
+    assert landscape.orientation == "landscape"
+    assert portrait.orientation == "portrait"
+
+
+def test_pack_panels_best_orientation_picks_the_orientation_with_more_panels():
+    roof = _square(20.0)
+    best = pack_panels_best_orientation(roof, latitude_deg=HYDERABAD_LAT, tilt_deg=15.0)
+    portrait = pack_panels(roof, latitude_deg=HYDERABAD_LAT, tilt_deg=15.0, params={"orientation": "portrait"})
+    landscape = pack_panels(
+        roof, latitude_deg=HYDERABAD_LAT, tilt_deg=15.0, params={"orientation": "landscape"}
+    )
+
+    assert best.count == max(portrait.count, landscape.count)
+    assert best.orientation == ("portrait" if portrait.count >= landscape.count else "landscape")
+
+
+def test_pack_panels_best_orientation_ties_prefer_portrait():
+    # An empty/impossible-to-pack roof ties at zero for both orientations.
+    best = pack_panels_best_orientation(_square(0.1), latitude_deg=HYDERABAD_LAT)
+    assert best.orientation == "portrait"
+
+
+# ---------------------------------------------------------------------------
+# engine/panel_validation.py — an independent re-check, not a rubber stamp
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "roof",
+    [_square(20.0), _l_shape(), _multi_square(), box(0.0, 0.0, 15.0, 25.0)],
+)
+def test_no_panel_ever_falls_outside_the_usable_polygon(roof):
+    layout = pack_panels_best_orientation(roof, latitude_deg=HYDERABAD_LAT, tilt_deg=12.0, azimuth_deg=170.0)
+    validation = validate_layout(layout, roof)
+
+    assert validation.panels_outside_roof == 0
+    assert validation.ok
+
+
+def test_validate_layout_flags_a_panel_deliberately_placed_outside_the_roof():
+    """Proves the validator actually catches something — not always zero
+    by construction."""
+    roof = _square(20.0)
+    bad_panel = PackedPanel(footprint=box(25.0, 25.0, 27.0, 27.0), watts=400.0, row=0)
+    layout = PackedLayout([bad_panel], panel_watts=400.0, tilt_deg=15.0, azimuth_deg=180.0, row_gap_m=0.3)
+
+    validation = validate_layout(layout, roof)
+
+    assert validation.panels_outside_roof == 1
+    assert not validation.ok
+
+
+def test_validate_layout_flags_intersection_with_exclusions():
+    roof = _square(20.0)
+    layout = pack_panels(roof, latitude_deg=HYDERABAD_LAT, tilt_deg=10.0, azimuth_deg=180.0)
+    assert layout.count > 0
+
+    # A synthetic exclusion overlapping exactly one packed panel's footprint.
+    exclusion = layout.panels[0].footprint
+
+    validation = validate_layout(layout, roof, exclusions_metric=exclusion)
+
+    assert validation.panels_intersecting_obstacles >= 1
+    assert not validation.ok

@@ -171,7 +171,7 @@ export function ObstacleSurveySection({ job }: { job: VendorJob }) {
                   if (file) setDraft({ ...draft, photoDataUrl: await readAsDataUrl(file) });
                 }}
               />
-              <span className="inline-flex items-center gap-1 rounded-[var(--radius-app)] border border-line px-2 py-1 hover:border-teal">
+              <span className="inline-flex items-center gap-1 rounded-[var(--radius-app)] border border-line px-2 py-1 hover:border-brand">
                 <ImageIcon size={13} strokeWidth={1.75} /> {draft.photoDataUrl ? "Photo attached" : "Attach photo"}
               </span>
               {draft.photoDataUrl && <Badge tone="blue">Ready</Badge>}

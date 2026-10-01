@@ -26,7 +26,7 @@ exists.
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from sqlalchemy import DateTime, String, select
+from sqlalchemy import DateTime, String, func, select
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from solarfit.db import Base
@@ -92,9 +92,11 @@ def count_uploaded_since(session: Session, since: datetime) -> int:
     """Real proxy for Vision API usage on the admin platform-health
     quota display — every bill/payment-proof upload triggers one OCR
     call. No per-provider call metering exists anywhere in this
-    codebase, so this is the closest honest count."""
-    stmt = select(UsnOcrUpload).where(UsnOcrUpload.uploaded_at >= since)
-    return len(list(session.scalars(stmt).all()))
+    codebase, so this is the closest honest count. COUNT(*) in SQL
+    rather than fetching every matching row just to len() them —
+    measurably faster on that endpoint."""
+    stmt = select(func.count()).select_from(UsnOcrUpload).where(UsnOcrUpload.uploaded_at >= since)
+    return session.scalar(stmt) or 0
 
 
 def find_expired(session: Session) -> list[UsnOcrUpload]:

@@ -1,7 +1,7 @@
 """Owner: keerthana (Vendor domain, customer-account admin, jurisdictions).
 
-The vendor's own portal — job queue, profile, payouts, earnings,
-submissions. Every route requires role="vendor"; "which vendor am I"
+The vendor's own portal — job queue, profile, submissions. Every route
+requires role="vendor"; "which vendor am I"
 resolves from current_user().vendor_id (karthik's field on the users
 row), never from a caller-supplied vendor id.
 
@@ -15,22 +15,30 @@ on either side.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import Field
 from sqlalchemy.orm import Session
 
 from solarfit.auth_users import AuthenticatedUser, require_role
 from solarfit.db import get_session
+from solarfit.providers import manual
+from solarfit.providers.validation import GeometryRejected, geometry_confidence
+from solarfit.repositories import audit as audit_repo
+from solarfit.repositories import notifications as notifications_repo
+from solarfit.repositories import sites as sites_repo
+from solarfit.repositories import users as users_repo
 from solarfit.repositories import vendors as repo
 from solarfit.repositories.sites import SiteRow
 from solarfit.repositories.vendors import VendorJobRow, VendorPayoutRow, VendorRow
-from solarfit.routers.common import CamelModel
+from solarfit.routers.common import CamelModel, actor_audit_fields, request_audit_meta
 
 router = APIRouter(prefix="/app/vendor", tags=["app-vendor"])
 
-VendorJobStatus = Literal["queued", "accepted", "in_progress", "submitted", "sla_at_risk", "overdue"]
+VendorJobStatus = Literal[
+    "queued", "accepted", "in_progress", "submitted", "sla_at_risk", "overdue", "declined"
+]
 
 # In-person survey data (spec sections 3 "Roof Layout/Obstacles" and 7
 # "Structural Assessment") — only ever vendor-captured, on-site. See
@@ -243,11 +251,6 @@ class VendorPayoutMethodOut(CamelModel):
     masked_account: str
 
 
-class VendorAccuracyPointOut(CamelModel):
-    label: str
-    score: float
-
-
 class VendorProfileOut(CamelModel):
     vendor_id: str
     name: str
@@ -255,10 +258,16 @@ class VendorProfileOut(CamelModel):
     service_area: VendorServiceAreaOut
     availability: bool
     accuracy_score: float
-    accuracy_trend: list[VendorAccuracyPointOut]
     payout_method: VendorPayoutMethodOut
     documents: list[str]
     joined_at: datetime
+    # Settings page's read-only Account Information section. These
+    # columns already existed on VendorRow (admin onboarding fields) but
+    # were never exposed on this response before — additive, so existing
+    # consumers of GET /profile are unaffected.
+    legal_name: str | None = None
+    contact_phone: str | None = None
+    contact_email: str | None = None
 
 
 class PayoutEntryOut(CamelModel):
@@ -270,16 +279,26 @@ class PayoutEntryOut(CamelModel):
     method: Literal["UPI", "Bank transfer"]
 
 
-class VendorEarningsSummaryOut(CamelModel):
-    week_total_inr: float
-    pending_inr: float
-    paid_inr: float
-    disputed_inr: float
-    jobs_completed_this_week: int
-
-
 class UpdateAvailabilityRequest(CamelModel):
     available: bool
+
+
+class VendorNotificationPreferencesOut(CamelModel):
+    new_job_assignment: bool
+    job_deadline_reminders: bool
+    job_reassignment: bool
+    submission_and_payout_updates: bool
+    dispute_updates: bool
+    installation_updates: bool
+
+
+class UpdateNotificationPreferencesRequest(CamelModel):
+    new_job_assignment: bool
+    job_deadline_reminders: bool
+    job_reassignment: bool
+    submission_and_payout_updates: bool
+    dispute_updates: bool
+    installation_updates: bool
 
 
 class DisputeRequest(CamelModel):
@@ -288,6 +307,18 @@ class DisputeRequest(CamelModel):
 
 class PanoramaPhotoRequest(CamelModel):
     data_url: str = Field(min_length=1)
+
+
+class BoundaryPoint(CamelModel):
+    lat: float
+    lng: float
+
+
+class SubmitFieldBoundaryRequest(CamelModel):
+    # An open path (the UI's own drawn ring, not yet closed) — same
+    # convention app_checks.py's confirmed_boundary uses; closed into a
+    # GeoJSON ring server-side, same as _apply_manual_boundary() there.
+    points: list[BoundaryPoint] = Field(min_length=3)
 
 
 class ShadingNotesRequest(CamelModel):
@@ -332,8 +363,7 @@ def _job_out(session: Session, row: VendorJobRow) -> VendorJobOut:
     )
 
 
-def _profile_out(row: VendorRow, history: list) -> VendorProfileOut:
-    accuracy_trend = [VendorAccuracyPointOut(label=h.label, score=h.score) for h in history]
+def _profile_out(row: VendorRow) -> VendorProfileOut:
     return VendorProfileOut(
         vendor_id=str(row.id),
         name=row.name,
@@ -341,11 +371,33 @@ def _profile_out(row: VendorRow, history: list) -> VendorProfileOut:
         service_area=VendorServiceAreaOut(**row.service_area),
         availability=row.availability,
         accuracy_score=row.accuracy_score,
-        accuracy_trend=accuracy_trend,
         payout_method=VendorPayoutMethodOut(type=row.payout_method_type, masked_account=row.payout_masked_account),
         documents=list(row.documents or []),
         joined_at=row.joined_at,
+        legal_name=row.legal_name,
+        contact_phone=row.contact_phone,
+        contact_email=row.contact_email,
     )
+
+
+_DEFAULT_NOTIFICATION_PREFERENCES: dict[str, bool] = {
+    "new_job_assignment": True,
+    "job_deadline_reminders": True,
+    "job_reassignment": True,
+    "submission_and_payout_updates": True,
+    "dispute_updates": True,
+    "installation_updates": True,
+}
+
+
+def _notification_preferences_out(row: VendorRow) -> VendorNotificationPreferencesOut:
+    # Merge over the default rather than trusting the stored dict's keys
+    # directly — a vendor row created before this column existed reads
+    # back as {} until its first PATCH, and should still show every
+    # toggle "on" (the migration's own server_default), not a KeyError.
+    stored = row.notification_preferences or {}
+    merged = {**_DEFAULT_NOTIFICATION_PREFERENCES, **stored}
+    return VendorNotificationPreferencesOut(**merged)
 
 
 def _payout_out(row: VendorPayoutRow) -> PayoutEntryOut:
@@ -363,6 +415,41 @@ def _require_vendor_id(user: AuthenticatedUser) -> str:
     if user.vendor_id is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no vendor profile linked to this account")
     return user.vendor_id
+
+
+def _audit_job_action(
+    session: Session,
+    request: Request,
+    user: AuthenticatedUser,
+    job: VendorJobRow,
+    *,
+    action: str,
+    details: str,
+    previous_value: dict | None = None,
+    new_value: dict | None = None,
+    reason: str | None = None,
+) -> None:
+    """Every significant vendor action on a job — spec section 6's
+    "Project Activity"/"Technical/Project Work" categories — logged the
+    same way, so ~15 call sites on this router don't each hand-build the
+    same entity/project/vendor reference. `job.site_id` is the one id
+    stable across the whole lifecycle (assessment -> vendor_job ->
+    installation all key off it, see app_assessments.py), used as
+    project_id the same way the admin-side review endpoints do."""
+    audit_repo.write_audit_log(
+        session,
+        **actor_audit_fields(user),
+        action=action,
+        target=str(job.id),
+        details=details,
+        entity_type="vendor_job",
+        project_id=str(job.site_id),
+        vendor_id=str(job.vendor_id) if job.vendor_id else None,
+        previous_value=previous_value,
+        new_value=new_value,
+        reason=reason,
+        **request_audit_meta(request),
+    )
 
 
 # --------------------------------------------------------------------- #
@@ -385,65 +472,177 @@ def list_jobs(
 @router.get("/jobs/{job_id}", response_model=VendorJobOut)
 def get_job(
     job_id: str,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
     user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
 ) -> VendorJobOut:
     vendor_id = _require_vendor_id(user)
     row = _job_or_404(session, job_id, vendor_id)
+    # "Project opened/viewed" (spec section 6) — the one read this router
+    # audit-logs: it's the point a vendor sees a specific customer's site
+    # detail, unlike GET /jobs' list view. Doesn't commit its own
+    # transaction (get_session()'s teardown does) since nothing else here
+    # writes anything to roll back together with.
+    _audit_job_action(
+        session, request, user, row, action="vendor_job.viewed", details=f"{user.email} opened job {job_id}"
+    )
+    session.commit()
     return _job_out(session, row)
+
+
+def _update_status_or_409(
+    session: Session, job_id: str, vendor_id: str, *, status_value: str, **fields: Any
+) -> VendorJobRow:
+    """Thin adapter: repo.update_job_status() raises ValueError for an
+    illegal transition (repositories/vendors.py::VENDOR_JOB_TRANSITIONS) —
+    turn that into the same 409 the old per-endpoint _ensure_job_status()
+    checks used to raise directly, so a vendor can't e.g. "accept" then
+    "decline" a job already in its terminal submitted state, silently
+    reverting a completed survey submission (measuredCapacityKwp,
+    obstacleSurvey, etc. all still on the row) to "declined"."""
+    try:
+        row = repo.update_job_status(session, job_id, vendor_id, status=status_value, **fields)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "job not found")
+    return row
 
 
 @router.post("/jobs/{job_id}/accept", response_model=VendorJobOut)
 def accept_job(
     job_id: str,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
     user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
 ) -> VendorJobOut:
     vendor_id = _require_vendor_id(user)
-    _job_or_404(session, job_id, vendor_id)
-    row = repo.update_job_status(session, job_id, vendor_id, status="accepted")
+    existing = _job_or_404(session, job_id, vendor_id)
+    # A plain string snapshot, not a reference — existing and the row
+    # _update_status_or_409 returns share the same SQLAlchemy identity, so
+    # existing.status would otherwise already read back the NEW value by
+    # the time this dict is built.
+    previous_status = existing.status
+    row = _update_status_or_409(session, job_id, vendor_id, status_value="accepted")
+    _audit_job_action(
+        session,
+        request,
+        user,
+        row,
+        action="vendor_job.accepted",
+        details=f"{user.email} accepted job {job_id}",
+        previous_value={"status": previous_status},
+        new_value={"status": "accepted"},
+    )
+    session.commit()
     return _job_out(session, row)
 
 
 @router.post("/jobs/{job_id}/decline", response_model=VendorJobOut)
 def decline_job(
     job_id: str,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
     user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
 ) -> VendorJobOut:
-    """Matches lib/api/client.ts's real semantics: declining removes the
-    job from the vendor's queue entirely, not just a status flip — the
-    response still describes the job as it was right before removal."""
+    """Sets status="declined" rather than deleting the row — the job
+    stays in this vendor's own history (visible via GET /jobs, same as
+    any other past job) AND stays visible to an admin, who can reassign
+    it (POST /app/admin/assessments/{id}/reassign) rather than it
+    silently disappearing. See repositories/vendors.py::decline_job()'s
+    own docstring for why this replaced remove_job() here."""
     vendor_id = _require_vendor_id(user)
-    row = _job_or_404(session, job_id, vendor_id)
-    out = _job_out(session, row)
-    repo.remove_job(session, job_id, vendor_id)
-    return out
+    existing = _job_or_404(session, job_id, vendor_id)
+    previous_status = existing.status
+    try:
+        row = repo.decline_job(session, job_id, vendor_id)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    _audit_job_action(
+        session,
+        request,
+        user,
+        row,
+        action="vendor_job.declined",
+        details=f"{user.email} declined job {job_id}",
+        previous_value={"status": previous_status},
+        new_value={"status": "declined"},
+    )
+    # Every admin sees every decline — the same "no per-admin preference"
+    # discipline submit_job() below already applies, and a decline needs
+    # an admin to reassign the job, so it can't go unnoticed the way a
+    # customer-facing notification preference might suppress it.
+    for admin_user in users_repo.list_by_role(session, "admin"):
+        notifications_repo.create_notification(
+            session,
+            user_id=admin_user.id,
+            kind="job_declined",
+            title="A vendor declined a job",
+            body=f"Job in {row.district}, {row.state} was declined and needs reassignment.",
+        )
+    session.commit()
+    return _job_out(session, row)
 
 
 @router.post("/jobs/{job_id}/start", response_model=VendorJobOut)
 def start_job(
     job_id: str,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
     user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
 ) -> VendorJobOut:
     vendor_id = _require_vendor_id(user)
-    _job_or_404(session, job_id, vendor_id)
-    row = repo.update_job_status(session, job_id, vendor_id, status="in_progress")
+    existing = _job_or_404(session, job_id, vendor_id)
+    previous_status = existing.status
+    row = _update_status_or_409(session, job_id, vendor_id, status_value="in_progress")
+    _audit_job_action(
+        session,
+        request,
+        user,
+        row,
+        action="vendor_job.site_visit_started",
+        details=f"{user.email} started the site visit for job {job_id}",
+        previous_value={"status": previous_status},
+        new_value={"status": "in_progress"},
+    )
+    session.commit()
     return _job_out(session, row)
 
 
 @router.post("/jobs/{job_id}/submit", response_model=VendorJobOut)
 def submit_job(
     job_id: str,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
     user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
 ) -> VendorJobOut:
     vendor_id = _require_vendor_id(user)
-    _job_or_404(session, job_id, vendor_id)
-    row = repo.update_job_status(
-        session, job_id, vendor_id, status="submitted", submitted_at=datetime.now().astimezone()
+    existing = _job_or_404(session, job_id, vendor_id)
+    previous_status = existing.status
+    row = _update_status_or_409(
+        session, job_id, vendor_id, status_value="submitted", submitted_at=datetime.now().astimezone()
     )
+    _audit_job_action(
+        session,
+        request,
+        user,
+        row,
+        action="vendor_job.site_visit_completed",
+        details=f"{user.email} submitted the completed survey for job {job_id}",
+        previous_value={"status": previous_status},
+        new_value={"status": "submitted"},
+    )
+    # No per-admin notification preference exists (unlike vendors'
+    # notification_preferences) — every admin sees every submission.
+    for admin_user in users_repo.list_by_role(session, "admin"):
+        notifications_repo.create_notification(
+            session,
+            user_id=admin_user.id,
+            kind="job_submitted",
+            title="A vendor submitted a survey",
+            body=f"Job in {existing.district}, {existing.state} was submitted.",
+        )
+    session.commit()
     return _job_out(session, row)
 
 
@@ -451,12 +650,76 @@ def submit_job(
 def upload_panorama_photo(
     job_id: str,
     payload: PanoramaPhotoRequest,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
     user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
 ) -> VendorJobOut:
     vendor_id = _require_vendor_id(user)
     _job_or_404(session, job_id, vendor_id)
     row = repo.set_panorama_photo(session, job_id, vendor_id, data_url=payload.data_url)
+    _audit_job_action(
+        session, request, user, row, action="vendor_job.site_photo_uploaded",
+        details=f"{user.email} uploaded a site panorama photo for job {job_id}",
+    )
+    session.commit()
+    return _job_out(session, row)
+
+
+@router.patch("/jobs/{job_id}/boundary", response_model=VendorJobOut)
+def submit_field_boundary(
+    job_id: str,
+    payload: SubmitFieldBoundaryRequest,
+    request: Request,
+    session: Annotated[Session, Depends(get_session)],
+    user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
+) -> VendorJobOut:
+    """GEO-02/SITE-05, the vendor side of a manually-drawn boundary. The
+    vendor's own on-site trace, tagged `field_measured` — GEO-09's
+    highest-trust geometry source (base confidence 0.95, and immune to
+    the imagery-age penalty other sources take, since a person physically
+    at the building isn't reading a satellite photo) — rather than
+    `manual_polygon` (0.75), which app_checks.py::_apply_manual_boundary()
+    already owns for a customer's own desk-bound edit. Shares that same
+    validate-then-version pipeline; only the source/confidence differ.
+    """
+    vendor_id = _require_vendor_id(user)
+    row = _job_or_404(session, job_id, vendor_id)
+
+    site = sites_repo.get(session, str(row.site_id))
+    if site is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "site not found")
+
+    boundary_geojson = {
+        "type": "Polygon",
+        # A GeoJSON ring must close; the UI sends the open path it drew.
+        "coordinates": [
+            [[p.lng, p.lat] for p in payload.points] + [[payload.points[0].lng, payload.points[0].lat]]
+        ],
+    }
+    try:
+        validated = manual.resolve_manual(site, {"boundary": boundary_geojson})
+    except GeometryRejected as exc:
+        # A self-intersecting or degenerate trace is the vendor's input
+        # to fix on-site, not a server fault — never silently repaired.
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+
+    confidence = geometry_confidence(source="field_measured", imagery_date=site.imagery_date, boundary=validated)
+
+    sites_repo.new_geometry_version(
+        session,
+        str(row.site_id),
+        boundary=validated,
+        actor=user.email,
+        source="vendor_field_survey",
+        geometry_source="field_measured",
+        geometry_confidence=confidence,
+    )
+    _audit_job_action(
+        session, request, user, row, action="vendor_job.boundary_captured",
+        details=f"{user.email} captured a field-measured boundary ({len(payload.points)} points) for job {job_id}",
+        new_value={"points": len(payload.points)},
+    )
+    session.commit()
     return _job_out(session, row)
 
 
@@ -464,12 +727,18 @@ def upload_panorama_photo(
 def save_shading_notes(
     job_id: str,
     payload: ShadingNotesRequest,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
     user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
 ) -> VendorJobOut:
     vendor_id = _require_vendor_id(user)
     _job_or_404(session, job_id, vendor_id)
     row = repo.set_shading_notes(session, job_id, vendor_id, notes=payload.notes)
+    _audit_job_action(
+        session, request, user, row, action="vendor_job.shading_notes_updated",
+        details=f"{user.email} updated shading notes for job {job_id}",
+    )
+    session.commit()
     return _job_out(session, row)
 
 
@@ -477,6 +746,7 @@ def save_shading_notes(
 def save_obstacle_survey(
     job_id: str,
     payload: ObstacleSurveyRequest,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
     user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
 ) -> VendorJobOut:
@@ -489,6 +759,11 @@ def save_obstacle_survey(
     row = repo.set_obstacle_survey(
         session, job_id, vendor_id, obstacles=[o.model_dump(by_alias=False) for o in payload.obstacles]
     )
+    _audit_job_action(
+        session, request, user, row, action="vendor_job.obstacle_survey_updated",
+        details=f"{user.email} saved {len(payload.obstacles)} obstacle(s) for job {job_id}",
+    )
+    session.commit()
     return _job_out(session, row)
 
 
@@ -496,6 +771,7 @@ def save_obstacle_survey(
 def save_structural_assessment(
     job_id: str,
     payload: StructuralAssessment,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
     user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
 ) -> VendorJobOut:
@@ -505,6 +781,11 @@ def save_structural_assessment(
     vendor_id = _require_vendor_id(user)
     _job_or_404(session, job_id, vendor_id)
     row = repo.set_structural_assessment(session, job_id, vendor_id, assessment=payload.model_dump(by_alias=False))
+    _audit_job_action(
+        session, request, user, row, action="vendor_job.structural_assessment_updated",
+        details=f"{user.email} saved the structural assessment for job {job_id}",
+    )
+    session.commit()
     return _job_out(session, row)
 
 
@@ -512,6 +793,7 @@ def save_structural_assessment(
 def save_electrical_assessment(
     job_id: str,
     payload: ElectricalAssessment,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
     user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
 ) -> VendorJobOut:
@@ -521,6 +803,11 @@ def save_electrical_assessment(
     vendor_id = _require_vendor_id(user)
     _job_or_404(session, job_id, vendor_id)
     row = repo.set_electrical_assessment(session, job_id, vendor_id, assessment=payload.model_dump(by_alias=False))
+    _audit_job_action(
+        session, request, user, row, action="vendor_job.electrical_assessment_updated",
+        details=f"{user.email} saved the electrical assessment for job {job_id}",
+    )
+    session.commit()
     return _job_out(session, row)
 
 
@@ -528,6 +815,7 @@ def save_electrical_assessment(
 def save_installation_constraints(
     job_id: str,
     payload: InstallationConstraints,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
     user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
 ) -> VendorJobOut:
@@ -536,6 +824,11 @@ def save_installation_constraints(
     vendor_id = _require_vendor_id(user)
     _job_or_404(session, job_id, vendor_id)
     row = repo.set_installation_constraints(session, job_id, vendor_id, constraints=payload.model_dump(by_alias=False))
+    _audit_job_action(
+        session, request, user, row, action="vendor_job.installation_constraints_updated",
+        details=f"{user.email} saved installation constraints for job {job_id}",
+    )
+    session.commit()
     return _job_out(session, row)
 
 
@@ -543,6 +836,7 @@ def save_installation_constraints(
 def save_safety_assessment(
     job_id: str,
     payload: SafetyAssessment,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
     user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
 ) -> VendorJobOut:
@@ -550,6 +844,11 @@ def save_safety_assessment(
     vendor_id = _require_vendor_id(user)
     _job_or_404(session, job_id, vendor_id)
     row = repo.set_safety_assessment(session, job_id, vendor_id, assessment=payload.model_dump(by_alias=False))
+    _audit_job_action(
+        session, request, user, row, action="vendor_job.safety_assessment_updated",
+        details=f"{user.email} saved the safety assessment for job {job_id}",
+    )
+    session.commit()
     return _job_out(session, row)
 
 
@@ -557,6 +856,7 @@ def save_safety_assessment(
 def save_battery_assessment(
     job_id: str,
     payload: BatteryAssessment,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
     user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
 ) -> VendorJobOut:
@@ -564,6 +864,11 @@ def save_battery_assessment(
     vendor_id = _require_vendor_id(user)
     _job_or_404(session, job_id, vendor_id)
     row = repo.set_battery_assessment(session, job_id, vendor_id, assessment=payload.model_dump(by_alias=False))
+    _audit_job_action(
+        session, request, user, row, action="vendor_job.battery_assessment_updated",
+        details=f"{user.email} saved the battery assessment for job {job_id}",
+    )
+    session.commit()
     return _job_out(session, row)
 
 
@@ -589,7 +894,7 @@ def get_profile(
 ) -> VendorProfileOut:
     vendor_id = _require_vendor_id(user)
     row = _vendor_or_404(session, vendor_id)
-    return _profile_out_with_history(session, row)
+    return _profile_out(row)
 
 
 @router.patch("/profile/availability", response_model=VendorProfileOut)
@@ -601,7 +906,29 @@ def update_availability(
     vendor_id = _require_vendor_id(user)
     _vendor_or_404(session, vendor_id)
     row = repo.update_availability(session, vendor_id, payload.available)
-    return _profile_out_with_history(session, row)
+    return _profile_out(row)
+
+
+@router.get("/profile/notification-preferences", response_model=VendorNotificationPreferencesOut)
+def get_notification_preferences(
+    session: Annotated[Session, Depends(get_session)],
+    user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
+) -> VendorNotificationPreferencesOut:
+    vendor_id = _require_vendor_id(user)
+    row = _vendor_or_404(session, vendor_id)
+    return _notification_preferences_out(row)
+
+
+@router.patch("/profile/notification-preferences", response_model=VendorNotificationPreferencesOut)
+def update_notification_preferences(
+    payload: UpdateNotificationPreferencesRequest,
+    session: Annotated[Session, Depends(get_session)],
+    user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
+) -> VendorNotificationPreferencesOut:
+    vendor_id = _require_vendor_id(user)
+    _vendor_or_404(session, vendor_id)
+    row = repo.update_notification_preferences(session, vendor_id, payload.model_dump())
+    return _notification_preferences_out(row)
 
 
 def _vendor_or_404(session: Session, vendor_id: str) -> VendorRow:
@@ -614,33 +941,15 @@ def _vendor_or_404(session: Session, vendor_id: str) -> VendorRow:
     return row
 
 
-def _profile_out_with_history(session: Session, row: VendorRow) -> VendorProfileOut:
-    history = repo.get_accuracy_history(session, str(row.id))
-    return _profile_out(row, history)
-
-
 # --------------------------------------------------------------------- #
-# payouts / earnings / submissions
+# submissions
+#
+# Note: vendor-facing /payouts and /earnings-summary routes were removed
+# (earnings feature removed from the vendor portal). PayoutEntryOut and
+# _payout_out() stay defined here — routers/app_admin_vendors.py still
+# imports both for its own GET /admin/vendors/{id}/payouts, which is a
+# separate (admin-facing) feature and was not touched.
 # --------------------------------------------------------------------- #
-
-
-@router.get("/payouts", response_model=list[PayoutEntryOut])
-def list_payouts(
-    session: Annotated[Session, Depends(get_session)],
-    user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
-) -> list[PayoutEntryOut]:
-    vendor_id = _require_vendor_id(user)
-    return [_payout_out(r) for r in repo.list_payouts(session, vendor_id)]
-
-
-@router.get("/earnings-summary", response_model=VendorEarningsSummaryOut)
-def get_earnings_summary(
-    session: Annotated[Session, Depends(get_session)],
-    user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
-) -> VendorEarningsSummaryOut:
-    vendor_id = _require_vendor_id(user)
-    summary = repo.get_earnings_summary(session, vendor_id)
-    return VendorEarningsSummaryOut(**summary)
 
 
 @router.get("/submissions", response_model=list[VendorJobOut])
@@ -656,10 +965,17 @@ def list_submissions(
 def dispute_submission(
     job_id: str,
     payload: DisputeRequest,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
     user: Annotated[AuthenticatedUser, Depends(require_role("vendor"))],
 ) -> VendorJobOut:
     vendor_id = _require_vendor_id(user)
     _job_or_404(session, job_id, vendor_id)
     row = repo.dispute_job(session, job_id, vendor_id, reason=payload.reason)
+    _audit_job_action(
+        session, request, user, row, action="vendor_job.disputed",
+        details=f"{user.email} disputed the payout for job {job_id}: {payload.reason}",
+        reason=payload.reason,
+    )
+    session.commit()
     return _job_out(session, row)

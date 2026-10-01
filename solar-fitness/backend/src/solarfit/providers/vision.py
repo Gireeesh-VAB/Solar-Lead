@@ -433,7 +433,10 @@ def refine_with_vision_model(cropped: CroppedImagery, boundary: dict) -> VisionR
                 continue
             obstacles.append(
                 Obstacle(
-                    type=item.type, bounding_polygon=bounding_polygon, confidence=item.confidence
+                    type=item.type,
+                    bounding_polygon=bounding_polygon,
+                    confidence=item.confidence,
+                    source="vision_llm",
                 )
             )
 

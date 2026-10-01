@@ -27,7 +27,7 @@ from solarfit.auth_users import AuthenticatedUser, current_user, require_role
 from solarfit.db import get_session
 from solarfit.packs import config_pack
 from solarfit.repositories import audit as audit_repo
-from solarfit.routers.common import CamelModel
+from solarfit.routers.common import CamelModel, actor_audit_fields
 
 router = APIRouter(prefix="/app", tags=["app-jurisdictions"])
 
@@ -120,10 +120,11 @@ def publish_jurisdiction(
 
     audit_repo.write_audit_log(
         session,
-        actor=admin.email,
+        **actor_audit_fields(admin),
         action="jurisdiction.published",
         target=code.upper(),
         details=f"{admin.email} published jurisdiction pack {code.upper()}",
+        entity_type="jurisdiction_pack",
     )
 
     return pack_out

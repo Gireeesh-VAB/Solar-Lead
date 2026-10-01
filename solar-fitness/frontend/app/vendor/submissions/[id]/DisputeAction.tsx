@@ -51,7 +51,7 @@ export function DisputeAction({ job }: { job: VendorJob }) {
         onChange={(e) => setReason(e.target.value)}
         rows={3}
         placeholder="Explain why the reconciled payout or measured capacity looks wrong…"
-        className="w-full rounded-[var(--radius-app)] border border-line bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-teal"
+        className="w-full rounded-[var(--radius-app)] border border-line bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/25"
       />
       <div className="flex gap-2">
         <Button

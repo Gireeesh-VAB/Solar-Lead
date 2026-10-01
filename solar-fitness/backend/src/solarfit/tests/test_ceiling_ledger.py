@@ -58,6 +58,22 @@ def _row(**overrides):
             "ceilings": CEILINGS,
         },
         "usable_area_m2": 207.045,
+        "total_area_m2": 230.5,
+        "score_components": None,
+        "confidence_components": None,
+        "confidence_explanation": None,
+        "generation": None,
+        # to_frontend_assessment_dict() reads this alongside `generation`;
+        # a stub row without it raises AttributeError rather than testing
+        # anything about the ledger.
+        "financial_estimate": None,
+        "review_status": "pending",
+        "enquiry_submitted_at": None,
+        "panel_layout": None,
+        "roof_segments": None,
+        "conditions": None,
+        "limitations": "test limitations statement",
+        "boundary_warning": None,
         "panorama_url": None,
         "ml_suitability_score": None,
         "cache_hit": False,

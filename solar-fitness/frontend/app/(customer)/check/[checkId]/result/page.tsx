@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CalendarClock, Loader2, MapPin } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { getCheckServer as getCheck, orRedirectToLogin } from "@/lib/api/serverFetch";
-import { VERDICT_EXPLAINER } from "@/lib/fixtures/customer";
-import { VerdictChip } from "@/components/ui/VerdictChip";
-import { ConfidenceMeter } from "@/components/ui/ConfidenceMeter";
-import { BindingConstraintTag } from "@/components/ui/BindingConstraintTag";
-import { Button, Card } from "@/components/ui/Primitives";
-import { CalculationBreakdown } from "./CalculationBreakdown";
-import { ResultMap } from "./ResultMap";
-import { formatKwp } from "@/lib/utils";
+import { Button } from "@/components/ui/Primitives";
+import { AnimatedSection } from "./AnimatedSection";
+import { ResultPageContent } from "./ResultPageContent";
+import { UsnCaptureFlow } from "@/components/sites/UsnCaptureFlow";
+
+// domain/site.py's BILLING_LINKED_SITE_TYPES — USN capture only applies to
+// these; other site types don't have a billing account to attach one to.
+const BILLING_LINKED_SITE_TYPES = new Set(["ROOFTOP_RESIDENTIAL", "ROOFTOP_CI"]);
 
 export const metadata: Metadata = {
   title: "Your result",
@@ -31,7 +31,7 @@ export default async function ResultPage({ params }: { params: Promise<{ checkId
     // before redirecting here — but handle it gracefully rather than 404.
     return (
       <div className="mx-auto flex max-w-sm flex-col items-center gap-4 py-16 text-center">
-        <Loader2 size={28} strokeWidth={1.75} className="animate-spin text-amber" aria-hidden="true" />
+        <Loader2 size={28} strokeWidth={1.75} className="animate-spin text-brand" aria-hidden="true" />
         <p className="text-sm text-ink-soft">Still finishing up this check.</p>
         <Link href={`/check/${checkId}/processing`}>
           <Button variant="secondary">Go to processing</Button>
@@ -42,89 +42,88 @@ export default async function ResultPage({ params }: { params: Promise<{ checkId
 
   const isPositive = POSITIVE_VERDICTS.has(assessment.verdict);
 
+  // The primary actions live twice: once inline (desktop, where the page
+  // is easily scrolled back to) and once in the sticky mobile bar below —
+  // same components, same logic, just two placements so the long-scroll
+  // result page always keeps them reachable on a phone.
+  const ctaRow = (
+    <>
+      <Link href="/check/new" className="flex-1">
+        <Button variant="secondary" className="w-full">
+          Check another location
+        </Button>
+      </Link>
+      {isPositive && <EnquiryCta checkId={check.id} reviewStatus={assessment.reviewStatus} />}
+    </>
+  );
+
   return (
-    <div className="mx-auto max-w-xl space-y-6">
-      <div className="text-center">
-        <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">{check.name}</p>
-        <div className="mt-2 flex justify-center">
-          <VerdictChip verdict={assessment.verdict} size="lg" />
-        </div>
-      </div>
+    <div className="mx-auto max-w-xl pb-20 sm:pb-0">
+      <ResultPageContent assessment={assessment} check={check} />
 
-      <Card className="p-5 text-center">
-        <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">Estimated system size</p>
-        <p className="mt-1 text-3xl font-semibold text-ink">
-          {assessment.capacityKwp > 0 ? formatKwp(assessment.capacityKwp) : "—"}
-        </p>
-        <div className="mt-3 flex justify-center">
-          <ConfidenceMeter tier={assessment.confidence} />
-        </div>
-      </Card>
-
-      <Card className="p-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">Why</p>
-        <BindingConstraintTag constraint={assessment.bindingConstraint} />
-      </Card>
-
-      {/* CON-04. The tag above names the deciding constraint; this says
-          what that actually means for this roof. Renders nothing when an
-          older assessment carries no ledger. */}
-      <CalculationBreakdown assessment={assessment} />
-
-      <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">Location</p>
-        <ResultMap
-          checkId={check.id}
-          pin={{
-            id: check.id,
-            lat: check.location.lat,
-            lng: check.location.lng,
-            label: check.name,
-            verdict: assessment.verdict,
-          }}
-          roofBoundary={check.boundary}
-          boundaryIsApproximate={check.boundaryIsApproximate ?? true}
-          canEditBoundary={(check.boundary?.length ?? 0) >= 3}
-          height={300}
-        />
-        <p className="mt-1.5 flex items-center gap-1 text-xs text-ink-faint">
-          <MapPin size={12} strokeWidth={1.75} aria-hidden="true" />
-          {check.address}
-        </p>
-      </div>
-
-      <Card className="p-4">
-        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-faint">What this means</p>
-        <p className="text-sm text-ink">{VERDICT_EXPLAINER[assessment.verdict]}</p>
-      </Card>
-
-      {assessment.verdict === "SUITABLE_SUBJECT_TO_SURVEY" && (
-        <div
-          className="flex items-start gap-2.5 rounded-[var(--radius-app)] border px-4 py-3 text-sm"
-          style={{ borderColor: "var(--warn)", background: "var(--warn-bg)", color: "var(--warn)" }}
-        >
-          <CalendarClock size={16} strokeWidth={1.75} className="mt-0.5 shrink-0" aria-hidden="true" />
-          <div>
-            <p className="font-medium">Site survey requested</p>
-            <p className="mt-0.5 text-xs opacity-90">
-              We&apos;ve queued a verified installer to visit and confirm the roof in person. You&apos;ll be notified here once the survey is complete.
-            </p>
-          </div>
-        </div>
+      {/* USN capture happens here, after the AI analysis has a result to
+          attach it to — not on the intake form, where it would be one more
+          thing standing between a customer and their first result. Only
+          shown for billing-linked site types (USN-05); every customer
+          check defaults to ROOFTOP_RESIDENTIAL, which qualifies. Kept out
+          of ResultPageContent since it's a customer-owned mutation form,
+          not something the admin embed should offer (see that file's own
+          docstring). */}
+      {BILLING_LINKED_SITE_TYPES.has(check.siteType) && (
+        <AnimatedSection className="mt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+            Electricity connection number (USN)
+          </p>
+          <UsnCaptureFlow site={check} mobile />
+        </AnimatedSection>
       )}
 
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Link href="/check/new" className="flex-1">
-          <Button variant="secondary" className="w-full">
-            Check another location
-          </Button>
-        </Link>
-        {isPositive && (
-          <Button className="flex-1" disabled title="Coming soon">
-            Get connected
-          </Button>
-        )}
+      {/* Inline CTA row — the primary reachable copy on desktop, where
+          scrolling back down is trivial. Hidden on mobile in favour of the
+          sticky bar below so the actions aren't offered twice on a phone. */}
+      <div className="mt-6 hidden gap-2 sm:flex">{ctaRow}</div>
+
+      {/* Sticky mobile action bar — this is the longest page in the app,
+          so "Check another location" / "Raise enquiry" stay reachable
+          without scrolling back up. Desktop keeps the inline row above
+          instead, where a sticky bar would just be clutter. Positioned
+          above the app's own mobile tab bar (app/(customer)/layout.tsx,
+          "fixed ... bottom-0 ... md:hidden") rather than at bottom-0,
+          so the two don't stack on top of each other. */}
+      <div
+        className="fixed inset-x-0 z-30 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur-sm sm:hidden"
+        style={{ bottom: "calc(60px + env(safe-area-inset-bottom))", boxShadow: "var(--shadow-float)" }}
+      >
+        <div className="mx-auto flex max-w-xl gap-2">{ctaRow}</div>
       </div>
     </div>
+  );
+}
+
+// The enquiry and the feasibility check are deliberately separate stages
+// (repositories/assessments.py::save_assessment()'s "not_submitted"
+// default) — this button is the one entry point between them. Once an
+// enquiry has been raised, re-entering the vendor-selection flow makes
+// no sense, so a status affordance replaces it instead.
+function EnquiryCta({ checkId, reviewStatus }: { checkId: string; reviewStatus?: string }) {
+  if (!reviewStatus || reviewStatus === "not_submitted") {
+    return (
+      <Link href={`/check/${checkId}/enquiry`} className="flex-1">
+        <Button className="w-full">Raise enquiry</Button>
+      </Link>
+    );
+  }
+  const label =
+    reviewStatus === "pending"
+      ? "Enquiry submitted — pending review"
+      : reviewStatus === "approved"
+        ? "Enquiry approved — vendor assigned"
+        : reviewStatus === "rejected"
+          ? "Enquiry not approved"
+          : "Enquiry submitted";
+  return (
+    <Button className="flex-1" variant="secondary" disabled title={label}>
+      {label}
+    </Button>
   );
 }

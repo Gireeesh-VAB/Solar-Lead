@@ -15,3 +15,7 @@ backend/infra/docker-compose.override.yml
 # VIZ-02 local artifact storage — generated .glb build output, never source.
 var/
 certs/
+
+# Local runtime artifacts, not source.
+backend/celerybeat-schedule
+frontend/dev.log

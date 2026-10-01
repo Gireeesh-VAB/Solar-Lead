@@ -35,7 +35,7 @@ export function SubmissionsListClient() {
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {submissions.data.map((job) => (
         <Link key={job.id} href={`/vendor/submissions/${job.id}`}>
-          <Card className="h-full space-y-2 p-4 hover:border-teal">
+          <Card interactive className="h-full space-y-2 p-4">
             <p className="font-medium text-ink">{job.siteName}</p>
             <p className="text-xs text-ink-soft">
               {job.district}, {job.state}

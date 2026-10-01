@@ -83,6 +83,12 @@ PRECEDENCE: dict[GeometrySource, int] = {
     "field_measured": 400,
     "manual_polygon": 300,
     "imported": 200,
+    # A real polygon vectorised from the Solar API's own building mask —
+    # better than the plain boundingBox rectangle (still fully automated,
+    # no human has looked at it, so it stays below imported/manual/field),
+    # but a genuine traced-ish outline rather than a box, so it ranks
+    # above the rectangle it upgrades.
+    "solar_api_mask": 150,
     "solar_api": 100,
 }
 

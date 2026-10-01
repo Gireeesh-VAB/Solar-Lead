@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Home, ListChecks, Sun, User } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { AuthGuard } from "@/components/auth/AuthGuard";
+import { LanguageProvider } from "@/lib/i18n/LanguageContext";
+import { LanguageSwitcher } from "@/components/layout/LanguageSwitcher";
 
 const NAV_ITEMS = [
   { href: "/home", label: "Home", icon: Home },
@@ -12,6 +14,7 @@ const NAV_ITEMS = [
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard role="customer">
+    <LanguageProvider>
     <div className="flex min-h-screen w-full flex-col">
       <Header
         showSearch={false}
@@ -21,7 +24,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
         userName="Priya Raman"
         userRole="Homeowner"
         userInitials="PR"
-        accentVar="var(--amber)"
+        accentVar="var(--brand)"
         navSlot={
           <>
             <Link href="/home" className="flex items-center gap-2 font-semibold text-ink">
@@ -40,6 +43,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
                 </Link>
               ))}
             </nav>
+            <LanguageSwitcher />
           </>
         }
       />
@@ -62,6 +66,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
         ))}
       </nav>
     </div>
+    </LanguageProvider>
     </AuthGuard>
   );
 }

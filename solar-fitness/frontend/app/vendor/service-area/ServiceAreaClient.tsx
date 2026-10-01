@@ -18,10 +18,10 @@ export function ServiceAreaClient() {
     <div className="space-y-6">
       <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="flex items-center gap-2">
-          <Power size={18} strokeWidth={1.75} className={available ? "text-teal" : "text-ink-faint"} aria-hidden="true" />
+          <Power size={18} strokeWidth={1.75} className={available ? "text-brand" : "text-ink-faint"} aria-hidden="true" />
           <div>
             <p className="font-medium text-ink">{available ? "Available for new jobs" : "Not accepting new jobs"}</p>
-            <p className="text-xs text-ink-soft">Toggle to control whether you're assigned new jobs in your service area.</p>
+            <p className="text-xs text-ink-soft">Toggle to control whether you&apos;re assigned new jobs in your service area.</p>
           </div>
         </div>
         <Button

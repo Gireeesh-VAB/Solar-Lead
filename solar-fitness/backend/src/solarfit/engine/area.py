@@ -47,6 +47,7 @@ __all__ = [
     "compute_usable_area_m2",
     "compute_usable_roof",
     "exclusion_area_m2",
+    "exclusions_metric_geometry",
 ]
 
 
@@ -158,8 +159,9 @@ def compute_usable_roof(site: Site, params: dict | None = None) -> UsableRoof:
     utilisation, or the same allowance is deducted twice.
 
         boundary -> project to a metric CRS
-                 -> negative buffer by the edge setback   (AREA-03)
-                 -> subtract unioned exclusions           (AREA-02, AREA-04)
+                 -> negative buffer by edge + parapet setback (AREA-03)
+                 -> subtract unioned exclusions, each buffered
+                    out by obstacle_setback_m first       (AREA-02, AREA-04)
                  -> measure                               (AREA-01)
                  -> multiply by the utilisation factor    (AREA-05)
                  -> clamp at zero                         (AREA-06)
@@ -167,7 +169,15 @@ def compute_usable_roof(site: Site, params: dict | None = None) -> UsableRoof:
     `params` overrides config-pack values for a single call — used by the
     tests, and by any future per-site precision superseding the by-class
     utilisation factor (AREA-05). Recognised keys: ``edge_setback_m``,
-    ``utilisation_factor``.
+    ``parapet_setback_m``, ``obstacle_setback_m``, ``utilisation_factor``.
+
+    parapet_setback_m stacks with edge_setback_m into one combined
+    boundary buffer — a documented simplification (uniform across the
+    whole edge, since nothing in this pipeline's real data sources
+    reports where a parapet wall actually stands), not a claim of
+    per-edge parapet detection. obstacle_setback_m instead buffers OUT
+    each exclusion polygon before it's subtracted, so a panel can't sit
+    flush against an obstacle's base either.
 
     Raises ValueError when the site has no boundary (see _metric_geometries).
     """
@@ -179,6 +189,21 @@ def compute_usable_roof(site: Site, params: dict | None = None) -> UsableRoof:
     setback_m = float(setback_m)
     if setback_m < 0:
         raise ValueError(f"edge_setback_m must not be negative, got {setback_m}")
+
+    parapet_setback_m = params.get("parapet_setback_m")
+    if parapet_setback_m is None:
+        parapet_setback_m = config_pack.get_parapet_setback_m()
+    parapet_setback_m = float(parapet_setback_m)
+    if parapet_setback_m < 0:
+        raise ValueError(f"parapet_setback_m must not be negative, got {parapet_setback_m}")
+    setback_m += parapet_setback_m
+
+    obstacle_setback_m = params.get("obstacle_setback_m")
+    if obstacle_setback_m is None:
+        obstacle_setback_m = config_pack.get_obstacle_setback_m()
+    obstacle_setback_m = float(obstacle_setback_m)
+    if obstacle_setback_m < 0:
+        raise ValueError(f"obstacle_setback_m must not be negative, got {obstacle_setback_m}")
 
     utilisation = params.get("utilisation_factor")
     if utilisation is None:
@@ -198,9 +223,13 @@ def compute_usable_roof(site: Site, params: dict | None = None) -> UsableRoof:
     if net.is_empty:
         return UsableRoof(area_m2=0.0, polygon=None, polygon_metric=None, epsg=epsg)
 
-    # AREA-02 / AREA-04 — exclusions come off after the setback.
+    # AREA-02 / AREA-04 — exclusions come off after the setback, each
+    # buffered out by obstacle_setback_m first (a real installation
+    # clearance around the obstacle's edge, not just its exact detected
+    # footprint — buffer(0) is a no-op when the config is 0).
     if exclusions is not None:
-        net = net.difference(exclusions)
+        buffered_exclusions = exclusions.buffer(obstacle_setback_m) if obstacle_setback_m else exclusions
+        net = net.difference(buffered_exclusions)
         if net.is_empty:
             return UsableRoof(area_m2=0.0, polygon=None, polygon_metric=None, epsg=epsg)
 
@@ -214,6 +243,21 @@ def compute_usable_roof(site: Site, params: dict | None = None) -> UsableRoof:
         polygon_metric=net,
         epsg=epsg,
     )
+
+
+def exclusions_metric_geometry(site: Site) -> BaseGeometry | None:
+    """The site's unioned exclusion polygon, in the same metric CRS
+    compute_usable_roof() itself projects into — a thin public wrapper
+    around _metric_geometries() for callers (panel-layout validation) that
+    need the real exclusion shape, not just the area it removes.
+
+    _metric_geometries() derives its UTM zone deterministically from the
+    site's own boundary, so a separate call here lands in the same zone
+    compute_usable_roof(site) already used for this same site/boundary —
+    no explicit EPSG needs to be threaded through for the two to agree.
+    """
+    _, exclusions, _ = _metric_geometries(site)
+    return exclusions
 
 
 def compute_usable_area_m2(site: Site, params: dict | None = None) -> float:

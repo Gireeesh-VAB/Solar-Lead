@@ -75,7 +75,7 @@ function PhotoField({
           if (file) onChange(await readAsDataUrl(file));
         }}
       />
-      <span className="inline-flex items-center gap-1 rounded-[var(--radius-app)] border border-line px-2 py-1 hover:border-teal">
+      <span className="inline-flex items-center gap-1 rounded-[var(--radius-app)] border border-line px-2 py-1 hover:border-brand">
         {value ? "Photo attached" : `Attach ${label.toLowerCase()}`}
       </span>
       {value && <Badge tone="blue">Ready</Badge>}

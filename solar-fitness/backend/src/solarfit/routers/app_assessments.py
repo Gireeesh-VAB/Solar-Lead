@@ -34,24 +34,27 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from solarfit.auth_users import AuthenticatedUser, current_user, require_role
+from solarfit.auth_users import AuthenticatedUser, current_user, require_permission, require_role
 from solarfit.db import get_session, session_scope
 from solarfit.domain.constraint import CapacityResult
 from solarfit.repositories import assessments as assessments_repo
 from solarfit.repositories import audit as audit_repo
+from solarfit.repositories import notifications as notifications_repo
 from solarfit.repositories import sites as sites_repo
 from solarfit.repositories import vendors as vendors_repo
 from solarfit.repositories.sites import SiteRow
 from solarfit.routers.assessments import (
     AssessmentResponse,
+    FinancialEstimateOut,
     GenerationEstimateOut,
     SiteNotFoundError,
     orchestrate_assessment,
 )
+from solarfit.routers.common import actor_audit_fields, request_audit_meta
 
 router = APIRouter(tags=["app-assessments"])
 
@@ -83,6 +86,7 @@ class AppAssessmentResponse(_CamelModel):
     confidence: ConfidenceLabel
     binding_constraint: BindingConstraintOut
     reasons: list[str]
+    conditions: list[dict] = []
     limitations: str
 
     capacity: CapacityResult
@@ -99,6 +103,7 @@ class AppAssessmentResponse(_CamelModel):
     constraint_pack_version: str
     created_at: str
     generation: GenerationEstimateOut | None = None
+    financial_estimate: FinancialEstimateOut | None = None
 
 
 class CeilingLedgerEntryOut(BaseModel):
@@ -117,7 +122,7 @@ class CeilingLedgerEntryOut(BaseModel):
     isBinding: bool = Field(alias="isBinding")
 
 
-ReviewStatus = Literal["pending", "approved", "rejected", "not_applicable"]
+ReviewStatus = Literal["not_submitted", "pending", "approved", "rejected", "not_applicable"]
 
 
 class ReviewFieldsOut(_CamelModel):
@@ -127,6 +132,15 @@ class ReviewFieldsOut(_CamelModel):
     rejection_reason: str | None = None
     assigned_vendor_id: str | None = None
     vendor_job_id: str | None = None
+    # Enquiry workflow — the customer's own action, distinct from the
+    # admin's approve/reject/reassign action above.
+    customer_selected_vendor_id: str | None = None
+    enquiry_submitted_at: str | None = None
+    # A district-matched vendor hint (repositories/vendors.py::
+    # best_available_vendor_for_district()) — real matching logic, shown
+    # only when no customer selection exists to prefill from instead.
+    # None when nothing matches, never a guessed vendor.
+    suggested_vendor_id: str | None = None
 
 
 class SiteSummaryOut(_CamelModel):
@@ -210,6 +224,12 @@ class RejectAssessmentRequest(_CamelModel):
     reason: str = Field(min_length=1)
 
 
+class ReassignAssessmentRequest(_CamelModel):
+    vendor_id: str
+    deadline_days: int = Field(default=3, ge=1, le=30)
+    reason: str | None = None
+
+
 def _confidence_label(score: float | None, confidence: float) -> ConfidenceLabel:
     if score is None:
         return "N/A"
@@ -242,6 +262,7 @@ def _to_app_response(row_id: str, response: AssessmentResponse, created_at) -> A
         confidence=_confidence_label(response.score, response.confidence),
         binding_constraint=_binding_constraint_out(response),
         reasons=response.reasons,
+        conditions=[c.model_dump() for c in response.conditions],
         limitations=response.limitations,
         capacity=response.capacity,
         boundary=response.boundary,
@@ -255,6 +276,7 @@ def _to_app_response(row_id: str, response: AssessmentResponse, created_at) -> A
         constraint_pack_version=response.constraint_pack_version,
         created_at=created_at.isoformat(),
         generation=response.generation,
+        financial_estimate=response.financial_estimate,
     )
 
 
@@ -273,7 +295,20 @@ def _site_summary(session: Session, site_id: str) -> SiteSummaryOut:
     )
 
 
-def _review_fields(row) -> ReviewFieldsOut:
+def _review_fields(row, session: Session | None = None) -> ReviewFieldsOut:
+    suggested_vendor_id = None
+    if (
+        session is not None
+        and row.review_status in ("pending", "not_submitted")
+        and row.customer_selected_vendor_id is None
+    ):
+        site_summary = _site_summary(session, row.site_id)
+        if site_summary.district:
+            already_tried = {str(row.assigned_vendor_id)} if row.assigned_vendor_id else set()
+            suggestion = vendors_repo.best_available_vendor_for_district(
+                session, site_summary.district, exclude_ids=already_tried
+            )
+            suggested_vendor_id = str(suggestion.id) if suggestion else None
     return ReviewFieldsOut(
         review_status=row.review_status,
         reviewed_by=row.reviewed_by,
@@ -281,6 +316,11 @@ def _review_fields(row) -> ReviewFieldsOut:
         rejection_reason=row.rejection_reason,
         assigned_vendor_id=str(row.assigned_vendor_id) if row.assigned_vendor_id else None,
         vendor_job_id=str(row.vendor_job_id) if row.vendor_job_id else None,
+        customer_selected_vendor_id=str(row.customer_selected_vendor_id)
+        if row.customer_selected_vendor_id
+        else None,
+        enquiry_submitted_at=row.enquiry_submitted_at.isoformat() if row.enquiry_submitted_at else None,
+        suggested_vendor_id=suggested_vendor_id,
     )
 
 
@@ -338,6 +378,7 @@ def list_all_assessments(
                 confidence=row.confidence,
                 binding_constraint=row.binding_constraint,
                 reasons=row.reasons,
+                conditions=row.conditions or [],
                 limitations=row.limitations,
                 capacity=CapacityResult(**row.capacity),
                 boundary=row.boundary,
@@ -352,13 +393,14 @@ def list_all_assessments(
                 engine_version=row.engine_version,
                 constraint_pack_version=row.constraint_pack_version,
                 generation=row.generation,
+                financial_estimate=row.financial_estimate,
             )
             item = _to_app_response(row.id, response, row.created_at)
             results.append(
                 AssessmentListItem(
                     owner_org=row.owner_org,
                     **item.model_dump(by_alias=False),
-                    **_review_fields(row).model_dump(by_alias=False),
+                    **_review_fields(row, session).model_dump(by_alias=False),
                     **_site_summary(session, row.site_id).model_dump(by_alias=False),
                 )
             )
@@ -388,6 +430,7 @@ def get_admin_assessment(
             confidence=row.confidence,
             binding_constraint=row.binding_constraint,
             reasons=row.reasons,
+            conditions=row.conditions or [],
             limitations=row.limitations,
             capacity=CapacityResult(**row.capacity),
             boundary=row.boundary,
@@ -402,6 +445,7 @@ def get_admin_assessment(
             engine_version=row.engine_version,
             constraint_pack_version=row.constraint_pack_version,
             generation=row.generation,
+            financial_estimate=row.financial_estimate,
         )
         item = _to_app_response(row.id, response, row.created_at)
         checklist = [CeilingLedgerEntryOut(**c) for c in assessments_repo.ceiling_ledger_list(row)]
@@ -411,7 +455,7 @@ def get_admin_assessment(
             grid_feasibility=GridFeasibilityOut(**row.grid_feasibility) if row.grid_feasibility else None,
             financial_feasibility=FinancialFeasibilityOut(**row.financial_feasibility) if row.financial_feasibility else None,
             **item.model_dump(by_alias=False),
-            **_review_fields(row).model_dump(by_alias=False),
+            **_review_fields(row, session).model_dump(by_alias=False),
             **_site_summary(session, row.site_id).model_dump(by_alias=False),
         )
 
@@ -420,8 +464,9 @@ def get_admin_assessment(
 def approve_assessment(
     assessment_id: str,
     payload: ApproveAssessmentRequest,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
-    admin: Annotated[AuthenticatedUser, Depends(require_role("admin"))],
+    admin: Annotated[AuthenticatedUser, Depends(require_permission("PROJECT_APPROVE"))],
 ) -> AssessmentDetailOut:
     """The one gate the whole review workflow exists for: Customer ->
     Feasibility Check -> Admin Review -> Admin Approval -> Vendor Access.
@@ -466,11 +511,35 @@ def approve_assessment(
     )
     audit_repo.write_audit_log(
         session,
-        actor=admin.email,
+        **actor_audit_fields(admin),
         action="assessment.approved",
         target=assessment_id,
         details=f"{admin.email} approved site {row.site_id} for vendor {vendor_row.name} (job {job.id})",
+        entity_type="assessment",
+        project_id=row.site_id,
+        survey_id=assessment_id,
+        customer_id=str(row.raised_by_user_id) if row.raised_by_user_id else row.owner_org,
+        vendor_id=payload.vendor_id,
+        previous_value={"reviewStatus": "pending"},
+        new_value={"reviewStatus": "approved", "vendorId": payload.vendor_id, "vendorJobId": str(job.id)},
+        **request_audit_meta(request),
     )
+    vendors_repo.notify_vendor_users(
+        session,
+        payload.vendor_id,
+        preference_key="new_job_assignment",
+        kind="job_assigned",
+        title="A new job has been assigned to you",
+        body=f"Job in {site_summary.district or 'an unassigned district'}, {site_summary.state or ''}.",
+    )
+    if row.raised_by_user_id is not None:
+        notifications_repo.create_notification(
+            session,
+            user_id=row.raised_by_user_id,
+            kind="vendor_request_approved",
+            title="Your vendor request was approved",
+            body=f"{vendor_row.name} has been assigned to your site.",
+        )
     session.commit()
     return get_admin_assessment(assessment_id, admin)
 
@@ -479,8 +548,9 @@ def approve_assessment(
 def reject_assessment(
     assessment_id: str,
     payload: RejectAssessmentRequest,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
-    admin: Annotated[AuthenticatedUser, Depends(require_role("admin"))],
+    admin: Annotated[AuthenticatedUser, Depends(require_permission("PROJECT_REJECT"))],
 ) -> AssessmentDetailOut:
     row = assessments_repo.get_assessment(session, assessment_id)
     if row is None:
@@ -491,11 +561,119 @@ def reject_assessment(
     assessments_repo.reject_assessment(session, assessment_id, admin_email=admin.email, reason=payload.reason)
     audit_repo.write_audit_log(
         session,
-        actor=admin.email,
+        **actor_audit_fields(admin),
         action="assessment.rejected",
         target=assessment_id,
         details=f"{admin.email} rejected site {row.site_id}: {payload.reason}",
+        entity_type="assessment",
+        project_id=row.site_id,
+        survey_id=assessment_id,
+        customer_id=str(row.raised_by_user_id) if row.raised_by_user_id else row.owner_org,
+        previous_value={"reviewStatus": "pending"},
+        new_value={"reviewStatus": "rejected"},
+        reason=payload.reason,
+        **request_audit_meta(request),
     )
+    if row.raised_by_user_id is not None:
+        notifications_repo.create_notification(
+            session,
+            user_id=row.raised_by_user_id,
+            kind="vendor_request_rejected",
+            title="Your vendor request was not approved",
+            body=payload.reason,
+        )
+    session.commit()
+    return get_admin_assessment(assessment_id, admin)
+
+
+@router.post("/app/admin/assessments/{assessment_id}/reassign", response_model=AssessmentDetailOut)
+def reassign_assessment(
+    assessment_id: str,
+    payload: ReassignAssessmentRequest,
+    request: Request,
+    session: Annotated[Session, Depends(get_session)],
+    admin: Annotated[AuthenticatedUser, Depends(require_permission("PROJECT_APPROVE"))],
+) -> AssessmentDetailOut:
+    """Changes an already-approved assessment's vendor — the gap the
+    approve/reject panel alone can't close: once approved, there was no
+    way to move the job to a different vendor short of rejecting the
+    whole assessment and starting over (losing the approval history).
+
+    Reuses the exact reassignment pattern the SLA sweep
+    (repositories/vendors.py::sweep_vendor_job_sla) already established
+    on the SAME vendor_jobs row, rather than creating a second one: the
+    old vendor moves into previous_vendor_ids, the row's vendor_id
+    changes, and status resets to "queued" with a fresh deadline so the
+    new vendor sees it as a normal live job, not damaged goods. The
+    site's surveyJobStatus link never breaks since it's still the same
+    job id."""
+    row = assessments_repo.get_assessment(session, assessment_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "assessment not found")
+    if row.review_status != "approved":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, f"assessment is {row.review_status}, not approved — nothing to reassign"
+        )
+    if row.vendor_job_id is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "assessment has no vendor job to reassign")
+
+    new_vendor_row = vendors_repo.get_vendor(session, payload.vendor_id)
+    if new_vendor_row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor not found")
+    if new_vendor_row.verification_status != "verified":
+        raise HTTPException(status.HTTP_409_CONFLICT, "vendor is not verified")
+
+    job = session.get(vendors_repo.VendorJobRow, row.vendor_job_id)
+    if job is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor job not found")
+
+    old_vendor_id = job.vendor_id
+    if old_vendor_id is not None:
+        job.previous_vendor_ids = [*job.previous_vendor_ids, str(old_vendor_id)]
+    job.vendor_id = uuid.UUID(str(payload.vendor_id))
+    job.status = "queued"
+    job.deadline = datetime.now(UTC) + timedelta(days=payload.deadline_days)
+    session.flush()
+
+    assessments_repo.reassign_assessment_vendor(
+        session, assessment_id, admin_email=admin.email, vendor_id=payload.vendor_id
+    )
+    audit_repo.write_audit_log(
+        session,
+        **actor_audit_fields(admin),
+        action="assessment.reassigned",
+        target=assessment_id,
+        details=(
+            f"{admin.email} reassigned site {row.site_id} from vendor "
+            f"{old_vendor_id or 'none'} to {new_vendor_row.name} (job {job.id})"
+            + (f" — {payload.reason}" if payload.reason else "")
+        ),
+        entity_type="assessment",
+        project_id=row.site_id,
+        survey_id=assessment_id,
+        customer_id=str(row.raised_by_user_id) if row.raised_by_user_id else row.owner_org,
+        vendor_id=payload.vendor_id,
+        previous_value={"vendorId": str(old_vendor_id) if old_vendor_id else None},
+        new_value={"vendorId": payload.vendor_id},
+        reason=payload.reason,
+        **request_audit_meta(request),
+    )
+    vendors_repo.notify_vendor_users(
+        session,
+        payload.vendor_id,
+        preference_key="job_reassignment",
+        kind="job_reassigned_to_you",
+        title="A job has been reassigned to you",
+        body=f"Job in {job.district}, {job.state}.",
+    )
+    if row.raised_by_user_id is not None:
+        notifications_repo.create_notification(
+            session,
+            user_id=row.raised_by_user_id,
+            kind="vendor_request_reassigned",
+            title="Your assigned vendor has changed",
+            body=f"{new_vendor_row.name} is now assigned to your site.",
+        )
     session.commit()
     return get_admin_assessment(assessment_id, admin)
 
@@ -504,6 +682,7 @@ def reject_assessment(
 def save_grid_feasibility(
     assessment_id: str,
     payload: GridFeasibilityOut,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
     admin: Annotated[AuthenticatedUser, Depends(require_role("admin"))],
 ) -> AssessmentDetailOut:
@@ -515,13 +694,22 @@ def save_grid_feasibility(
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "assessment not found")
 
+    previous_grid_feasibility = row.grid_feasibility
     assessments_repo.set_grid_feasibility(session, assessment_id, feasibility=payload.model_dump(by_alias=False))
     audit_repo.write_audit_log(
         session,
-        actor=admin.email,
+        **actor_audit_fields(admin),
         action="assessment.grid_feasibility_updated",
         target=assessment_id,
         details=f"{admin.email} updated grid/DISCOM feasibility for site {row.site_id}",
+        entity_type="assessment",
+        project_id=row.site_id,
+        survey_id=assessment_id,
+        customer_id=str(row.raised_by_user_id) if row.raised_by_user_id else row.owner_org,
+        vendor_id=str(row.assigned_vendor_id) if row.assigned_vendor_id else None,
+        previous_value=previous_grid_feasibility,
+        new_value=payload.model_dump(by_alias=False),
+        **request_audit_meta(request),
     )
     session.commit()
     return get_admin_assessment(assessment_id, admin)
@@ -531,6 +719,7 @@ def save_grid_feasibility(
 def save_financial_feasibility(
     assessment_id: str,
     payload: FinancialFeasibilityOut,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
     admin: Annotated[AuthenticatedUser, Depends(require_role("admin"))],
 ) -> AssessmentDetailOut:
@@ -539,13 +728,22 @@ def save_financial_feasibility(
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "assessment not found")
 
+    previous_financial_feasibility = row.financial_feasibility
     assessments_repo.set_financial_feasibility(session, assessment_id, feasibility=payload.model_dump(by_alias=False))
     audit_repo.write_audit_log(
         session,
-        actor=admin.email,
+        **actor_audit_fields(admin),
         action="assessment.financial_feasibility_updated",
         target=assessment_id,
         details=f"{admin.email} updated financial feasibility for site {row.site_id}",
+        entity_type="assessment",
+        project_id=row.site_id,
+        survey_id=assessment_id,
+        customer_id=str(row.raised_by_user_id) if row.raised_by_user_id else row.owner_org,
+        vendor_id=str(row.assigned_vendor_id) if row.assigned_vendor_id else None,
+        previous_value=previous_financial_feasibility,
+        new_value=payload.model_dump(by_alias=False),
+        **request_audit_meta(request),
     )
     session.commit()
     return get_admin_assessment(assessment_id, admin)

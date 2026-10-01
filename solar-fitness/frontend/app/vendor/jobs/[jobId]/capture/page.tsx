@@ -25,7 +25,7 @@ export default async function VendorJobCapturePage({ params }: { params: Promise
   return (
     <div className="space-y-6">
       <PageHeader title={`Capture — ${job.siteName}`} description="Draw the site boundary and, where applicable, confirm the USN." />
-      <CaptureTabs site={site} showUsn={showUsn} />
+      <CaptureTabs jobId={job.id} site={site} showUsn={showUsn} />
     </div>
   );
 }

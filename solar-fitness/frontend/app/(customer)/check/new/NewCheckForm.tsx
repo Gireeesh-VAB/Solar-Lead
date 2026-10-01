@@ -2,63 +2,26 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Crosshair, Loader2, Search } from "lucide-react";
-import { Button } from "@/components/ui/Primitives";
+import { motion } from "framer-motion";
+import { Crosshair, IndianRupee, Loader2, MapPin, Search } from "lucide-react";
+import { Button, Card } from "@/components/ui/Primitives";
 import { AddressAutocomplete } from "@/components/map/AddressAutocomplete";
 import { MapView, type MapPinData } from "@/components/map/MapView";
 import { GeocodeUnavailableError, geocodeAddress, reverseGeocode, type GeocodeResult } from "@/lib/maps/geocode";
 import { useCreateCheck } from "@/lib/query/hooks";
-import type { ConnectionType, RoofMaterial, RoofSlope, RoofType } from "@/lib/types";
 
 type Coords = { lat: number; lng: number };
 
-const CONNECTION_TYPE_LABEL: Record<ConnectionType, string> = {
-  SINGLE_PHASE: "Single phase",
-  THREE_PHASE: "Three phase",
+const fadeUp = {
+  hidden: { opacity: 0, y: 14 },
+  show: { opacity: 1, y: 0 },
 };
 
-// Last 12 calendar months, oldest first, as "YYYY-MM" — matches spec
-// section 9's Jan..Dec monthly consumption capture.
-function last12Months(): string[] {
-  const months: string[] = [];
-  const now = new Date();
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-  }
-  return months;
-}
-
-function monthLabel(month: string): string {
-  const [y, m] = month.split("-").map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
-}
-
-const ROOF_TYPE_LABEL: Record<RoofType, string> = {
-  RCC_CONCRETE: "RCC / concrete",
-  METAL_SHEET: "Metal sheet",
-  GI_SHEET: "GI sheet",
-  TILED: "Tiled roof",
-  ASBESTOS_SHEET: "Asbestos sheet",
-  GROUND_MOUNTED: "Ground-mounted",
-  TERRACE: "Terrace",
-  OTHER: "Other",
-};
-
-const ROOF_MATERIAL_LABEL: Record<RoofMaterial, string> = {
-  RCC: "RCC",
-  CONCRETE: "Concrete",
-  METAL: "Metal",
-  TILE: "Tile",
-  SHEET: "Sheet",
-  OTHER: "Other",
-};
-
-const ROOF_SLOPE_LABEL: Record<RoofSlope, string> = {
-  FLAT: "Flat",
-  LOW: "Low slope",
-  MEDIUM: "Medium slope",
-  HIGH: "High slope",
+const stagger = {
+  hidden: {},
+  show: {
+    transition: { staggerChildren: 0.07, delayChildren: 0.05 },
+  },
 };
 
 export function NewCheckForm() {
@@ -76,33 +39,13 @@ export function NewCheckForm() {
   // CON-05. A range rather than one figure because Indian household bills
   // swing hard with the season — a summer bill can be double a winter one,
   // and either endpoint alone sizes the system wrong in an obvious
-  // direction. The backend averages them.
+  // direction. The backend averages them. USN capture happens later, on
+  // the result page, once the AI analysis has something to attach it to.
+  const [billMode, setBillMode] = useState<"kwh" | "inr">("kwh");
   const [billLow, setBillLow] = useState("");
   const [billHigh, setBillHigh] = useState("");
-
-  // Roof Information (customer self-report at intake) — a rough
-  // description is enough to shape the initial feasibility check; the
-  // vendor's own in-person structural assessment is the source of truth
-  // once a survey happens, not these. All optional.
-  const [roofType, setRoofType] = useState<RoofType | "">("");
-  const [roofMaterial, setRoofMaterial] = useState<RoofMaterial | "">("");
-  const [roofSlope, setRoofSlope] = useState<RoofSlope | "">("");
-  const [roofConstructionYear, setRoofConstructionYear] = useState("");
-
-  // Electrical Information + Electricity Consumption (customer self-report,
-  // from the customer's own bill) — the vendor's own in-person electrical
-  // inspection is a separate, later capture on the vendor_jobs row.
-  const [electricityBoard, setElectricityBoard] = useState("");
-  const [consumerNumber, setConsumerNumber] = useState("");
-  const [connectionType, setConnectionType] = useState<ConnectionType | "">("");
-  const [sanctionedLoadKw, setSanctionedLoadKw] = useState("");
-  const [monthlyUnits, setMonthlyUnits] = useState<Record<string, string>>({});
-
-  // Battery Requirement (spec section 14) — customer's own interest/need.
-  const [batteryRequired, setBatteryRequired] = useState(false);
-  const [backupRequired, setBackupRequired] = useState(false);
-  const [requiredBackupHours, setRequiredBackupHours] = useState("");
-  const [criticalLoads, setCriticalLoads] = useState("");
+  const [consumptionLow, setConsumptionLow] = useState("");
+  const [consumptionHigh, setConsumptionHigh] = useState("");
 
   const handleSuggestionPicked = (found: GeocodeResult) => {
     setCoords(found);
@@ -127,23 +70,52 @@ export function NewCheckForm() {
     }
     setLocating(true);
     setNotice(null);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude, longitude } = pos.coords;
-        setCoords({ lat: latitude, lng: longitude });
-        await relabelPin(latitude, longitude);
+
+    // Fast network fix and precise GPS fix race; the pin lands on whichever
+    // answers first and GPS refines it if more accurate.
+    let bestAccuracy = Infinity;
+    let pending = 2;
+    let finished = false;
+
+    const applyPosition = (pos: GeolocationPosition) => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      if (accuracy >= bestAccuracy) return;
+      bestAccuracy = accuracy;
+      setCoords({ lat: latitude, lng: longitude });
+      void relabelPin(latitude, longitude);
+      setLocating(false);
+      finished = true;
+      setNotice(
+        accuracy > 150
+          ? `Found you within about ${Math.round(accuracy)}m — drag the pin onto your exact roof to fine-tune it.`
+          : null
+      );
+    };
+
+    const onFailure = (err: GeolocationPositionError) => {
+      pending -= 1;
+      if (finished) return;
+      if (err.code === err.PERMISSION_DENIED) {
         setLocating(false);
-      },
-      (err) => {
+        setNotice("Location permission denied. Tap the map to place your pin instead.");
+        return;
+      }
+      if (pending === 0) {
         setLocating(false);
-        setNotice(
-          err.code === err.PERMISSION_DENIED
-            ? "Location permission denied. Tap the map to place your pin instead."
-            : "Couldn't get your location. Tap the map to place your pin instead."
-        );
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
+        setNotice("Couldn't get your location. Tap the map to place your pin instead.");
+      }
+    };
+
+    navigator.geolocation.getCurrentPosition(applyPosition, onFailure, {
+      enableHighAccuracy: false,
+      timeout: 6000,
+      maximumAge: 60000,
+    });
+    navigator.geolocation.getCurrentPosition(applyPosition, onFailure, {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 0,
+    });
   };
 
   const handleMapMove = (lat: number, lng: number) => {
@@ -183,33 +155,29 @@ export function NewCheckForm() {
     try {
       // The existing create-check API is what persists the confirmed
       // coordinates — POST /app/checks {address, lat, lng, siteType, ...}.
-      const low = Number.parseFloat(billLow);
-      const high = Number.parseFloat(billHigh);
+      // kWh is primary (FIN-03) — sent only when BOTH are real numbers, a
+      // half-filled range is worse than none and the backend would
+      // reject it anyway; the ₹ pair is the fallback mode instead.
+      const consumptionInput = (() => {
+        if (billMode === "kwh") {
+          const low = Number.parseFloat(consumptionLow);
+          const high = Number.parseFloat(consumptionHigh);
+          return Number.isFinite(low) && low > 0 && Number.isFinite(high) && high > 0
+            ? { lowestConsumptionKwh: low, highestConsumptionKwh: high }
+            : {};
+        }
+        const low = Number.parseFloat(billLow);
+        const high = Number.parseFloat(billHigh);
+        return Number.isFinite(low) && low > 0 && Number.isFinite(high) && high > 0
+          ? { monthlyBillLowInr: low, monthlyBillHighInr: high }
+          : {};
+      })();
       const check = await createCheck.mutateAsync({
         address: address.trim() || "Pinned location",
         lat: coords.lat,
         lng: coords.lng,
         siteType: "ROOFTOP_RESIDENTIAL",
-        // Sent only when BOTH are real numbers — a half-filled range is
-        // worse than none, and the backend would reject it anyway.
-        ...(Number.isFinite(low) && low > 0 && Number.isFinite(high) && high > 0
-          ? { monthlyBillLowInr: low, monthlyBillHighInr: high }
-          : {}),
-        roofType: roofType || undefined,
-        roofMaterial: roofMaterial || undefined,
-        roofSlope: roofSlope || undefined,
-        roofConstructionYear: roofConstructionYear ? Number(roofConstructionYear) : undefined,
-        electricityBoard: electricityBoard.trim() || undefined,
-        consumerNumber: consumerNumber.trim() || undefined,
-        connectionType: connectionType || undefined,
-        sanctionedLoadKw: sanctionedLoadKw ? Number(sanctionedLoadKw) : undefined,
-        monthlyConsumptionKwh: Object.entries(monthlyUnits)
-          .filter(([, units]) => units.trim() !== "")
-          .map(([month, units]) => ({ month, unitsKwh: Number(units) })),
-        batteryRequired,
-        backupRequired,
-        requiredBackupHours: requiredBackupHours ? Number(requiredBackupHours) : undefined,
-        criticalLoads: criticalLoads.trim() || undefined,
+        ...consumptionInput,
       });
       router.push(`/check/${check.id}/processing`);
     } catch (err) {
@@ -220,11 +188,12 @@ export function NewCheckForm() {
   // Only complain once both are filled — nagging while the user is still
   // typing the first field is noise.
   const billError = (() => {
-    const low = Number.parseFloat(billLow);
-    const high = Number.parseFloat(billHigh);
-    if (!billLow || !billHigh) return null;
+    const [lowRaw, highRaw] = billMode === "kwh" ? [consumptionLow, consumptionHigh] : [billLow, billHigh];
+    const low = Number.parseFloat(lowRaw);
+    const high = Number.parseFloat(highRaw);
+    if (!lowRaw || !highRaw) return null;
     if (!Number.isFinite(low) || !Number.isFinite(high) || low <= 0 || high <= 0) {
-      return "Enter both amounts as numbers.";
+      return billMode === "kwh" ? "Enter both usage figures as numbers." : "Enter both amounts as numbers.";
     }
     if (high < low) return "The highest month should not be less than the lowest.";
     return null;
@@ -234,8 +203,10 @@ export function NewCheckForm() {
     ? [{ id: "pin", lat: coords.lat, lng: coords.lng, label: address.trim() || "Your pin" }]
     : [];
 
+  const canSubmit = !!coords && !createCheck.isPending;
+
   return (
-    <div className="space-y-4">
+    <motion.div initial="hidden" animate="show" variants={stagger} className="space-y-4 pb-4">
       {/* Suggestions come from Google Places through our own backend, so
           the public Maps key never needs Places or Geocoding permission.
           Picking one moves the map and drops the pin; the pin stays
@@ -243,7 +214,7 @@ export function NewCheckForm() {
           exact roof. The Search button beside it is the fallback for
           typing a full address and searching it directly, without
           picking from the dropdown. */}
-      <div className="flex items-start gap-2">
+      <motion.div variants={fadeUp} transition={{ duration: 0.4, ease: "easeOut" }} className="flex items-start gap-2">
         <div className="flex-1">
           <AddressAutocomplete
             value={address}
@@ -258,307 +229,216 @@ export function NewCheckForm() {
           variant="secondary"
           onClick={handleSearch}
           disabled={searching || createCheck.isPending || !address.trim()}
+          className="h-11 min-h-11 w-11 shrink-0 px-0"
         >
-          {searching ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Search size={15} strokeWidth={1.75} aria-hidden="true" />}
+          {searching ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Search size={16} strokeWidth={1.75} aria-hidden="true" />}
+          <span className="sr-only">Search</span>
         </Button>
-      </div>
+      </motion.div>
 
-      <button
+      <motion.button
+        variants={fadeUp}
+        transition={{ duration: 0.4, ease: "easeOut" }}
         type="button"
         onClick={handleUseCurrentLocation}
         disabled={locating}
-        className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-app)] border border-dashed border-line bg-paper px-3 py-2 text-sm font-medium text-blue outline-none transition-colors hover:border-blue hover:bg-surface disabled:opacity-60"
+        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-app)] border border-dashed border-line bg-paper px-3 py-2.5 text-sm font-medium text-blue outline-none transition-colors hover:border-blue hover:bg-surface focus-visible:border-blue focus-visible:ring-2 focus-visible:ring-blue/20 disabled:opacity-60"
       >
-        {locating ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Crosshair size={15} strokeWidth={1.75} aria-hidden="true" />}
+        {locating ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Crosshair size={16} strokeWidth={1.75} aria-hidden="true" />}
         {locating ? "Finding you…" : "Use my current location"}
-      </button>
+      </motion.button>
 
       {notice && (
-        <p className="rounded-[var(--radius-app)] border border-line bg-surface px-3 py-2 text-xs text-ink-soft" role="status">
+        <motion.p
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-[var(--radius-app)] border border-line bg-surface px-3 py-2.5 text-xs text-ink-soft"
+          role="status"
+        >
           {notice}
-        </p>
+        </motion.p>
       )}
 
-      <div>
-        <MapView pins={pins} center={coords} height={320} interactive onMove={handleMapMove} />
-        <p className="mt-1.5 text-xs text-ink-faint">
+      <motion.div variants={fadeUp} transition={{ duration: 0.4, ease: "easeOut" }}>
+        <div className="overflow-hidden rounded-[var(--radius-app)] border border-line shadow-[var(--shadow-float)]">
+          <MapView pins={pins} center={coords} height={320} interactive onMove={handleMapMove} />
+        </div>
+        <p className="mt-2 flex items-start gap-1.5 text-xs text-ink-faint">
+          <MapPin size={13} strokeWidth={1.75} className="mt-0.5 shrink-0" aria-hidden="true" />
           {coords ? (
-            <>
-              Pin set at <span className="font-mono">{coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}</span> — drag it
-              or tap the map to fine-tune.
-            </>
+            <span>📍 Location selected — drag the pin or tap the map to fine-tune.</span>
           ) : (
-            "Search, use your location, or tap the map once it appears to drop a pin."
+            <span>Search, use your location, or tap the map once it appears to drop a pin.</span>
           )}
         </p>
-      </div>
+      </motion.div>
 
       {/* CON-05. Without this the system is sized by roof area alone, which
           is why an ordinary house used to come back at tens of kWp it could
           never use. Optional, so a customer who does not know their bill can
           still get a result. */}
-      <div>
-        <p className="mb-1.5 text-sm font-medium text-ink">Your electricity bill</p>
-        <p className="mb-2.5 text-xs text-ink-soft">
-          Roughly what do you pay in a month? Give us your lowest and highest — bills change a lot
-          between seasons, and the range helps us size the system to what you actually use.
-        </p>
-        <div className="flex items-center gap-2">
-          <div className="flex-1">
-            <label htmlFor="bill-low" className="mb-1 block text-xs text-ink-faint">
-              Lowest month
-            </label>
-            <div className="flex items-center gap-1.5 rounded-[var(--radius-app)] border border-line bg-paper px-2.5 py-2">
-              <span className="text-sm text-ink-faint">₹</span>
-              <input
-                id="bill-low"
-                type="number"
-                inputMode="numeric"
-                min={1}
-                value={billLow}
-                onChange={(e) => setBillLow(e.target.value)}
-                placeholder="1,200"
-                className="w-full bg-transparent text-sm text-ink outline-none"
-              />
-            </div>
-          </div>
-          <div className="flex-1">
-            <label htmlFor="bill-high" className="mb-1 block text-xs text-ink-faint">
-              Highest month
-            </label>
-            <div className="flex items-center gap-1.5 rounded-[var(--radius-app)] border border-line bg-paper px-2.5 py-2">
-              <span className="text-sm text-ink-faint">₹</span>
-              <input
-                id="bill-high"
-                type="number"
-                inputMode="numeric"
-                min={1}
-                value={billHigh}
-                onChange={(e) => setBillHigh(e.target.value)}
-                placeholder="2,400"
-                className="w-full bg-transparent text-sm text-ink outline-none"
-              />
-            </div>
-          </div>
-        </div>
-        <p className="mt-1.5 text-xs text-ink-faint">
-          {billError ?? "Optional — skip it and we'll size by roof space alone."}
-        </p>
-      </div>
-
-      <div className="space-y-2 rounded-[var(--radius-app)] border border-line bg-paper p-3">
-        <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">Roof details (optional, helps our estimate)</p>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label htmlFor="roof-type" className="mb-1 block text-xs text-ink-soft">
-              Roof type
-            </label>
-            <select
-              id="roof-type"
-              value={roofType}
-              onChange={(e) => setRoofType(e.target.value as RoofType | "")}
-              className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+      <motion.div variants={fadeUp} transition={{ duration: 0.4, ease: "easeOut" }}>
+        <Card className="p-4">
+          <div className="mb-1.5 flex items-center gap-2">
+            <span
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+              style={{ background: "var(--warn-bg)", color: "var(--amber)" }}
+              aria-hidden="true"
             >
-              <option value="">Not sure</option>
-              {(Object.keys(ROOF_TYPE_LABEL) as RoofType[]).map((t) => (
-                <option key={t} value={t}>
-                  {ROOF_TYPE_LABEL[t]}
-                </option>
-              ))}
-            </select>
+              <IndianRupee size={15} strokeWidth={1.75} />
+            </span>
+            <p className="text-sm font-medium text-ink">Your electricity usage</p>
           </div>
-          <div>
-            <label htmlFor="roof-material" className="mb-1 block text-xs text-ink-soft">
-              Roof material
-            </label>
-            <select
-              id="roof-material"
-              value={roofMaterial}
-              onChange={(e) => setRoofMaterial(e.target.value as RoofMaterial | "")}
-              className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+          <p className="mb-2 text-xs leading-relaxed text-ink-soft">
+            Give us your least and highest bill in the year — usage changes a lot between seasons, and
+            the range helps us size the system to what you actually use.
+          </p>
+          <div className="mb-3 flex items-center gap-1.5 rounded-[var(--radius-app)] border border-line bg-surface-2 p-1 text-xs">
+            <button
+              type="button"
+              onClick={() => setBillMode("kwh")}
+              className="flex-1 rounded-[calc(var(--radius-app)-4px)] py-1.5 font-medium transition-colors"
+              style={billMode === "kwh" ? { background: "var(--surface)", color: "var(--ink)" } : { color: "var(--ink-faint)" }}
             >
-              <option value="">Not sure</option>
-              {(Object.keys(ROOF_MATERIAL_LABEL) as RoofMaterial[]).map((m) => (
-                <option key={m} value={m}>
-                  {ROOF_MATERIAL_LABEL[m]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="roof-slope" className="mb-1 block text-xs text-ink-soft">
-              Roof slope
-            </label>
-            <select
-              id="roof-slope"
-              value={roofSlope}
-              onChange={(e) => setRoofSlope(e.target.value as RoofSlope | "")}
-              className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+              Units (kWh)
+            </button>
+            <button
+              type="button"
+              onClick={() => setBillMode("inr")}
+              className="flex-1 rounded-[calc(var(--radius-app)-4px)] py-1.5 font-medium transition-colors"
+              style={billMode === "inr" ? { background: "var(--surface)", color: "var(--ink)" } : { color: "var(--ink-faint)" }}
             >
-              <option value="">Not sure</option>
-              {(Object.keys(ROOF_SLOPE_LABEL) as RoofSlope[]).map((s) => (
-                <option key={s} value={s}>
-                  {ROOF_SLOPE_LABEL[s]}
-                </option>
-              ))}
-            </select>
+              Bill amount (₹)
+            </button>
           </div>
-          <div>
-            <label htmlFor="roof-construction-year" className="mb-1 block text-xs text-ink-soft">
-              Construction year
-            </label>
-            <input
-              id="roof-construction-year"
-              type="number"
-              min={1900}
-              max={2100}
-              placeholder="e.g. 2015"
-              value={roofConstructionYear}
-              onChange={(e) => setRoofConstructionYear(e.target.value)}
-              className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-2 rounded-[var(--radius-app)] border border-line bg-paper p-3">
-        <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">Electricity connection (optional, from your bill)</p>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label htmlFor="electricity-board" className="mb-1 block text-xs text-ink-soft">
-              Electricity board
-            </label>
-            <input
-              id="electricity-board"
-              value={electricityBoard}
-              onChange={(e) => setElectricityBoard(e.target.value)}
-              placeholder="e.g. TSSPDCL"
-              className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
-            />
-          </div>
-          <div>
-            <label htmlFor="consumer-number" className="mb-1 block text-xs text-ink-soft">
-              Consumer number
-            </label>
-            <input
-              id="consumer-number"
-              value={consumerNumber}
-              onChange={(e) => setConsumerNumber(e.target.value)}
-              className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
-            />
-          </div>
-          <div>
-            <label htmlFor="connection-type" className="mb-1 block text-xs text-ink-soft">
-              Connection type
-            </label>
-            <select
-              id="connection-type"
-              value={connectionType}
-              onChange={(e) => setConnectionType(e.target.value as ConnectionType | "")}
-              className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
-            >
-              <option value="">Not sure</option>
-              {(Object.keys(CONNECTION_TYPE_LABEL) as ConnectionType[]).map((c) => (
-                <option key={c} value={c}>
-                  {CONNECTION_TYPE_LABEL[c]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="sanctioned-load" className="mb-1 block text-xs text-ink-soft">
-              Sanctioned load (kW)
-            </label>
-            <input
-              id="sanctioned-load"
-              type="number"
-              min={0}
-              value={sanctionedLoadKw}
-              onChange={(e) => setSanctionedLoadKw(e.target.value)}
-              className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
-            />
-          </div>
-        </div>
-        <div>
-          <p className="mb-1 text-xs text-ink-soft">Last 12 months&apos; consumption (kWh, from your bills — optional)</p>
-          <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
-            {last12Months().map((month) => (
-              <div key={month}>
-                <label htmlFor={`consumption-${month}`} className="mb-0.5 block text-[10px] text-ink-faint">
-                  {monthLabel(month)}
+          {billMode === "kwh" ? (
+            <div className="flex items-start gap-2.5">
+              <div className="flex-1">
+                <label htmlFor="consumption-low" className="mb-1.5 block text-xs font-medium text-ink-faint">
+                  Least usage in year
                 </label>
-                <input
-                  id={`consumption-${month}`}
-                  type="number"
-                  min={0}
-                  value={monthlyUnits[month] ?? ""}
-                  onChange={(e) => setMonthlyUnits((prev) => ({ ...prev, [month]: e.target.value }))}
-                  className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-1.5 py-1 text-xs text-ink"
-                />
+                <div className="flex min-h-11 items-center gap-1.5 rounded-[var(--radius-app)] border border-line bg-paper px-3 py-2.5 transition-colors focus-within:border-blue focus-within:ring-2 focus-within:ring-blue/15">
+                  <input
+                    id="consumption-low"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={consumptionLow}
+                    onChange={(e) => setConsumptionLow(e.target.value)}
+                    placeholder="400"
+                    className="w-full bg-transparent text-sm text-ink outline-none"
+                  />
+                  <span className="text-sm text-ink-faint">kWh</span>
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-2 rounded-[var(--radius-app)] border border-line bg-paper p-3">
-        <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">Battery / backup (optional)</p>
-        <div className="flex flex-wrap gap-4">
-          <label className="flex items-center gap-2 text-sm text-ink">
-            <input type="checkbox" checked={batteryRequired} onChange={(e) => setBatteryRequired(e.target.checked)} />
-            Interested in battery storage
-          </label>
-          <label className="flex items-center gap-2 text-sm text-ink">
-            <input type="checkbox" checked={backupRequired} onChange={(e) => setBackupRequired(e.target.checked)} />
-            Need power backup
-          </label>
-        </div>
-        {backupRequired && (
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label htmlFor="backup-hours" className="mb-1 block text-xs text-ink-soft">
-                Required backup hours
-              </label>
-              <input
-                id="backup-hours"
-                type="number"
-                min={0}
-                value={requiredBackupHours}
-                onChange={(e) => setRequiredBackupHours(e.target.value)}
-                className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
-              />
+              <div className="flex-1">
+                <label htmlFor="consumption-high" className="mb-1.5 block text-xs font-medium text-ink-faint">
+                  Highest usage in year
+                </label>
+                <div className="flex min-h-11 items-center gap-1.5 rounded-[var(--radius-app)] border border-line bg-paper px-3 py-2.5 transition-colors focus-within:border-blue focus-within:ring-2 focus-within:ring-blue/15">
+                  <input
+                    id="consumption-high"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={consumptionHigh}
+                    onChange={(e) => setConsumptionHigh(e.target.value)}
+                    placeholder="900"
+                    className="w-full bg-transparent text-sm text-ink outline-none"
+                  />
+                  <span className="text-sm text-ink-faint">kWh</span>
+                </div>
+              </div>
             </div>
-            <div>
-              <label htmlFor="critical-loads" className="mb-1 block text-xs text-ink-soft">
-                Critical loads (what must stay on)
-              </label>
-              <input
-                id="critical-loads"
-                value={criticalLoads}
-                onChange={(e) => setCriticalLoads(e.target.value)}
-                placeholder="e.g. fridge, lights, Wi-Fi router"
-                className="w-full rounded-[var(--radius-app)] border border-line bg-surface px-2 py-1.5 text-sm text-ink"
-              />
+          ) : (
+            <div className="flex items-start gap-2.5">
+              <div className="flex-1">
+                <label htmlFor="bill-low" className="mb-1.5 block text-xs font-medium text-ink-faint">
+                  Least bill in year
+                </label>
+                <div className="flex min-h-11 items-center gap-1.5 rounded-[var(--radius-app)] border border-line bg-paper px-3 py-2.5 transition-colors focus-within:border-blue focus-within:ring-2 focus-within:ring-blue/15">
+                  <span className="text-sm text-ink-faint">₹</span>
+                  <input
+                    id="bill-low"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={billLow}
+                    onChange={(e) => setBillLow(e.target.value)}
+                    placeholder="1,200"
+                    className="w-full bg-transparent text-sm text-ink outline-none"
+                  />
+                </div>
+              </div>
+              <div className="flex-1">
+                <label htmlFor="bill-high" className="mb-1.5 block text-xs font-medium text-ink-faint">
+                  Highest bill in year
+                </label>
+                <div className="flex min-h-11 items-center gap-1.5 rounded-[var(--radius-app)] border border-line bg-paper px-3 py-2.5 transition-colors focus-within:border-blue focus-within:ring-2 focus-within:ring-blue/15">
+                  <span className="text-sm text-ink-faint">₹</span>
+                  <input
+                    id="bill-high"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={billHigh}
+                    onChange={(e) => setBillHigh(e.target.value)}
+                    placeholder="2,400"
+                    className="w-full bg-transparent text-sm text-ink outline-none"
+                  />
+                </div>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+          <p className="mt-2 text-xs" style={billError ? { color: "var(--bad)" } : undefined}>
+            <span className={billError ? "" : "text-ink-faint"}>
+              {billError ?? "Optional — skip it and we'll size by roof space alone."}
+            </span>
+          </p>
+        </Card>
+      </motion.div>
 
       {submitError && (
-        <p className="rounded-[var(--radius-app)] border px-3 py-2 text-xs" role="alert" style={{ borderColor: "var(--bad)", color: "var(--bad)" }}>
+        <motion.p
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-[var(--radius-app)] border px-3 py-2.5 text-xs"
+          role="alert"
+          style={{ borderColor: "var(--bad)", color: "var(--bad)", background: "var(--bad-bg)" }}
+        >
           {submitError}
-        </p>
+        </motion.p>
       )}
 
-      <Button
-        type="button"
-        size="md"
-        className="w-full"
-        onClick={handleSubmit}
-        disabled={createCheck.isPending || !coords}
+      {/* Sticky on mobile so the primary action stays reachable without
+          hunting for it after scrolling through the map and bill fields —
+          parked just above the app's fixed mobile bottom nav. On md+ (where
+          that bottom nav disappears and the form sits in a calmer, roomier
+          layout) it reverts to a normal in-flow button. */}
+      <motion.div
+        variants={fadeUp}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-10 -mx-4 border-t border-line bg-paper/95 px-4 py-3 backdrop-blur-sm md:static md:bottom-auto md:z-auto md:mx-0 md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none"
       >
-        {createCheck.isPending ? "Starting…" : coords ? "Check this location" : "Place your pin first"}
-      </Button>
-    </div>
+        <Button
+          type="button"
+          size="md"
+          className="min-h-12 w-full text-base shadow-[var(--shadow-float)]"
+          onClick={handleSubmit}
+          disabled={!canSubmit}
+        >
+          {createCheck.isPending ? (
+            <>
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+              Starting…
+            </>
+          ) : coords ? (
+            "Check this location"
+          ) : (
+            "Place your pin first"
+          )}
+        </Button>
+      </motion.div>
+    </motion.div>
   );
 }

@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, ClipboardList, IndianRupee, TrendingUp } from "lucide-react";
-import { useVendorEarningsSummary, useVendorJobs, useVendorProfile } from "@/lib/query/hooks";
+import { AlertTriangle, ArrowRight, ClipboardList, TrendingUp } from "lucide-react";
+import { useVendorJobs, useVendorProfile } from "@/lib/query/hooks";
 import { Card, CardSkeleton, ErrorState, Button } from "@/components/ui/Primitives";
 import { JobCard } from "@/components/vendor/JobCard";
 
 export function VendorDashboardClient() {
   const jobs = useVendorJobs();
-  const earnings = useVendorEarningsSummary();
   const profile = useVendorProfile();
 
   const items = jobs.data ?? [];
@@ -25,24 +24,18 @@ export function VendorDashboardClient() {
         <h2 id="dashboard-summary-heading" className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-faint">
           Today
         </h2>
-        {(jobs.isLoading || earnings.isLoading || profile.isLoading) && (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => (
+        {(jobs.isLoading || profile.isLoading) && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
               <CardSkeleton key={i} />
             ))}
           </div>
         )}
-        {(jobs.isError || earnings.isError) && (
-          <ErrorState
-            description="Could not load dashboard data."
-            onRetry={() => {
-              jobs.refetch();
-              earnings.refetch();
-            }}
-          />
+        {jobs.isError && (
+          <ErrorState description="Could not load dashboard data." onRetry={() => jobs.refetch()} />
         )}
-        {jobs.data && earnings.data && profile.data && (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {jobs.data && profile.data && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Card className="p-4">
               <p className="flex items-center gap-1.5 text-xs text-ink-soft">
                 <ClipboardList size={13} strokeWidth={1.75} aria-hidden="true" />
@@ -61,17 +54,10 @@ export function VendorDashboardClient() {
             </Card>
             <Card className="p-4">
               <p className="flex items-center gap-1.5 text-xs text-ink-soft">
-                <IndianRupee size={13} strokeWidth={1.75} aria-hidden="true" />
-                This week&apos;s earnings
-              </p>
-              <p className="mt-1 font-mono tabular text-2xl text-ink">₹{earnings.data.weekTotalInr.toLocaleString("en-IN")}</p>
-            </Card>
-            <Card className="p-4">
-              <p className="flex items-center gap-1.5 text-xs text-ink-soft">
                 <TrendingUp size={13} strokeWidth={1.75} aria-hidden="true" />
                 Accuracy score
               </p>
-              <p className="mt-1 font-mono tabular text-2xl text-teal">{profile.data.accuracyScore}%</p>
+              <p className="mt-1 font-mono tabular text-2xl text-brand">{profile.data.accuracyScore}%</p>
             </Card>
           </div>
         )}

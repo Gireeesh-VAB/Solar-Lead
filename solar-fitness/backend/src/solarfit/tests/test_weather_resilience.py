@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from solarfit.providers.nasa_power import NASAPowerError
 from solarfit.providers.weather import WeatherProviderError
 
 
@@ -27,9 +28,17 @@ def dead_weather():
     return WeatherProviderError("Open-Meteo request failed: timed out")
 
 
-def test_generation_already_degrades_on_a_dead_provider(dead_weather):
+@pytest.fixture
+def dead_nasa_power():
+    return NASAPowerError("NASA POWER request failed: timed out")
+
+
+def test_generation_already_degrades_on_a_dead_provider(dead_weather, dead_nasa_power):
     """The pattern the other two call sites now follow. Not a new
-    behaviour — pinned so it cannot regress."""
+    behaviour — pinned so it cannot regress. NASA POWER (the fallback
+    tier tried before the flat constant, see engine/generation.py) is
+    also mocked dead here so this pins the FINAL degrade step, not the
+    intermediate one covered by tests/test_generation.py."""
     from solarfit.domain.site import Site
     from solarfit.engine import generation
 
@@ -43,7 +52,15 @@ def test_generation_already_degrades_on_a_dead_provider(dead_weather):
         created_at=datetime.now(UTC),
     )
 
-    with patch.object(generation, "fetch_weather", side_effect=dead_weather):
+    with (
+        patch.object(generation, "fetch_weather", side_effect=dead_weather),
+        patch.object(generation, "fetch_nasa_power_irradiance", side_effect=dead_nasa_power),
+        patch.object(
+            generation,
+            "fetch_pvgis_generation",
+            return_value={"annual_kwh": 1000.0, "monthly_kwh": [83.3] * 12},
+        ),
+    ):
         estimate = generation.estimate_generation_kwh(site, 5.0)
 
     assert estimate is not None

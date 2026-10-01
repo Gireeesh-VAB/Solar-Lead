@@ -14,6 +14,7 @@ import { ClipboardList, ClipboardCheck } from "lucide-react";
 const PAGE_SIZE = 20;
 
 const REVIEW_STATUS_LABEL: Record<ReviewStatus, string> = {
+  not_submitted: "Not submitted",
   pending: "Pending review",
   approved: "Approved",
   rejected: "Rejected",

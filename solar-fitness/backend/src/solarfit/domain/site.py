@@ -22,7 +22,17 @@ BILLING_LINKED_SITE_TYPES: tuple[RoofSiteType, ...] = (
     "ROOFTOP_CI",
 )
 
-GeometrySource = Literal["manual_polygon", "solar_api", "imported", "field_measured"]
+# "solar_api_mask" added alongside "solar_api": GEO-04's real-outline
+# upgrade (providers/solar_api.py::extract_roof_polygon_from_mask) —
+# a polygon vectorised from the Solar API's own building-mask raster,
+# distinct from "solar_api"'s boundingBox rectangle. Additive only:
+# every existing source is unchanged, and code that doesn't know about
+# this one still treats it correctly via base.APPROXIMATE_SOURCES /
+# base.PRECEDENCE (it deliberately is NOT in APPROXIMATE_SOURCES — it's
+# a real traced-ish outline, not a rectangle).
+GeometrySource = Literal[
+    "manual_polygon", "solar_api", "solar_api_mask", "imported", "field_measured"
+]
 UsnSource = Literal["manual", "bill_ocr", "payment_proof_ocr"]
 ShadingSource = Literal["solar_api", "unavailable"]
 
@@ -75,6 +85,12 @@ class Site(BaseModel):
     imagery_date: datetime | None = None
     imagery_quality: str | None = None
     geometry_confidence: float | None = None  # GEO-09, 0..1
+    # providers/solar_api.py::MaskVectorization.competing_regions, captured
+    # once at site-creation time — how many OTHER candidate buildings the
+    # mask found near the pin besides the one selected. None means no
+    # mask lookup ran (not "found zero") — see repositories/sites.py's
+    # own column comment for the full rationale.
+    competing_buildings_nearby: int | None = None
     shading: ShadingEstimate | None = None  # SHADE-01/02
 
     usn: UsnCapture | None = None

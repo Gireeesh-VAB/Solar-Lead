@@ -85,7 +85,7 @@ export default async function VendorJobDetailPage({ params }: { params: Promise<
               <ul className="space-y-2 text-sm text-ink">
                 {job.requirements.map((req) => (
                   <li key={req} className="flex items-start gap-2">
-                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-teal" aria-hidden="true" />
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-hidden="true" />
                     {req}
                   </li>
                 ))}

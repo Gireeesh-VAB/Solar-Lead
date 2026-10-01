@@ -11,28 +11,13 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, RotateCcw, TriangleAlert } from "lucide-react";
+import { Check, Loader2, Plus, RotateCcw, TriangleAlert } from "lucide-react";
 import { MapView } from "@/components/map/MapView";
 import type { LatLngPoint } from "@/components/map/RoofBoundaryEditor";
 import { Button } from "@/components/ui/Primitives";
 import * as api from "@/lib/api/client";
+import { approxAreaM2 } from "@/lib/geo/area";
 import type { Site } from "@/lib/types";
-
-/** Rough plan-view area, only to catch a nonsense shape before saving —
- *  the authoritative measurement is the backend's projected one. */
-function approxAreaM2(points: LatLngPoint[]): number {
-  if (points.length < 3) return 0;
-  const lat0 = (points.reduce((s, p) => s + p.lat, 0) / points.length) * (Math.PI / 180);
-  const mPerLat = 111_320;
-  const mPerLng = 111_320 * Math.cos(lat0);
-  let twice = 0;
-  for (let i = 0; i < points.length; i++) {
-    const a = points[i];
-    const b = points[(i + 1) % points.length];
-    twice += a.lng * mPerLng * (b.lat * mPerLat) - b.lng * mPerLng * (a.lat * mPerLat);
-  }
-  return Math.abs(twice) / 2;
-}
 
 export function BoundaryEditorClient({ check }: { check: Site }) {
   const router = useRouter();
@@ -40,6 +25,7 @@ export function BoundaryEditorClient({ check }: { check: Site }) {
 
   const [points, setPoints] = useState<LatLngPoint[]>(original);
   const [version, setVersion] = useState(0);
+  const [addPointSignal, setAddPointSignal] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,10 +43,11 @@ export function BoundaryEditorClient({ check }: { check: Site }) {
     try {
       await api.saveCheckBoundary(check.id, points);
       // The boundary is versioned immediately, but usable area and
-      // capacity are recomputed by the assessment — so re-run it rather
-      // than leaving the customer looking at a result built on the box.
-      await api.completeCheck(check.id).catch(() => null);
-      router.push(`/check/${check.id}/result`);
+      // capacity are recomputed by the assessment. Rather than re-running
+      // it here and again after the obstacle step, hand straight over to
+      // that step — it ends with the same completeCheck() and lands on
+      // the result. One recompute, from the finished geometry.
+      router.push(`/check/${check.id}/obstacles`);
       router.refresh();
     } catch (err) {
       setError(
@@ -82,13 +69,14 @@ export function BoundaryEditorClient({ check }: { check: Site }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div>
-        <h1 className="text-lg font-semibold text-ink">Is this your roof?</h1>
-        <p className="mt-1 text-sm text-ink-soft">
+        <h1 className="text-xl font-semibold tracking-tight text-ink">Is this your roof?</h1>
+        <p className="mt-1.5 text-sm leading-relaxed text-ink-soft">
           The cyan shape is our best guess from satellite data — a rectangle around your building,
-          not a traced roof. Drag the corners onto your actual roof edges. To make an L-shape,
-          drag one of the small midpoint handles out to create a new corner.
+          not a traced roof. Drag the corners onto your actual roof edges. For an L-shape, T-shape,
+          or other irregular roof, drag one of the small midpoint handles out to create a new
+          corner, or use &quot;Add point&quot; below.
         </p>
       </div>
 
@@ -101,10 +89,15 @@ export function BoundaryEditorClient({ check }: { check: Site }) {
             label: check.name,
           },
         ]}
-        height={420}
+        // Fills most of the viewport on a small phone (where every pixel of
+        // drag precision matters) without overflowing the layout on a
+        // larger screen — a fixed px height was either cramped on mobile
+        // or needlessly tall on desktop.
+        height="clamp(320px, 60dvh, 480px)"
         editableBoundary={original}
         onBoundaryChange={onChange}
         editorVersion={version}
+        addPointSignal={addPointSignal}
       />
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-faint">
@@ -114,6 +107,16 @@ export function BoundaryEditorClient({ check }: { check: Site }) {
         </span>
         <span>Right-click a corner to remove it.</span>
       </div>
+
+      <Button
+        type="button"
+        variant="secondary"
+        className="w-full"
+        onClick={() => setAddPointSignal((n) => n + 1)}
+        disabled={saving || points.length < 3}
+      >
+        <Plus size={16} strokeWidth={1.75} aria-hidden="true" /> Add point
+      </Button>
 
       {tooSmall && (
         <p
@@ -162,8 +165,8 @@ export function BoundaryEditorClient({ check }: { check: Site }) {
       </div>
 
       <p className="text-xs text-ink-faint">
-        Confirming replaces the satellite estimate with your outline, and we&apos;ll recalculate
-        your usable roof space and system size from it.
+        Confirming replaces the satellite estimate with your outline. Next we&apos;ll ask what&apos;s
+        on the roof, then recalculate your usable roof space and system size from both.
       </p>
     </div>
   );

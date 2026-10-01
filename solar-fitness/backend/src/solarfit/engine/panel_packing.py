@@ -84,6 +84,14 @@ class PackedLayout:
     tilt_deg: float
     azimuth_deg: float
     row_gap_m: float
+    # Candidate rectangles generated but rejected for failing full-footprint
+    # containment — a geometry-rejection count, distinct from panels later
+    # trimmed by select_for_target_capacity() for capacity reasons.
+    rejected_count: int = 0
+    # Which orientation actually produced this layout ("portrait"/"landscape") —
+    # set by pack_panels() itself so pack_panels_best_orientation() can report
+    # which of its two attempts won.
+    orientation: str = "portrait"
 
     @property
     def count(self) -> int:
@@ -167,12 +175,14 @@ def pack_panels(
     tilt = float(settings["default_tilt_deg"] if tilt_deg is None else tilt_deg)
     azimuth = float(settings["default_azimuth_deg"] if azimuth_deg is None else azimuth_deg)
 
-    if usable_polygon_metric is None or usable_polygon_metric.is_empty:
-        return PackedLayout([], watts, tilt, azimuth, 0.0)
-
     # PORTRAIT runs the long side up the slope, which is the direction
     # rows advance in. LANDSCAPE turns each module a quarter turn.
     portrait = str(settings["orientation"]).lower() != "landscape"
+    orientation_name = "portrait" if portrait else "landscape"
+
+    if usable_polygon_metric is None or usable_polygon_metric.is_empty:
+        return PackedLayout([], watts, tilt, azimuth, 0.0, rejected_count=0, orientation=orientation_name)
+
     along = length if portrait else width  # up-slope, the shaded direction
     across = width if portrait else length  # along the row
 
@@ -190,6 +200,7 @@ def pack_panels(
     min_x, min_y, max_x, max_y = working.bounds
 
     panels: list[PackedPanel] = []
+    rejected_count = 0
     y = min_y
     row_index = 0
     while y + along * math.cos(math.radians(tilt)) <= max_y:
@@ -209,6 +220,8 @@ def pack_panels(
                     )
                 )
                 placed_in_row += 1
+            else:
+                rejected_count += 1
             x += col_pitch
 
         if placed_in_row:
@@ -222,15 +235,116 @@ def pack_panels(
         y += row_pitch + extra
 
     logger.info(
-        "Packed %d panels (%.2f kWp) into %.1f m2 at tilt %.1f / azimuth %.1f, row gap %.2f m",
+        "Packed %d panels (%.2f kWp), rejected %d candidates, into %.1f m2 "
+        "at tilt %.1f / azimuth %.1f, row gap %.2f m, orientation %s",
         len(panels),
         len(panels) * watts / 1000.0,
+        rejected_count,
         usable_polygon_metric.area,
         tilt,
         azimuth,
         gap,
+        orientation_name,
     )
-    return PackedLayout(panels, watts, tilt, azimuth, gap)
+    return PackedLayout(
+        panels, watts, tilt, azimuth, gap, rejected_count=rejected_count, orientation=orientation_name
+    )
+
+
+def pack_panels_best_orientation(
+    usable_polygon_metric: BaseGeometry,
+    *,
+    latitude_deg: float,
+    tilt_deg: float | None = None,
+    azimuth_deg: float | None = None,
+    panel_length_m: float | None = None,
+    panel_width_m: float | None = None,
+    panel_watts: float | None = None,
+    params: dict | None = None,
+) -> PackedLayout:
+    """Packs both portrait and landscape and keeps whichever fits more panels.
+
+    pack_panels()'s own contract, config-driven default orientation, and
+    single-call behaviour are unchanged — this just calls it twice with the
+    orientation forced each way (params always wins over the config-pack
+    default, since pack_panels() merges params over config) and picks the
+    winner. Ties keep portrait.
+    """
+    base_params = dict(params or {})
+    portrait = pack_panels(
+        usable_polygon_metric,
+        latitude_deg=latitude_deg,
+        tilt_deg=tilt_deg,
+        azimuth_deg=azimuth_deg,
+        panel_length_m=panel_length_m,
+        panel_width_m=panel_width_m,
+        panel_watts=panel_watts,
+        params={**base_params, "orientation": "portrait"},
+    )
+    landscape = pack_panels(
+        usable_polygon_metric,
+        latitude_deg=latitude_deg,
+        tilt_deg=tilt_deg,
+        azimuth_deg=azimuth_deg,
+        panel_length_m=panel_length_m,
+        panel_width_m=panel_width_m,
+        panel_watts=panel_watts,
+        params={**base_params, "orientation": "landscape"},
+    )
+    return portrait if portrait.count >= landscape.count else landscape
+
+
+def select_for_target_capacity(layout: PackedLayout, target_kwp: float | None) -> PackedLayout:
+    """Keep only as many packed panels as the target system needs.
+
+    `pack_panels` fills the whole usable polygon — every module that
+    physically fits. Installing all of them regardless of what the
+    customer actually asked for is exactly the "why fill the whole roof"
+    problem this exists to avoid: the roof's technical maximum
+    (``layout.kwp``) and the customer's recommended system size
+    (typically CON-05's bill-based figure) are different numbers, and the
+    smaller one wins.
+
+    Panels are kept in packing order (row by row, front to back) rather
+    than re-sorted by any per-panel yield estimate — this layout does not
+    carry one (every panel here has identical `watts`, by construction).
+    `target_kwp=None` (no capacity resolved yet) returns an empty
+    selection, not the full layout — never show a layout the capacity
+    figure it should match hasn't actually sized.
+    """
+    empty = PackedLayout(
+        [],
+        layout.panel_watts,
+        layout.tilt_deg,
+        layout.azimuth_deg,
+        layout.row_gap_m,
+        rejected_count=layout.rejected_count,
+        orientation=layout.orientation,
+    )
+    if target_kwp is None or target_kwp <= 0 or not layout.panels:
+        return empty
+
+    target_watts = target_kwp * 1000.0
+    kept: list[PackedPanel] = []
+    total_watts = 0.0
+    for panel in layout.panels:
+        if total_watts >= target_watts:
+            break
+        kept.append(panel)
+        total_watts += panel.watts
+
+    # rejected_count/orientation describe pack_panels()'s own geometry
+    # rejections — a capacity-driven truncation here is not a geometry
+    # rejection, so both are carried through unchanged.
+    return PackedLayout(
+        kept,
+        layout.panel_watts,
+        layout.tilt_deg,
+        layout.azimuth_deg,
+        layout.row_gap_m,
+        rejected_count=layout.rejected_count,
+        orientation=layout.orientation,
+    )
 
 
 def to_wgs84_rings(layout: PackedLayout, epsg: int) -> list[list[tuple[float, float]]]:
@@ -255,7 +369,9 @@ __all__ = [
     "PackedPanel",
     "assert_not_double_derated",
     "pack_panels",
+    "pack_panels_best_orientation",
     "row_gap_m",
+    "select_for_target_capacity",
     "solar_noon_altitude_deg",
     "to_wgs84_rings",
 ]

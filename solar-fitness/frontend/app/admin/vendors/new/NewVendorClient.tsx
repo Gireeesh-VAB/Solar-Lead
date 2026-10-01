@@ -10,20 +10,27 @@ import { Button, Card } from "@/components/ui/Primitives";
 import { useCreateAdminVendor } from "@/lib/query/hooks";
 import { ApiError } from "@/lib/api/fetchClient";
 import type { NewVendorResult } from "@/lib/api/client";
+import { optionalIndianPhone, sanitizePhoneInput } from "@/lib/validation/phone";
 
+// max() on each optional field mirrors the backend's own VendorCreateRequest
+// limits (routers/app_admin_vendors.py), which in turn mirror the VendorRow
+// database columns — catching an oversized value here, inline, is friendlier
+// than the round trip to the server's 422 (previously an unhandled 500: an
+// oversized value hit Postgres's own varchar limit directly, with nothing at
+// either layer validating first).
 const schema = z.object({
-  name: z.string().min(1, "Enter the vendor's display name."),
-  legalName: z.string().optional(),
-  gstNumber: z.string().optional(),
-  panNumber: z.string().optional(),
-  contactName: z.string().optional(),
-  contactPhone: z.string().optional(),
-  contactEmail: z.string().email("Enter a valid email address — this becomes the vendor's login."),
-  addressLine1: z.string().optional(),
-  addressLine2: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  pincode: z.string().optional(),
+  name: z.string().min(1, "Enter the vendor's display name.").max(255),
+  legalName: z.string().max(255, "Too long — 255 characters max.").optional(),
+  gstNumber: z.string().max(32, "Too long — 32 characters max.").optional(),
+  panNumber: z.string().max(16, "Too long — 16 characters max.").optional(),
+  contactName: z.string().max(255, "Too long — 255 characters max.").optional(),
+  contactPhone: optionalIndianPhone,
+  contactEmail: z.string().email("Enter a valid email address — this becomes the vendor's login.").max(255),
+  addressLine1: z.string().max(255, "Too long — 255 characters max.").optional(),
+  addressLine2: z.string().max(255, "Too long — 255 characters max.").optional(),
+  city: z.string().max(128, "Too long — 128 characters max.").optional(),
+  state: z.string().max(128, "Too long — 128 characters max.").optional(),
+  pincode: z.string().max(16, "Too long — 16 characters max.").optional(),
   serviceAreaRegion: z.string().min(1, "Enter a service area region."),
   serviceAreaDistricts: z.string().optional(),
   payoutMethodType: z.enum(["UPI", "Bank transfer"]),
@@ -52,6 +59,7 @@ export function NewVendorClient() {
   const {
     register,
     handleSubmit,
+    trigger,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -156,19 +164,22 @@ export function NewVendorClient() {
             <label htmlFor="legalName" className={labelClass}>
               Legal / registered name
             </label>
-            <input id="legalName" className={inputClass} {...register("legalName")} />
+            <input id="legalName" className={inputClass} aria-invalid={!!errors.legalName} {...register("legalName")} />
+            {errors.legalName && <p className={errorClass} style={{ color: "var(--bad)" }}>{errors.legalName.message}</p>}
           </div>
           <div>
             <label htmlFor="gstNumber" className={labelClass}>
               GST number
             </label>
-            <input id="gstNumber" className={inputClass} {...register("gstNumber")} />
+            <input id="gstNumber" className={inputClass} aria-invalid={!!errors.gstNumber} {...register("gstNumber")} />
+            {errors.gstNumber && <p className={errorClass} style={{ color: "var(--bad)" }}>{errors.gstNumber.message}</p>}
           </div>
           <div>
             <label htmlFor="panNumber" className={labelClass}>
               PAN number
             </label>
-            <input id="panNumber" className={inputClass} {...register("panNumber")} />
+            <input id="panNumber" className={inputClass} aria-invalid={!!errors.panNumber} {...register("panNumber")} />
+            {errors.panNumber && <p className={errorClass} style={{ color: "var(--bad)" }}>{errors.panNumber.message}</p>}
           </div>
         </div>
       </Card>
@@ -180,13 +191,31 @@ export function NewVendorClient() {
             <label htmlFor="contactName" className={labelClass}>
               Contact person
             </label>
-            <input id="contactName" className={inputClass} {...register("contactName")} />
+            <input id="contactName" className={inputClass} aria-invalid={!!errors.contactName} {...register("contactName")} />
+            {errors.contactName && <p className={errorClass} style={{ color: "var(--bad)" }}>{errors.contactName.message}</p>}
           </div>
           <div>
             <label htmlFor="contactPhone" className={labelClass}>
               Contact phone
             </label>
-            <input id="contactPhone" type="tel" className={inputClass} {...register("contactPhone")} />
+            <input
+              id="contactPhone"
+              type="tel"
+              inputMode="numeric"
+              className={inputClass}
+              aria-invalid={!!errors.contactPhone}
+              {...register("contactPhone", {
+                onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                  e.target.value = sanitizePhoneInput(e.target.value);
+                  void trigger("contactPhone");
+                },
+              })}
+            />
+            {errors.contactPhone && (
+              <p className={errorClass} style={{ color: "var(--bad)" }}>
+                {errors.contactPhone.message}
+              </p>
+            )}
           </div>
           <div className="sm:col-span-2">
             <label htmlFor="contactEmail" className={labelClass}>
@@ -215,31 +244,36 @@ export function NewVendorClient() {
             <label htmlFor="addressLine1" className={labelClass}>
               Address line 1
             </label>
-            <input id="addressLine1" className={inputClass} {...register("addressLine1")} />
+            <input id="addressLine1" className={inputClass} aria-invalid={!!errors.addressLine1} {...register("addressLine1")} />
+            {errors.addressLine1 && <p className={errorClass} style={{ color: "var(--bad)" }}>{errors.addressLine1.message}</p>}
           </div>
           <div className="sm:col-span-2">
             <label htmlFor="addressLine2" className={labelClass}>
               Address line 2
             </label>
-            <input id="addressLine2" className={inputClass} {...register("addressLine2")} />
+            <input id="addressLine2" className={inputClass} aria-invalid={!!errors.addressLine2} {...register("addressLine2")} />
+            {errors.addressLine2 && <p className={errorClass} style={{ color: "var(--bad)" }}>{errors.addressLine2.message}</p>}
           </div>
           <div>
             <label htmlFor="city" className={labelClass}>
               City
             </label>
-            <input id="city" className={inputClass} {...register("city")} />
+            <input id="city" className={inputClass} aria-invalid={!!errors.city} {...register("city")} />
+            {errors.city && <p className={errorClass} style={{ color: "var(--bad)" }}>{errors.city.message}</p>}
           </div>
           <div>
             <label htmlFor="state" className={labelClass}>
               State
             </label>
-            <input id="state" className={inputClass} {...register("state")} />
+            <input id="state" className={inputClass} aria-invalid={!!errors.state} {...register("state")} />
+            {errors.state && <p className={errorClass} style={{ color: "var(--bad)" }}>{errors.state.message}</p>}
           </div>
           <div>
             <label htmlFor="pincode" className={labelClass}>
               Pincode
             </label>
-            <input id="pincode" className={inputClass} {...register("pincode")} />
+            <input id="pincode" className={inputClass} aria-invalid={!!errors.pincode} {...register("pincode")} />
+            {errors.pincode && <p className={errorClass} style={{ color: "var(--bad)" }}>{errors.pincode.message}</p>}
           </div>
         </div>
       </Card>

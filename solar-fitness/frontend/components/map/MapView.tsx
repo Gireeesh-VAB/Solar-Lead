@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   APIProvider,
   Map as GoogleMap,
@@ -11,7 +11,9 @@ import { MapPin } from "lucide-react";
 import { RoofBoundaryEditor, type LatLngPoint } from "./RoofBoundaryEditor";
 import {
   SolarPanelOverlay,
+  type LayerVisibility,
   type RoofObstaclePolygon,
+  type RoofSegmentPolygon,
   type SolarPanelPolygon,
 } from "./SolarPanelOverlay";
 import type { Verdict } from "@/lib/types";
@@ -36,7 +38,7 @@ const VERDICT_COLOR: Record<Verdict, string> = {
 // Marker glyphs are drawn by google.maps, which needs real colour values —
 // CSS custom properties don't resolve inside a canvas-rendered marker.
 const VERDICT_HEX: Record<Verdict, string> = {
-  SUITABLE: "#1f7a4d",
+  SUITABLE: "#1e7a5f",
   SUITABLE_SUBJECT_TO_SURVEY: "#b5590c",
   CONDITIONAL: "#b5590c",
   INSUFFICIENT_DATA: "#64748b",
@@ -71,10 +73,41 @@ function pinIcon(color: string): google.maps.Symbol {
   };
 }
 
-/** Keeps the viewport following `center` when the parent moves it
- *  (address search, geolocation) without fighting the user's own panning:
- *  it only recentres when the target actually changes. */
-/** Zooms to the highest level Google actually has imagery for at `point`.
+/** Steps `map`'s zoom from `from` to `to` one level at a time, spaced
+ *  `durationMs` apart in total — the Maps JS API has no native smooth-
+ *  zoom transition (setZoom() jumps instantly), so this fakes one by
+ *  animating through the intermediate integer levels. Returns a cleanup
+ *  function that stops the sequence if the target changes mid-flight
+ *  (a fast re-pin during the animation must not leave two sequences
+ *  fighting each other). No-op (immediate jump) when `to <= from` —
+ *  never animates a zoom-OUT, only zooming in reads as "homing in on
+ *  the roof". */
+function animateZoomTo(map: google.maps.Map, from: number, to: number, durationMs = 900): () => void {
+  if (to <= from) {
+    map.setZoom(to);
+    return () => {};
+  }
+  const steps = to - from;
+  const stepDelayMs = durationMs / steps;
+  let cancelled = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const tick = (level: number) => {
+    if (cancelled) return;
+    map.setZoom(level);
+    if (level < to) timer = setTimeout(() => tick(level + 1), stepDelayMs);
+  };
+  tick(from + 1);
+
+  return () => {
+    cancelled = true;
+    if (timer) clearTimeout(timer);
+  };
+}
+
+/** Zooms to the highest level Google actually has imagery for at `point`,
+ *  animating the approach rather than jumping straight there — Step 15's
+ *  "camera smoothly zooms to selected building", not an instant cut.
  *
  *  Satellite coverage depth varies street by street. A fixed zoom either
  *  wastes real resolution where Google has it, or pushes past the tiles
@@ -91,6 +124,7 @@ function ZoomToBestImagery({ point }: { point: { lat: number; lng: number } | nu
   useEffect(() => {
     if (!map || !point || !google?.maps?.MaxZoomService) return;
     let cancelled = false;
+    let stopAnimation: (() => void) | null = null;
 
     new google.maps.MaxZoomService()
       .getMaxZoomAtLatLng(point)
@@ -98,7 +132,8 @@ function ZoomToBestImagery({ point }: { point: { lat: number; lng: number } | nu
         if (cancelled || result.status !== google.maps.MaxZoomStatus.OK) return;
         const best = Math.min(result.zoom, MAX_USEFUL_ZOOM);
         // Never zoom OUT from the building framing — only sharpen it.
-        if (best > (map.getZoom() ?? 0)) map.setZoom(best);
+        const current = map.getZoom() ?? 0;
+        if (best > current) stopAnimation = animateZoomTo(map, current, best);
       })
       .catch(() => {
         // No imagery-depth answer available; the existing zoom stands.
@@ -106,6 +141,7 @@ function ZoomToBestImagery({ point }: { point: { lat: number; lng: number } | nu
 
     return () => {
       cancelled = true;
+      stopAnimation?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, key]);
@@ -113,6 +149,22 @@ function ZoomToBestImagery({ point }: { point: { lat: number; lng: number } | nu
   return null;
 }
 
+/** Keeps the viewport following `center` when the parent moves it
+ *  (address search, geolocation, a dragged/tapped pin) without fighting
+ *  the user's own panning: it only recentres when the target actually
+ *  changes.
+ *
+ *  `zoom` is deliberately NOT applied here for the single/no-pin case
+ *  (see the `pins.length <= 1` check where this is mounted below) —
+ *  ZoomToBestImagery owns that decision so it can animate smoothly and
+ *  never zoom out. This component using `map.setZoom()` (an instant
+ *  jump) on every pin adjustment used to fight it: each drag/tap first
+ *  hard-reset the zoom back down to BUILDING_ZOOM, THEN
+ *  ZoomToBestImagery tried to animate back up — visible as "the exact
+ *  point doesn't zoom in properly" while adjusting the pin, because the
+ *  reset undid whatever zoom level the customer had already reached.
+ *  Multi-pin portfolio views have no ZoomToBestImagery running at all,
+ *  so they still pass `zoom` through here to get one. */
 function ViewportSync({ center, zoom }: { center: { lat: number; lng: number } | null; zoom?: number }) {
   const map = useMap();
   const key = center ? `${center.lat.toFixed(6)},${center.lng.toFixed(6)}` : null;
@@ -138,13 +190,25 @@ export function MapView({
   center,
   solarPanels,
   roofObstacles,
+  restrictedZones,
+  roofSegments,
   roofBoundary,
+  layerVisibility,
   editableBoundary,
   onBoundaryChange,
   editorVersion,
+  addPointSignal,
+  draggableCursor,
+  disableDoubleClickZoom,
+  draggable,
+  hint,
+  children,
 }: {
   pins: MapPinData[];
-  height?: number;
+  /** A number is a pixel height (the historical default); a string
+   *  (e.g. "100%") lets a full-screen wrapper (StartCheckWizard) size
+   *  the map edge-to-edge without MapView needing its own viewport math. */
+  height?: number | string;
   drawEnabled?: boolean;
   /** When true (and onMove is provided), tapping the map or dragging the pin repositions it. */
   interactive?: boolean;
@@ -157,14 +221,54 @@ export function MapView({
   solarPanels?: SolarPanelPolygon[];
   /** OBS-04 obstacles applied to this roof. Same rule: empty draws nothing. */
   roofObstacles?: RoofObstaclePolygon[];
+  /** Site.exclusions rings — setbacks + applied obstacles already
+   *  subtracted from the usable area. Same rule: empty draws nothing. */
+  restrictedZones?: { lat: number; lng: number }[][];
+  /** Each roof plane's own polygon (Step 14), drawn as a distinctly
+   *  coloured light fill under the panels/obstacles. Same rule: empty
+   *  draws nothing. */
+  roofSegments?: RoofSegmentPolygon[];
   /** The detected roof footprint, outlined. */
   roofBoundary?: { lat: number; lng: number }[];
+  /** Per-layer show/hide for the overlay above — omit to show everything. */
+  layerVisibility?: LayerVisibility;
   /** Turns the map into a roof-tracing surface, starting from this shape.
    *  Supplying it replaces the read-only outline with an editable one. */
   editableBoundary?: LatLngPoint[];
   onBoundaryChange?: (points: LatLngPoint[]) => void;
   /** Bump to discard edits and restart from `editableBoundary`. */
   editorVersion?: number;
+  /** Bump to insert a new corner at the midpoint of the shape's longest
+   *  edge — the "Add Point" button's signal to RoofBoundaryEditor. */
+  addPointSignal?: number;
+  /** Native MapOptions.draggableCursor pass-through — e.g. "crosshair"
+   *  while a click-to-place tool is active, so the pointer itself signals
+   *  "click to place/draw" over the satellite imagery. */
+  draggableCursor?: string;
+  /** Native MapOptions.disableDoubleClickZoom pass-through — for a tool
+   *  that places a point per click, where two clicks landing inside
+   *  Google's own double-click window would otherwise zoom the map
+   *  instead of (or as well as) registering the second point. */
+  disableDoubleClickZoom?: boolean;
+  /** Native MapOptions.draggable pass-through, default true. Set false
+   *  while a click-to-place tool is active: with the default
+   *  gestureHandling="greedy", a click with even a couple of pixels of
+   *  movement — routine on a trackpad — reads as a pan, not a click, so
+   *  the map slides instead of placing a point. Disabling drag removes
+   *  that ambiguity entirely; the map still zooms via scroll/pinch/the
+   *  on-screen controls, just doesn't pan from a click-drag. */
+  draggable?: boolean;
+  /** Overrides the caption in the top strip. `interactive` maps' default
+   *  wording is about placing the location pin; a screen that reuses the
+   *  same tap-to-place plumbing for something else (marking rooftop
+   *  obstacles) needs to say what the tap will actually do. */
+  hint?: string;
+  /** Extra overlays rendered inside the live <GoogleMap>, alongside the
+   *  built-in ones above — e.g. CropRectangleSelector/
+   *  FreehandPolygonSelector, which (like RoofBoundaryEditor) resolve
+   *  their map instance via useMap() and so must be mounted inside the
+   *  same GoogleMap tree, not merely under APIProvider. */
+  children?: ReactNode;
 }) {
   const [dragPos, setDragPos] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -234,11 +338,16 @@ export function MapView({
           streetViewControl={false}
           fullscreenControl={false}
           onClick={handleMapClick}
+          draggableCursor={draggableCursor}
+          disableDoubleClickZoom={disableDoubleClickZoom}
+          draggable={draggable}
           style={{ width: "100%", height: "100%" }}
         >
-          <ViewportSync center={focus} zoom={zoom} />
-          {/* Only for a single rooftop — a portfolio of pins is a
-              different job and should stay zoomed out. */}
+          {/* Single/no-pin screens: ZoomToBestImagery owns zoom (smooth,
+              never out) — ViewportSync only pans. Multi-pin portfolio
+              views have no ZoomToBestImagery, so they get a fixed zoom
+              here instead; a portfolio should stay zoomed out. */}
+          <ViewportSync center={focus} zoom={pins.length > 1 ? zoom : undefined} />
           {pins.length <= 1 && <ZoomToBestImagery point={focus} />}
 
           {pins.map((p) => {
@@ -279,25 +388,30 @@ export function MapView({
               initial={editableBoundary}
               onChange={onBoundaryChange}
               version={editorVersion}
+              addPointSignal={addPointSignal}
             />
           )}
 
           {!editableBoundary &&
             ((solarPanels?.length ?? 0) > 0 ||
             (roofObstacles?.length ?? 0) > 0 ||
+            (restrictedZones?.length ?? 0) > 0 ||
+            (roofSegments?.length ?? 0) > 0 ||
             (roofBoundary?.length ?? 0) > 0) && (
             <SolarPanelOverlay
               panels={solarPanels ?? []}
               obstacles={roofObstacles ?? []}
+              restrictedZones={restrictedZones ?? []}
+              roofSegments={roofSegments ?? []}
               roofBoundary={roofBoundary}
+              visibility={layerVisibility}
             />
           )}
 
-          {/* Roof-polygon drawing hooks in here. The drawing library is
-              available on this key (verified), and PUT /app/sites/{id}/boundary
-              already accepts {points: [{lat,lng}...]} and versions it through
-              SITE-05. Deliberately NOT stubbed with a fake polygon — an empty
-              extension point is honest, a drawn-on rectangle is not. */}
+          {/* CropRectangleSelector/FreehandPolygonSelector (StartCheckWizard's
+              "Select Building" step) mount here — the extension point the
+              comment this replaced was left for. */}
+          {children}
         </GoogleMap>
       </APIProvider>
 
@@ -306,9 +420,10 @@ export function MapView({
           visible and unobscured. */}
       <div className="pointer-events-none absolute left-2 right-2 top-2 flex items-center justify-between gap-2 rounded-[var(--radius-app)] border border-line bg-paper/95 px-2.5 py-1.5 text-[11px] text-ink-soft">
         <span>
-          {interactive && onMove
-            ? "Drag the pin, or tap the map, to place it exactly on your roof."
-            : `${pins.length} location${pins.length === 1 ? "" : "s"}`}
+          {hint ??
+            (interactive && onMove
+              ? "Drag the pin, or tap the map, to place it exactly on your roof."
+              : `${pins.length} location${pins.length === 1 ? "" : "s"}`)}
         </span>
         {drawEnabled && <span className="italic">Roof drawing coming soon.</span>}
       </div>

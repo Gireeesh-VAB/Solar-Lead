@@ -28,6 +28,7 @@ from solarfit.repositories import (  # noqa: F401
     audit,
     calibration,
     import_jobs,
+    installations,
     ml_models,
     usn_uploads,
 )

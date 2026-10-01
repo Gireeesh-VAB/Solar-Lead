@@ -170,7 +170,7 @@ export function AddressAutocomplete({
           onKeyDown={onKeyDown}
           onFocus={() => setDismissed(false)}
           disabled={disabled || resolving}
-          placeholder="Start typing your address or area"
+          placeholder="Search address or area"
           autoComplete="off"
           role="combobox"
           aria-expanded={open}
@@ -181,10 +181,15 @@ export function AddressAutocomplete({
       </div>
 
       {open && suggestions.length > 0 && (
+        // In normal flow, not absolutely positioned: an overlay here would
+        // float over whatever sits below in the page (e.g. the "use my
+        // current location" button on the check-start wizard), hiding it
+        // under the list instead of leaving both visible. Growing the
+        // layout in place pushes that content down instead.
         <ul
           id="address-suggestions"
           role="listbox"
-          className="absolute z-20 mt-1 w-full overflow-hidden rounded-[var(--radius-app)] border border-line bg-paper shadow-[var(--shadow-float)]"
+          className="mt-1 w-full origin-top overflow-hidden rounded-[var(--radius-app)] border border-line bg-paper shadow-[var(--shadow-float)] [animation:dropdown-in_160ms_cubic-bezier(0.16,1,0.3,1)] motion-reduce:[animation:none]"
         >
           {suggestions.map((suggestion, index) => (
             <li key={suggestion.placeId} role="option" aria-selected={index === highlighted}>

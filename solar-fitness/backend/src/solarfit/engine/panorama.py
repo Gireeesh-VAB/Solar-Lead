@@ -99,7 +99,12 @@ from shapely.geometry.multipoint import MultiPoint
 from shapely.ops import transform as shapely_transform
 from shapely.ops import triangulate
 
-from solarfit.domain.assessment import PanoramaResult
+from solarfit.domain.assessment import (
+    PanoramaResult,
+    SceneGeometryResult,
+    SceneMesh,
+    SceneObstacle,
+)
 from solarfit.packs.config_pack import get_panorama_build_params, get_panorama_grid_resolution
 
 logger = logging.getLogger(__name__)
@@ -122,6 +127,24 @@ _GROUND_COLOR = (176, 182, 168, 255)  # muted sage, recedes behind the building
 _PANEL_GLASS_COLOR = (28, 45, 100, 255)
 _PANEL_FRAME_COLOR = (176, 181, 190, 255)
 
+# Scene-prototype-only, distinguishing an obstacle box from the building
+# it sits on: a warm terracotta that reads as "excluded area" against the
+# roof's cooler sunshine tint.
+_OBSTACLE_COLOR = (196, 106, 64, 255)
+
+# Presentation default for an obstacle's extrusion height. OBS detection
+# (domain/assessment.py::Obstacle) carries a real bounding_polygon
+# footprint but no measured height — every obstacle box uses this same
+# constant rather than a per-obstacle guess dressed up as data.
+_OBSTACLE_HEIGHT_M = 0.8
+
+# Scene-prototype-only: caps the gap between the DSM-triangulated roof
+# outline and the real site boundary (see _roof_extension_mesh()) — a
+# muted tan, deliberately different from both the cream/measured roof
+# tint and the wall colour, so an extrapolated area always reads as
+# "estimated" rather than passing for measured DSM data.
+_ROOF_EXTENSION_COLOR = (196, 188, 162, 255)
+
 # The laminate slab's own depth, and how far its top clears the frame's.
 # Both are rendering constants rather than pack config: they exist to
 # make the module legible and to keep the two surfaces off each other in
@@ -134,6 +157,35 @@ _PANEL_GLASS_PROUD_M = 0.003
 # hardcoded 12, which silently broke when the frame was added.
 FACES_PER_PANEL = 24
 VERTICES_PER_PANEL = 16
+
+# Scene-prototype-only, visual racking under flat-mounted panels — a
+# galvanized-steel gray, distinct from both panel and obstacle colours.
+_MOUNTING_LEG_COLOR = (150, 152, 158, 255)
+
+# A packed panel's own tiltDeg equals its roof segment's real
+# pitchDegrees (routers/assessments.py::_pack_panel_layout()) — so a
+# module at or below this tilt sits on a roof segment that reads as
+# flat, and gets visible support legs the way a real ballasted rack
+# would need. A sloped module above it already sits flush to its own
+# roof plane and needs no separate rack visual (spec: "low-profile
+# mounting hardware" for sloped roofs).
+#
+# 5.0 measured too tight against real Building Insights data: a single
+# real (visibly flat) roof was observed reporting segments at 0.49,
+# 2.53, 5.04, and 8.17 degrees — Google's per-segment pitch on a
+# genuinely flat roof is noisy enough (parapets, drainage fall, DSM
+# sampling) that a segment barely over 5 degrees is still a flat roof
+# in practice, not a shallow slope. 10 degrees is the conventional
+# low-slope/flat-roof cutoff (below it needs a tilted rack; above it a
+# roof is doing its own tilting) and comfortably clears that noise
+# band while still leaving real sloped-roof segments (routinely
+# 15 degrees+) flush-mounted with no legs.
+_FLAT_ROOF_TILT_THRESHOLD_DEG = 10.0
+
+# Leg post cross-section — a rendering constant, not real hardware
+# geometry, sized only to be visible without dwarfing the module above it.
+_MOUNTING_LEG_SIZE_M = 0.04
+_MOUNTING_LEG_INSET_FRACTION = 0.15
 
 
 def _gltf_y_up() -> np.ndarray:
@@ -402,15 +454,29 @@ def _vertex_colors_from_segments(
     return np.array(colors, dtype="uint8")
 
 
-def _nearest_roof_z(roof_vertices: np.ndarray, x: float, y: float, k: int = 5) -> float:
-    """Elevation of the roof surface at (x, y), as the mean of the k
-    nearest sampled roof vertices. Averaging rather than taking the single
-    nearest keeps one noisy DSM pixel from floating a panel above the roof
-    or burying it inside."""
+def _nearest_roof_z(roof_vertices: np.ndarray, x: float, y: float, k: int = 12) -> float:
+    """Elevation of the roof surface at (x, y): a least-squares plane
+    fit through the k nearest sampled roof vertices, evaluated at (x, y).
+
+    A plain mean of those neighbours (the original approach) assumes
+    they're symmetric around the query point — true away from any edge,
+    but false near the roof's outline on a sloped/tilted roof, where the
+    neighbourhood is one-sided and the mean drags the estimate toward
+    whichever side has more samples. Fitting the local plane and reading
+    it AT (x, y) removes that bias; averaging is still what keeps one
+    noisy DSM pixel from floating a panel above the roof or burying it
+    inside, now applied to the plane's residual rather than to z
+    directly."""
     d2 = (roof_vertices[:, 0] - x) ** 2 + (roof_vertices[:, 1] - y) ** 2
     count = min(k, len(d2))
     nearest = np.argpartition(d2, count - 1)[:count] if count < len(d2) else np.arange(len(d2))
-    return float(roof_vertices[nearest, 2].mean())
+    pts = roof_vertices[nearest]
+    if count < 3:
+        return float(pts[:, 2].mean())
+    design = np.column_stack([pts[:, 0], pts[:, 1], np.ones(count)])
+    coeffs, *_ = np.linalg.lstsq(design, pts[:, 2], rcond=None)
+    a, b, c = coeffs
+    return float(a * x + b * y + c)
 
 
 def _ground_elevation(
@@ -583,6 +649,70 @@ def _roof_outline(roof_vertices: np.ndarray):
     # corners, without moving any of them further than that.
     simplified = hull.simplify(_OUTLINE_SIMPLIFY_M, preserve_topology=True)
     return simplified if simplified.geom_type == "Polygon" and not simplified.is_empty else hull
+
+
+def _roof_extension_mesh(
+    roof_outline, site_boundary, roof_vertices: np.ndarray
+) -> trimesh.Trimesh | None:
+    """Scene-prototype-only: caps the gap between this module's own
+    DSM-triangulated `roof_outline` and build_scene_geometry()'s wider
+    `site_boundary` (the same real boundary its walls now extrude to —
+    see that function's own comment on why the two disagree).
+
+    Without this, a wall raised all the way to the real boundary has no
+    roof surface above the part of it the DSM outline doesn't reach —
+    measured on a real check: a 93 m^2 hole, 23% of the true footprint,
+    with the walls' bare top edge visible through it. This fills that
+    hole rather than leaving a see-through building.
+
+    Every new vertex's height comes from _nearest_roof_z()'s real-sample
+    plane fit — the same extrapolation _wall_mesh() already uses for its
+    own top edge, not an invented flat guess — and the mesh is coloured
+    with _ROOF_EXTENSION_COLOR so it always reads as estimated rather
+    than measured DSM data. Triangulated the same way
+    _extrude_polygon_manual() handles an arbitrary polygon: a Delaunay of
+    both rings' own points, kept only where a triangle's centroid falls
+    inside the real gap. None when there's no real gap to fill (the two
+    outlines already agree, within a token tolerance)."""
+    gap = site_boundary.difference(roof_outline)
+    if gap.is_empty or gap.area < 1.0:
+        return None
+
+    outline_parts = [roof_outline] if roof_outline.geom_type == "Polygon" else list(roof_outline.geoms)
+    boundary_parts = (
+        [site_boundary] if site_boundary.geom_type == "Polygon" else list(site_boundary.geoms)
+    )
+    points_2d = list(
+        {
+            xy
+            for part in (*outline_parts, *boundary_parts)
+            for xy in part.exterior.coords
+        }
+    )
+    if len(points_2d) < 3:
+        return None
+
+    index_by_xy = {xy: i for i, xy in enumerate(points_2d)}
+    faces = []
+    for tri in triangulate(MultiPoint(points_2d)):
+        corners = list(tri.exterior.coords)[:3]
+        if not gap.intersects(tri.centroid) or gap.intersection(tri).area < 1e-6:
+            continue
+        try:
+            faces.append([index_by_xy[c] for c in corners])
+        except KeyError:
+            continue
+    if not faces:
+        return None
+
+    vertices = np.array(
+        [[x, y, _nearest_roof_z(roof_vertices, x, y)] for x, y in points_2d]
+    )
+    mesh = trimesh.Trimesh(vertices=vertices, faces=np.array(faces, dtype=int), process=False)
+    mesh.visual.vertex_colors = np.tile(_ROOF_EXTENSION_COLOR, (len(mesh.vertices), 1)).astype(
+        "uint8"
+    )
+    return mesh
 
 
 def _faces_within(vertices: np.ndarray, faces: np.ndarray, outline) -> np.ndarray:
@@ -970,4 +1100,494 @@ def generate_panorama(
         logger.exception("Panorama generation failed")
         return PanoramaResult(
             status="not_generated", reason="Unexpected failure during panorama generation"
+        )
+
+
+def _mesh_to_scene_mesh(mesh: trimesh.Trimesh) -> SceneMesh:
+    """trimesh's own vertices/faces are already the Z-up local-metre frame
+    every part of this module builds in — this only drops them to plain
+    JSON-able lists. Deliberately skipped for the glTF export path: that
+    one only ever needs the Z-up -> Y-up node transform (_gltf_y_up()),
+    never a JSON copy of the same arrays.
+
+    Carries `mesh.visual.vertex_colors` through as 0..1 floats when the
+    mesh was actually vertex-coloured (roof sunshine tint, panel frame/
+    glass) — `kind == "vertex"` is trimesh's own way of saying colour was
+    explicitly set rather than defaulted, so an uncoloured mesh (walls,
+    ground) correctly comes back with colors=None instead of a fabricated
+    flat tint."""
+    colors = None
+    if mesh.visual.kind == "vertex":
+        rgba = np.asarray(mesh.visual.vertex_colors)
+        colors = [[float(r) / 255, float(g) / 255, float(b) / 255] for r, g, b, _a in rgba]
+    return SceneMesh(
+        vertices=[[float(x), float(y), float(z)] for x, y, z in mesh.vertices],
+        faces=[[int(a), int(b), int(c)] for a, b, c in mesh.faces],
+        colors=colors,
+    )
+
+
+def _mounting_leg_mesh(width: float, length: float, height: float) -> trimesh.Trimesh | None:
+    """Four short support-leg posts under a flat-roof-mounted module, from
+    the roof surface up to the panel's own underside — visual racking
+    only. Built in the same local (unrotated, uncentred-in-Z) frame as
+    _panel_module(), so the caller can carry it through the exact same
+    tilt/azimuth/translate transform as the module it sits under and it
+    will line up underneath. Never adjusts panel footprint, tilt or
+    position — purely additive presentation geometry.
+
+    None when there isn't enough clearance to render a visible leg, or
+    the module is too small for the corner inset to leave any footprint.
+    """
+    if height <= 0.01:
+        return None
+    half_w = width / 2 - width * _MOUNTING_LEG_INSET_FRACTION
+    half_l = length / 2 - length * _MOUNTING_LEG_INSET_FRACTION
+    if half_w <= 0 or half_l <= 0:
+        return None
+
+    legs = []
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            leg = trimesh.creation.box(extents=(_MOUNTING_LEG_SIZE_M, _MOUNTING_LEG_SIZE_M, height))
+            leg.apply_translation([sx * half_w, sy * half_l, height / 2])
+            legs.append(leg)
+
+    mesh = trimesh.util.concatenate(legs)
+    mesh.visual.vertex_colors = np.tile(_MOUNTING_LEG_COLOR, (len(mesh.vertices), 1)).astype("uint8")
+    return mesh
+
+
+def _panel_mesh_from_layout(
+    panel_layout: dict,
+    to_local: Transformer,
+    roof_vertices: np.ndarray,
+    params: dict[str, float],
+    site_boundary=None,
+) -> tuple[trimesh.Trimesh | None, int, trimesh.Trimesh | None]:
+    """This app's OWN packed layout (routers/assessments.py::
+    _pack_panel_layout(), persisted on Assessment.panel_layout) placed in
+    3D — deliberately NOT _panel_mesh()'s Google solarPanels[]. See this
+    module's own docstring (VIZ-01) on why the two disagree substantially
+    in count/capacity: this is the layout the rest of the result page's
+    capacity/kWp figures actually describe, so it is the one the scene
+    prototype places.
+
+    Each panel's own packed footprint (`corners`, 4 WGS84 points — see
+    engine/panel_packing.py::to_wgs84_rings()) gives its real width/length
+    directly, so unlike _panel_mesh() this needs no
+    panelHeight/WidthMeters constant from Building Insights. tiltDeg/
+    azimuthDeg are the panel's own packed segment values (routers/
+    assessments.py::_pack_panel_layout()), same rotation convention
+    _panel_mesh() already uses.
+
+    `site_boundary`, when given, is the caller's real, local-frame site
+    boundary (NOT this module's own DSM-triangulated _roof_outline()) —
+    gating against that coarser DSM hull the way _panel_mesh() gates
+    Google's raw layout was measured dropping legitimately-placed panels
+    near the roof edge as "outside the roof" when they were not: this
+    app's own panels were already packed against and validated inside the
+    real, resolved usable-roof polygon (routers/assessments.py::
+    _pack_panel_layout(), panel_validation.py), which the DSM hull can be
+    measurably narrower than (a courtyard or lower wing inside the same
+    site boundary reads as "non-roof" by height and gets excluded from
+    the hull, even though the packed layout — correctly — is not
+    constrained to the hull). The real site boundary is the authoritative
+    fence for these panels; omit it only to skip the check entirely.
+    _nearest_roof_z()'s k-nearest-neighbour plane fit still gives every
+    panel a sensible height even right at the edge.
+
+    Returns (mesh, panel_count, mounting_mesh); (None, 0, None) when the
+    layout has no usable panels — never an invented array. `mounting_mesh`
+    is the visual-only support-leg geometry under any module whose tilt
+    reads as flat (see _mounting_leg_mesh()); None when every module is
+    sloped enough to need none, or none was buildable."""
+    panels = panel_layout.get("panels") or []
+    if not panels:
+        return None, 0, None
+
+    thickness = params["panel_thickness_m"]
+    clearance = params["panel_clearance_m"]
+
+    modules = []
+    mounting_legs = []
+    skipped = 0
+    for panel in panels:
+        corners = panel.get("corners") or []
+        if len(corners) < 4:
+            continue
+        local_corners = [to_local.transform(lng, lat) for lng, lat in corners[:4]]
+        cx = sum(x for x, _y in local_corners) / len(local_corners)
+        cy = sum(y for _x, y in local_corners) / len(local_corners)
+        # corners[] comes straight from shapely's box() ring order (see
+        # engine/panel_packing.py::pack_panels()'s `box(x, y, x+across,
+        # y+row_height)`), which is (maxx,miny) -> (maxx,maxy) ->
+        # (minx,maxy) -> (minx,miny) — a RIGID rotation (packing's own
+        # azimuth swing, then WGS84 projection and back) never reorders
+        # that ring, so corners[0]->corners[1] is always the row_height
+        # edge (`along * cos(tilt)`, the up-slope dimension the row pitch
+        # foreshortens) and corners[1]->corners[2] is always the `across`
+        # edge (the flat, row-direction dimension). _panel_module()'s own
+        # `length_m` is the dimension that gets tilted below (mapped to
+        # local Y, which the [1,0,0]-axis tilt rotation swings toward Z —
+        # see _panel_mesh()'s "(0, -sinT, cosT)" comment for the same
+        # convention with Google's own panelHeight/WidthMeters), and
+        # `width_m` is the flat, untitled dimension (local X). Reading
+        # corners[0]->corners[1] as "width" and corners[1]->corners[2] as
+        # "length" (the previous code) fed the up-slope edge into the
+        # untitled X axis and the flat across-row edge into the tilted Y
+        # axis — every module tilted sideways across its row instead of
+        # up its own slope, with zero clearance ever reserved for that
+        # sideways lift, so neighbouring panels intersected.
+        panel_length = math.dist(local_corners[0], local_corners[1])
+        panel_width = math.dist(local_corners[1], local_corners[2])
+        if panel_width <= 0 or panel_length <= 0:
+            continue
+
+        if site_boundary is not None and not shapely_contains_xy(site_boundary, cx, cy):
+            skipped += 1
+            continue
+
+        tilt_deg = float(panel.get("tiltDeg") or 0.0)
+        tilt = math.radians(tilt_deg)
+
+        # The Z-swing angle is MEASURED from the footprint's own already-
+        # correctly-placed corners, never re-derived from the raw
+        # `azimuthDeg` number the way _panel_mesh() does for Google's
+        # layout. The two are not interchangeable here: pack_panels()
+        # rotates a candidate rectangle back into real-world position
+        # with a plain `shapely.affinity.rotate(candidate, azimuth_deg)`
+        # (a bare CCW-from-+X swing, with no compass-bearing conversion),
+        # while `azimuthDeg` on a real Google roof segment IS a compass
+        # bearing. Re-deriving the render's rotation from that same raw
+        # number via a compass-bearing formula (the previous `pi -
+        # azimuth`, correct for _panel_mesh()'s Google-placed panels)
+        # therefore swings this app's OWN packed modules by a DIFFERENT
+        # angle than pack_panels() used to place them next to each other
+        # — for a non-round azimuth (measured on this real 25-panel
+        # Hyderabad layout: azimuth 189.21 deg) that mismatch is off by
+        # ~18 deg, enough to slide adjacent panels into each other.
+        # Measuring the swing straight off `local_corners` instead is
+        # exact by construction for ANY azimuth, because it reproduces
+        # pack_panels()'s own rotation rather than a second, potentially
+        # different, formula for it: along_vec (the low-edge-to-high-edge
+        # direction, corners[0]->corners[1]) is where local +Y — the
+        # tilted axis _panel_module() builds — must end up pointing, and
+        # for a rotation about +Z by angle phi, local +Y (90 deg from
+        # local +X) lands at world-angle phi+90, so phi = along_angle-90.
+        along_vec = (
+            local_corners[1][0] - local_corners[0][0],
+            local_corners[1][1] - local_corners[0][1],
+        )
+        swing = math.atan2(along_vec[1], along_vec[0]) - math.pi / 2
+
+        module = _panel_module(panel_width, panel_length, thickness, params)
+        module.apply_transform(trimesh.transformations.rotation_matrix(tilt, [1, 0, 0]))
+        module.apply_transform(trimesh.transformations.rotation_matrix(swing, [0, 0, 1]))
+
+        roof_z = _nearest_roof_z(roof_vertices, cx, cy)
+        module.apply_translation([cx, cy, roof_z + clearance])
+        modules.append(module)
+
+        if tilt_deg <= _FLAT_ROOF_TILT_THRESHOLD_DEG:
+            legs = _mounting_leg_mesh(panel_width, panel_length, clearance)
+            if legs is not None:
+                # Same rotation as the module above so the legs line up
+                # under it; no extra clearance added — legs already span
+                # the full gap from the roof surface up to the module.
+                legs.apply_transform(trimesh.transformations.rotation_matrix(tilt, [1, 0, 0]))
+                legs.apply_transform(trimesh.transformations.rotation_matrix(swing, [0, 0, 1]))
+                legs.apply_translation([cx, cy, roof_z])
+                mounting_legs.append(legs)
+
+    if skipped:
+        logger.info(
+            "Panel layout (app-packed): %d of %d panels fell outside the real site "
+            "boundary and were skipped",
+            skipped,
+            len(panels),
+        )
+
+    if not modules:
+        return None, 0, None
+    mounting_mesh = trimesh.util.concatenate(mounting_legs) if mounting_legs else None
+    return trimesh.util.concatenate(modules), len(modules), mounting_mesh
+
+
+def _extrude_polygon_manual(local_geom, height: float) -> trimesh.Trimesh | None:
+    """A flat-topped box from an arbitrary simple polygon, without
+    depending on an external polygon-triangulation engine — trimesh's own
+    trimesh.creation.extrude_polygon() needs mapbox_earcut/triangle,
+    neither installed here, and this codebase otherwise triangulates with
+    plain shapely (see _mesh_from_dsm()).
+
+    Caps are a Delaunay triangulation of the ring's own points (same
+    primitive _mesh_from_dsm() uses for the roof), kept only where a
+    triangle's centroid falls inside the polygon — same discipline
+    _faces_within() applies to the roof outline. Exact for any convex
+    polygon, including the near-rectangular shape a real OBS-04
+    bounding_polygon almost always is; a strongly concave hand-drawn
+    shape may under-triangulate rather than fail outright, matching this
+    module's "degrade honestly" rule elsewhere. None when there's nothing
+    triangulable."""
+    ring = list(local_geom.exterior.coords)
+    if len(ring) > 1 and ring[0] == ring[-1]:
+        ring = ring[:-1]
+    n = len(ring)
+    if n < 3:
+        return None
+
+    vertices = np.array([[x, y, height] for x, y in ring] + [[x, y, 0.0] for x, y in ring])
+
+    index_by_xy = {xy: i for i, xy in enumerate(ring)}
+    top_faces = []
+    for tri in triangulate(MultiPoint(ring)):
+        corners = list(tri.exterior.coords)[:3]
+        if not local_geom.contains(tri.centroid):
+            continue
+        try:
+            top_faces.append([index_by_xy[c] for c in corners])
+        except KeyError:
+            continue
+    if not top_faces:
+        return None
+
+    top_faces_arr = np.array(top_faces, dtype=int)
+    bottom_faces_arr = top_faces_arr[:, ::-1] + n  # reversed winding, offset into the bottom block
+
+    side_faces = []
+    for i in range(n):
+        top_a, top_b = i, (i + 1) % n
+        bot_a, bot_b = n + i, n + (i + 1) % n
+        side_faces.append([bot_a, top_b, top_a])
+        side_faces.append([bot_a, bot_b, top_b])
+
+    faces = np.vstack([top_faces_arr, bottom_faces_arr, np.array(side_faces, dtype=int)])
+    return trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+
+
+def _obstacle_meshes(
+    obstacles: list[dict], to_local: Transformer, roof_vertices: np.ndarray
+) -> list[tuple[str, str | None, trimesh.Trimesh]]:
+    """OBS-04's applied obstacles, extruded to boxes sitting on the roof.
+
+    The footprint (x/y) is the obstacle's own real bounding_polygon,
+    projected into the same local frame as everything else; only the
+    extrusion height is a configured default (_OBSTACLE_HEIGHT_M) — see
+    that constant's own comment for why. Skips (never raises on) any
+    obstacle whose polygon is missing, degenerate, or fails to extrude,
+    same "degrade honestly" discipline as the rest of this module."""
+    results: list[tuple[str, str | None, trimesh.Trimesh]] = []
+    for obstacle in obstacles:
+        obstacle_id = obstacle.get("id")
+        polygon = obstacle.get("bounding_polygon")
+        if not obstacle_id or not polygon:
+            continue
+        try:
+            geom = shape(polygon)
+        except Exception:
+            logger.warning("Obstacle %s has an unparseable polygon — skipped", obstacle_id, exc_info=True)
+            continue
+        if geom.geom_type != "Polygon" or geom.is_empty:
+            continue
+
+        local_geom = shapely_transform(to_local.transform, geom)
+        if local_geom.area <= 0:
+            continue
+
+        try:
+            mesh = _extrude_polygon_manual(local_geom, height=_OBSTACLE_HEIGHT_M)
+        except Exception:
+            logger.warning("Obstacle %s failed to extrude — skipped", obstacle_id, exc_info=True)
+            continue
+        if mesh is None:
+            continue
+
+        base_z = _nearest_roof_z(roof_vertices, local_geom.centroid.x, local_geom.centroid.y)
+        mesh.apply_translation([0.0, 0.0, base_z])
+        mesh.visual.vertex_colors = np.tile(_OBSTACLE_COLOR, (len(mesh.vertices), 1)).astype(
+            "uint8"
+        )
+        results.append((obstacle_id, obstacle.get("type"), mesh))
+    return results
+
+
+def build_scene_geometry(
+    boundary: dict,
+    panel_layout: dict | None = None,
+    obstacles: list[dict] | None = None,
+    params: dict | None = None,
+) -> SceneGeometryResult:
+    """Prototype for a client-rendered (Three.js) 3D viewer: the roof and
+    walls parts of generate_panorama()'s own VIZ-01 pipeline, plus this
+    app's own packed panel array, the roof's sunshine-tint heatmap, and
+    OBS-04's applied obstacles — all returned as plain JSON instead of a
+    baked .glb scene.
+
+    Deliberately reuses generate_panorama()'s own private helpers
+    (_local_transformer, _ground_elevation, _mesh_from_dsm,
+    _snap_to_segment_planes/_smooth_roof_z, _building_height,
+    _roof_outline, _faces_within, _wall_mesh, _vertex_colors_from_segments,
+    _nearest_roof_z) rather than re-deriving any projection/DSM/segment-
+    plane/shading math independently — same source of truth, same
+    accuracy, as the already-shipped .glb pipeline.
+
+    `panel_layout` is Assessment.panel_layout (this app's OWN packed
+    array — see _panel_mesh_from_layout()'s docstring on why that's
+    deliberately not Google's solarPanels[]) and `obstacles` is OBS-04's
+    applied-obstacle list (repositories/sites.py::applied_obstacles());
+    both optional and additive — omitting either just leaves that part of
+    the scene empty, same VIZ-03 "degrade honestly, never fabricate"
+    discipline the roof/walls path already follows.
+
+    Never raises and never touches PanoramaResult, object storage, or the
+    .glb pipeline (generate_panorama() itself is untouched) — purely
+    additive.
+    """
+    try:
+        boundary_geom = shape(boundary)
+        centroid = boundary_geom.centroid
+        lng, lat = centroid.x, centroid.y
+        build_params = params or get_panorama_build_params()
+
+        from solarfit.providers.vision import _download_geotiff_bytes, fetch_solar_api_datalayers
+
+        layers = fetch_solar_api_datalayers(lat, lng)
+        dsm_url = layers.get("dsmUrl")
+        if not dsm_url:
+            return SceneGeometryResult(
+                status="not_generated", reason="No dsmUrl in Data Layers response"
+            )
+        dsm_bytes = _download_geotiff_bytes(dsm_url)
+
+        to_local = _local_transformer(boundary_geom)
+        ground_z = _ground_elevation(dsm_bytes, boundary_geom, to_local, build_params)
+
+        roof_vertices, roof_faces, vertex_lnglat = _mesh_from_dsm(dsm_bytes, boundary_geom, ground_z)
+        if len(roof_faces) == 0:
+            return SceneGeometryResult(
+                status="not_generated", reason="Elevation grid too sparse to triangulate"
+            )
+
+        building_insights: dict = {}
+        try:
+            from solarfit.providers.vision import fetch_building_insights
+
+            building_insights = fetch_building_insights(lat, lng)
+        except Exception:
+            logger.warning(
+                "Building Insights unavailable — no segment-plane snap, no shading tint",
+                exc_info=True,
+            )
+
+        planar = _snap_to_segment_planes(roof_vertices, vertex_lnglat, building_insights, to_local)
+        if planar is not None:
+            roof_vertices = planar
+        else:
+            logger.info("No roof segments — keeping the DSM surface")
+            roof_vertices = _smooth_roof_z(roof_vertices, roof_faces, build_params)
+
+        height = _building_height(roof_vertices, ground_z, build_params)
+
+        roof_base = float(np.median(roof_vertices[:, 2])) - height
+        roof_vertices = roof_vertices.copy()
+        roof_vertices[:, 2] -= roof_base
+
+        outline = _roof_outline(roof_vertices)
+        roof_faces = _faces_within(roof_vertices, roof_faces, outline)
+        if len(roof_faces) == 0:
+            return SceneGeometryResult(
+                status="not_generated", reason="Roof outline left no usable surface"
+            )
+
+        roof_mesh = trimesh.Trimesh(vertices=roof_vertices, faces=roof_faces, process=False)
+
+        # Same shading tint generate_panorama() applies to the .glb roof —
+        # real per-segment sunshine data, colouring the exact vertices the
+        # roof mesh above already carries. Applied BEFORE the extension
+        # cap below is concatenated on: reassigning vertex_colors after
+        # concatenation would both overwrite the cap's own distinct
+        # colour and mismatch the (by-then-larger) vertex count.
+        vertex_colors = _vertex_colors_from_segments(vertex_lnglat, building_insights)
+        if vertex_colors is not None:
+            roof_mesh.visual.vertex_colors = vertex_colors
+
+        # Walls extrude from the SITE'S OWN real boundary (`local_boundary`),
+        # not from `outline` above (the DSM-triangulated hull) the way
+        # generate_panorama()'s .glb walls do. Measured on a real check:
+        # the DSM's roof/ground height split can legitimately exclude part
+        # of the site as "too low to be roof" (a courtyard, a lower wing),
+        # which leaves `outline` narrower than the true building footprint
+        # — panels this app packed against the real, full boundary then
+        # render as floating past the walls' edge. `local_boundary` is
+        # provably the superset (`local_boundary.contains(outline)` holds
+        # for every real check inspected) and is the same polygon
+        # `_pack_panel_layout()` already resolved panels against, so
+        # tracing walls to it instead keeps the building's visible
+        # envelope consistent with where its own panels actually sit.
+        # Wall-top height at any point on that wider edge still comes from
+        # _nearest_roof_z()'s real-sample plane fit — nothing invented,
+        # same technique _wall_mesh() already uses for every wall point.
+        local_boundary = shapely_transform(to_local.transform, boundary_geom)
+        walls_mesh = _wall_mesh(local_boundary, roof_vertices, ground_z=0.0)
+
+        # Caps the gap between `outline` (DSM-triangulated, narrower) and
+        # `local_boundary` above (what the walls now extrude to) — without
+        # this, that gap is a real hole in the roof with only bare wall
+        # tops visible through it. See _roof_extension_mesh()'s own
+        # docstring for why and how.
+        extension_mesh = _roof_extension_mesh(outline, local_boundary, roof_vertices)
+        if extension_mesh is not None:
+            roof_mesh = trimesh.util.concatenate([roof_mesh, extension_mesh])
+
+        # Panels are gated against the same real `local_boundary`, not the
+        # narrower DSM `outline` — this app's own packed layout is already
+        # resolved against (and validated inside) that real boundary
+        # (routers/assessments.py::_pack_panel_layout(),
+        # engine/panel_validation.py), so it is the authoritative fence
+        # here; `outline`'s narrower DSM hull wrongly rejected real,
+        # correctly-placed panels near the roof's edge (measured 3 of 6 on
+        # a real check).
+        panel_mesh, panel_count, mounting_mesh = (
+            _panel_mesh_from_layout(panel_layout, to_local, roof_vertices, build_params, local_boundary)
+            if panel_layout
+            else (None, 0, None)
+        )
+
+        obstacle_meshes = _obstacle_meshes(obstacles or [], to_local, roof_vertices)
+
+        logger.debug(
+            "build_scene_geometry: origin=(%.6f, %.6f) height_m=%.2f ground_source=%s "
+            "roof_bbox=%s panel_count=%d obstacle_count=%d",
+            lat,
+            lng,
+            height,
+            "measured" if ground_z is not None else "fallback",
+            roof_mesh.bounds.tolist(),
+            panel_count,
+            len(obstacle_meshes),
+        )
+
+        return SceneGeometryResult(
+            status="ok",
+            origin_lat=lat,
+            origin_lng=lng,
+            height_m=height,
+            ground_source="measured" if ground_z is not None else "fallback",
+            roof=_mesh_to_scene_mesh(roof_mesh),
+            walls=_mesh_to_scene_mesh(walls_mesh) if walls_mesh is not None else None,
+            panels=_mesh_to_scene_mesh(panel_mesh) if panel_mesh is not None else None,
+            mounting=_mesh_to_scene_mesh(mounting_mesh) if mounting_mesh is not None else None,
+            panel_count=panel_count,
+            obstacles=[
+                SceneObstacle(id=obstacle_id, type=obs_type, mesh=_mesh_to_scene_mesh(mesh))
+                for obstacle_id, obs_type, mesh in obstacle_meshes
+            ],
+            version=_boundary_version_hash(boundary),
+        )
+
+    except Exception:
+        logger.exception("Scene geometry generation failed")
+        return SceneGeometryResult(
+            status="not_generated", reason="Unexpected failure during scene geometry generation"
         )

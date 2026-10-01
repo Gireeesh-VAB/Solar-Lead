@@ -212,6 +212,54 @@ def test_orchestrate_assessment_full_response(db_backed_dependencies, stub_pipel
     assert result.constraint_pack_version == "rooftop_v1"  # API-04
 
 
+def test_a_mask_derived_boundary_is_reported_not_the_cached_bounding_box(
+    db_backed_dependencies, stub_pipeline, monkeypatch
+):
+    """A site whose own boundary outranks the cache's (a real mask-
+    derived outline, geometry_source="solar_api_mask") is what
+    compute_usable_roof() actually measures — the response must report
+    THAT shape, not analysis.boundary's cruder bounding box, even though
+    both feed the same area figure via GEO-01 precedence."""
+    mask_boundary = _square_4326(15.0)  # deliberately a different shape/size than the stub's bbox
+    monkeypatch.setattr(
+        router_module.sites_repo,
+        "get",
+        lambda session, site_id: stub_pipeline["site"].model_copy(
+            update={"boundary": mask_boundary, "geometry_source": "solar_api_mask"}
+        )
+        if site_id == "site-1"
+        else None,
+    )
+
+    result = router_module.orchestrate_assessment("site-1")
+
+    assert result.boundary == mask_boundary
+    assert result.boundary != stub_pipeline["analysis"].boundary
+
+
+def test_a_mismatched_building_surfaces_as_a_wrong_building_condition(
+    db_backed_dependencies, stub_pipeline, monkeypatch
+):
+    """Phase 6: _building_match_warning()'s free-text string becomes a
+    first-class WRONG_BUILDING_RETURNED condition on the response, not
+    just the separate boundary_warning field."""
+    far_insights = {
+        "solarPotential": {"roofSegmentStats": []},
+        "boundingBox": {
+            "sw": {"latitude": 1.0, "longitude": 1.0},
+            "ne": {"latitude": 1.001, "longitude": 1.001},
+        },
+    }
+    monkeypatch.setattr(router_module, "fetch_building_insights", lambda lat, lng: far_insights)
+
+    result = router_module.orchestrate_assessment("site-1")
+
+    assert result.boundary_warning is not None
+    wrong_building = [c for c in result.conditions if c.code == "WRONG_BUILDING_RETURNED"]
+    assert len(wrong_building) == 1
+    assert wrong_building[0].message == result.boundary_warning
+
+
 def test_orchestrate_assessment_site_not_found(db_backed_dependencies, stub_pipeline):
     with pytest.raises(router_module.SiteNotFoundError):
         router_module.orchestrate_assessment("does-not-exist")

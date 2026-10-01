@@ -6,15 +6,20 @@ import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/Primitives";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { signup } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/fetchClient";
 import { ROLE_LANDING, type PortalRole } from "@/lib/auth/session";
+import { requiredIndianPhone, sanitizePhoneInput } from "@/lib/validation/phone";
 
 const schema = z.object({
   name: z.string().min(2, "Enter your name."),
   email: z.string().email("Enter a valid email address."),
-  phone: z.string().min(7, "Enter a valid phone number."),
-  password: z.string().min(6, "Password must be at least 6 characters."),
+  phone: requiredIndianPhone,
+  // Matches the backend's MIN_PASSWORD_LENGTH (app_auth.py) — a shorter
+  // client-side minimum let a 6-7 char password pass here and then get
+  // rejected by the server on submit.
+  password: z.string().min(8, "Password must be at least 8 characters."),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -25,6 +30,7 @@ export function SignupForm() {
   const {
     register,
     handleSubmit,
+    trigger,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -36,7 +42,8 @@ export function SignupForm() {
     setFormError(null);
     try {
       const session = await signup(values);
-      router.push(ROLE_LANDING[session.role as PortalRole] ?? "/home");
+      // replace, not push — see LoginForm's own onSubmit for why.
+      router.replace(ROLE_LANDING[session.role as PortalRole] ?? "/home");
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
       setSubmitting(false);
@@ -90,11 +97,17 @@ export function SignupForm() {
         <input
           id="phone"
           type="tel"
+          inputMode="numeric"
           autoComplete="tel"
           className="w-full rounded-[var(--radius-app)] border border-line bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-blue"
           aria-invalid={!!errors.phone}
           aria-describedby={errors.phone ? "phone-error" : undefined}
-          {...register("phone")}
+          {...register("phone", {
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+              e.target.value = sanitizePhoneInput(e.target.value);
+              void trigger("phone");
+            },
+          })}
         />
         {errors.phone && (
           <p id="phone-error" className="mt-1 text-xs" style={{ color: "var(--bad)" }}>
@@ -106,9 +119,8 @@ export function SignupForm() {
         <label htmlFor="password" className="mb-1 block text-sm font-medium text-ink">
           Password
         </label>
-        <input
+        <PasswordInput
           id="password"
-          type="password"
           autoComplete="new-password"
           className="w-full rounded-[var(--radius-app)] border border-line bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-blue"
           aria-invalid={!!errors.password}
