@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getAdminVendorServer as getAdminVendor } from "@/lib/api/serverFetch";
+import { getAdminVendorServer as getAdminVendor, orRedirectToLogin } from "@/lib/api/serverFetch";
 import { PageHeader } from "@/components/ui/Primitives";
 import { VendorDetailClient } from "./VendorDetailClient";
 
@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function VendorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const vendor = await getAdminVendor(id).catch(() => null);
+  const vendor = await orRedirectToLogin(getAdminVendor(id));
   if (!vendor) notFound();
 
   return (

@@ -33,7 +33,12 @@ export function CeilingLedgerTable({ assessment }: { assessment: Assessment }) {
                 )}
               </td>
               <td className="py-2 pr-3 text-ink-soft">{CONSTRAINT_KIND_LABEL[entry.kind]}</td>
-              <td className="py-2 pr-3 text-right font-mono tabular text-ink">{formatKwp(entry.kwp)}</td>
+              <td className="py-2 pr-3 text-right font-mono tabular text-ink">
+                {/* A ceiling that could not be evaluated is not a ceiling
+                    of zero — showing 0 kWp would claim the opposite of
+                    what insufficient_data means. */}
+                {entry.kwp == null ? <span className="text-ink-faint">—</span> : formatKwp(entry.kwp)}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -55,12 +60,16 @@ export function GenerationEstimateCard({ assessment }: { assessment: Assessment 
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">Annual generation estimate</p>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <p className="font-mono tabular text-lg text-ink">{assessment.generation.p50AnnualKwh.toLocaleString("en-IN")} kWh</p>
-          <p className="text-xs text-ink-soft">P50</p>
+          <p className="font-mono tabular text-lg text-ink">
+            {assessment.generation.estimatedKwhPerYear != null ? `${Math.round(assessment.generation.estimatedKwhPerYear).toLocaleString("en-IN")} kWh` : "—"}
+          </p>
+          <p className="text-xs text-ink-soft">Estimated annual generation</p>
         </div>
         <div>
-          <p className="font-mono tabular text-lg text-ink">{assessment.generation.p90AnnualKwh.toLocaleString("en-IN")} kWh</p>
-          <p className="text-xs text-ink-soft">P90</p>
+          <p className="font-mono tabular text-lg text-ink">
+            {assessment.generation.performanceRatio != null ? `${Math.round(assessment.generation.performanceRatio * 100)}%` : "—"}
+          </p>
+          <p className="text-xs text-ink-soft">Performance ratio</p>
         </div>
       </div>
     </Card>

@@ -1,8 +1,24 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { QueryProvider } from "@/lib/query/provider";
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://solar-fitness.example.com";
+
+// viewportFit: "cover" lets content draw under the iPhone notch/Dynamic
+// Island/home indicator (paired with the safe-area padding in globals.css
+// and on the fixed Navigation bar) instead of Safari letterboxing behind
+// a plain white bar. themeColor tints the Safari status bar/task switcher
+// to match the app instead of leaving it default black/white.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f6f8f4" },
+    { media: "(prefers-color-scheme: dark)", color: "#121815" },
+  ],
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -30,12 +46,20 @@ export const metadata: Metadata = {
     index: false,
     follow: false,
   },
+  appleWebApp: {
+    title: "GoHarit",
+    statusBarStyle: "default",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full antialiased">
       <head>
+        {/* Applies a stored Light/Dark theme choice before first paint —
+            see lib/theme.ts's THEME_INIT_SCRIPT docstring for why this
+            can't be a React effect. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link

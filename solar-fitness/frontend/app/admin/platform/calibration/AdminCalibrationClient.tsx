@@ -48,7 +48,7 @@ export function AdminCalibrationClient() {
               </div>
               <div>
                 <p className="text-xs text-ink-faint">Variance</p>
-                <p className="font-mono tabular" style={{ color: Math.abs(p.variancePct) > 10 ? "var(--bad)" : "var(--good)" }}>
+                <p className={`font-mono tabular ${Math.abs(p.variancePct) > 10 ? "text-bad" : "text-good"}`}>
                   {p.variancePct > 0 ? "+" : ""}
                   {p.variancePct}%
                 </p>

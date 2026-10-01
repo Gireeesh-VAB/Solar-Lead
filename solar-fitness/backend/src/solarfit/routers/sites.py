@@ -24,6 +24,7 @@ from solarfit.db import get_session
 from solarfit.domain import schemas
 from solarfit.domain.site import RoofSiteType, Site
 from solarfit.engine.area import boundary_area_m2, compute_usable_area_m2
+from solarfit.packs import config_pack
 from solarfit.providers import manual, solar_api, validation
 from solarfit.providers.validation import GeometryRejected
 from solarfit.repositories import sites as repo
@@ -120,6 +121,25 @@ def create_site_core(
     district: str | None = None,
     state: str | None = None,
     tags: list[str] | None = None,
+    monthly_bill_low_inr: float | None = None,
+    monthly_bill_high_inr: float | None = None,
+    highest_consumption_kwh: float | None = None,
+    lowest_consumption_kwh: float | None = None,
+    roof_type: str | None = None,
+    roof_material: str | None = None,
+    roof_slope: str | None = None,
+    roof_construction_year: int | None = None,
+    electricity_board: str | None = None,
+    consumer_number: str | None = None,
+    connection_type: str | None = None,
+    sanctioned_load_kw: float | None = None,
+    contract_demand_kva: float | None = None,
+    connected_load_kw: float | None = None,
+    monthly_consumption_kwh: list[dict] | None = None,
+    battery_required: bool | None = None,
+    backup_required: bool | None = None,
+    required_backup_hours: float | None = None,
+    critical_loads: str | None = None,
 ) -> tuple[Site, str | None]:
     """The real work behind SITE-01 + GEO-02 — geometry resolution,
     GEO-07/08 validation, SITE-02 schema check, persistence. Pulled out
@@ -131,7 +151,9 @@ def create_site_core(
 
     address/district/state/tags (karthik addition) are keyword-only and
     optional — the existing POST /sites caller below never passes them,
-    unaffected; routers/app_sites.py's frontend-shaped create does.
+    unaffected; routers/app_sites.py's frontend-shaped create does. The
+    monthly bill pair is the same: only the customer check flow collects
+    it, and a site created without it behaves exactly as before.
 
     The boundary goes through GEO-07/08 validation before it is stored —
     a rejected trace is a 422, never a silently repaired polygon.
@@ -144,19 +166,22 @@ def create_site_core(
     imagery_quality = None
     imagery_date = None
     resolution_note = None
+    competing_buildings_nearby: int | None = None
 
     # GEO-04 + SHADE-01. Only when the caller gave an address and no
     # geometry — a supplied boundary always wins, since every other
-    # source outranks solar_api in base.PRECEDENCE.
-    if boundary is None and (centroid is not None or payload.address):
+    # source outranks solar_api in base.PRECEDENCE. An address is what
+    # signals "please go and find this roof"; a bare centroid does not,
+    # and must not trigger a billed lookup on its own.
+    if boundary is None and payload.address:
         try:
-            if centroid is not None:
-                # A real lat/lng is already known (e.g. a map pin) — resolve
-                # Building Insights directly against it rather than
-                # re-deriving a point from address text via the Geocoding
-                # API, which is a strictly lossier, extra-billed round trip
-                # for information we already have.
-                lng, lat = centroid["coordinates"]
+            if centroid:
+                # Coordinates already known — the frontend's map pin gives
+                # us these directly. Geocoding the address as well would
+                # be a second billed call to convert an address into a
+                # location we are already holding, and it would make the
+                # whole flow depend on the Geocoding API for no benefit.
+                lng, lat = centroid["coordinates"][0], centroid["coordinates"][1]
                 result = solar_api.resolve_for_location(float(lat), float(lng))
             else:
                 result = solar_api.resolve_for_address(payload.address)
@@ -173,6 +198,83 @@ def create_site_core(
         if result.usable:
             boundary = result.boundary
             geometry_source = "solar_api"
+
+            # The boundary above is Google's bounding RECTANGLE, not a
+            # traced roof outline — Building Insights does not return one
+            # (verified against the live API, 2026-09-01). Measuring that
+            # rectangle over-states a real roof badly: on a Banjara Hills
+            # building it gave 227.7 m² against Google's own 127.1 m²
+            # roof figure, a 79% over-estimate. Quoting a system twice the
+            # size a roof can hold is exactly the kind of plausible-looking
+            # wrong number §17 exists to prevent.
+            #
+            # So when Google reports its own roof area, that supersedes
+            # the rectangle. The rectangle is still stored as the boundary
+            # because downstream needs *a* shape (imagery cropping, map
+            # display, an operator's starting point for a trace), but it
+            # no longer decides the area.
+            solar_area_m2 = result.roof_area_m2
+            if solar_area_m2:
+                resolution_note = (
+                    f"area from Solar API roof stats ({solar_area_m2:.1f} m²); "
+                    "stored boundary is Google's bounding box, not a traced "
+                    "outline — trace it (GEO-02) or field-measure it (GEO-06) "
+                    "to supersede this"
+                )
+
+            # GEO-04's real-outline upgrade: vectorise the Solar API's own
+            # building mask instead of settling for the rectangle above.
+            # A second, billed Data Layers call — worth it exactly once per
+            # site creation, never repeated on every later assessment. Any
+            # failure (no mask at this location/quality tier, a download
+            # error, nothing vectorisable) falls back to the rectangle
+            # already stored above; extract_roof_polygon_from_mask() never
+            # raises, so this can never block site creation the rectangle
+            # path already handles.
+            mask_result = solar_api.extract_roof_polygon_from_mask(
+                float(centroid["coordinates"][1]), float(centroid["coordinates"][0])
+            )
+            # A real, independent signal for "is the pin near more than
+            # one building" — the mask's own disconnected-region count,
+            # not a guess. Recorded regardless of whether a polygon was
+            # selected: a customer whose pin sits between two buildings
+            # is entitled to know that even when neither region was
+            # close enough to trust as theirs.
+            competing_buildings_nearby = mask_result.competing_regions
+            if mask_result.polygon is not None:
+                # Same disagreement guard as routers/app_checks.py::
+                # resolve_building_at_point() — _select_building_region()
+                # picks whichever mask region is nearest the query point,
+                # independent of (and not cross-checked against) Building
+                # Insights' own building match. Only trust it when it's
+                # close enough to agree; otherwise a dense block can hand
+                # a customer their neighbour's real-but-wrong outline
+                # instead of their own building's coarser rectangle.
+                mask_centroid = solar_api.polygon_centroid(mask_result.polygon)
+                disagreement_m = solar_api.centroid_disagreement_m(mask_centroid, centroid)
+                max_disagreement_m = float(config_pack.get_roof_mask_params()["max_pin_distance_m"])
+                if disagreement_m is not None and disagreement_m > max_disagreement_m:
+                    resolution_note = (
+                        f"{resolution_note or ''} building mask found a region "
+                        f"{disagreement_m:.1f}m from the resolved building centre — "
+                        "too far to trust as the same building, kept the rectangle."
+                    ).strip()
+                else:
+                    boundary = mask_result.polygon
+                    geometry_source = "solar_api_mask"
+                    # The mask region nearest the query point can legitimately
+                    # be a different structure than Building Insights resolved
+                    # (see solar_api.polygon_centroid()'s docstring) — recompute
+                    # from the boundary actually being stored, never leave the
+                    # earlier Building Insights centroid attached to this
+                    # different shape.
+                    centroid = mask_centroid or centroid
+                    resolution_note = (
+                        "boundary vectorised from the Solar API's own building mask — "
+                        "a real outline, not a bounding box. Still fully automated: "
+                        "trace it (GEO-02) or field-measure it (GEO-06) for a "
+                        "human-verified shape."
+                    )
         elif centroid is None:
             # No coverage AND no location: nothing to store at all.
             raise HTTPException(
@@ -222,8 +324,12 @@ def create_site_core(
     duplicate = find_nearby_site(session, centroid, owner_org)
     if duplicate is not None:
         existing_site_id, distance_m = duplicate
-        duplicate_note = f"possible duplicate: existing site {existing_site_id} is {distance_m:.0f} m away"
-        resolution_note = f"{resolution_note}; {duplicate_note}" if resolution_note else duplicate_note
+        duplicate_note = (
+            f"possible duplicate: existing site {existing_site_id} is {distance_m:.0f} m away"
+        )
+        resolution_note = (
+            f"{resolution_note}; {duplicate_note}" if resolution_note else duplicate_note
+        )
 
     confidence = (
         validation.geometry_confidence(
@@ -270,6 +376,7 @@ def create_site_core(
         imagery_quality=imagery_quality,
         imagery_date=imagery_date,
         geometry_confidence=confidence,
+        competing_buildings_nearby=competing_buildings_nearby,
         shading=shading,
         address=address,
         district=district,
@@ -277,6 +384,25 @@ def create_site_core(
         tags=tags,
         usn=payload.usn,
         usn_source=payload.usn_source,
+        monthly_bill_low_inr=monthly_bill_low_inr,
+        monthly_bill_high_inr=monthly_bill_high_inr,
+        highest_consumption_kwh=highest_consumption_kwh,
+        lowest_consumption_kwh=lowest_consumption_kwh,
+        roof_type=roof_type,
+        roof_material=roof_material,
+        roof_slope=roof_slope,
+        roof_construction_year=roof_construction_year,
+        electricity_board=electricity_board,
+        consumer_number=consumer_number,
+        connection_type=connection_type,
+        sanctioned_load_kw=sanctioned_load_kw,
+        contract_demand_kva=contract_demand_kva,
+        connected_load_kw=connected_load_kw,
+        monthly_consumption_kwh=monthly_consumption_kwh,
+        battery_required=battery_required,
+        backup_required=backup_required,
+        required_backup_hours=required_backup_hours,
+        critical_loads=critical_loads,
         actor=owner_org,
     )
     return site, resolution_note

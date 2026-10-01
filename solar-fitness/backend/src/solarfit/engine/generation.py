@@ -33,22 +33,49 @@ solarfit.packs.config_pack (frozen loader, Day 0).
 
 from solarfit.domain.site import Site
 from solarfit.packs import config_pack
+from solarfit.providers.nasa_power import NASAPowerError, fetch_nasa_power_irradiance
+from solarfit.providers.pvgis import PVGISError, fetch_pvgis_generation
 from solarfit.providers.weather import WeatherProviderError, fetch_weather
+
+# Below this fraction of the customer's own selected/usable area actually
+# overlapping the roof plane tilt_deg/azimuth_deg describes, the PVGIS
+# cross-check is documented as a partial match rather than presented as
+# if it characterised the whole selected roof — a placeholder judgment
+# call, not a measured cutoff, same spirit as this module's other
+# config-pack-adjacent constants.
+_PRIMARY_PLANE_COVERAGE_CAVEAT_THRESHOLD = 0.7
 
 
 def estimate_generation_kwh(site: Site, capacity_kwp: float, params: dict | None = None) -> dict:
-    """GEN-01..06 + SHADE-03."""
-    del params  # no generation-specific overrides needed yet; kept for signature stability
+    """GEN-01..06 + SHADE-03.
+
+    params, when given, may carry "tilt_deg"/"azimuth_deg" from the
+    caller's own roof-segment data (the plane actually used for panel
+    placement) — used for the PVGIS cross-check below. Falls back to a
+    latitude-tilt/south-facing default, noted as an assumption, when
+    absent.
+
+    "primary_plane_coverage_ratio" (0..1, optional) is how much of the
+    customer's own selected/cropped area that tilt_deg/azimuth_deg plane
+    actually overlaps — e.g. the crop spans two Google roof segments and
+    panels concentrated on one of them. Below
+    _PRIMARY_PLANE_COVERAGE_CAVEAT_THRESHOLD, this is noted in
+    method_notes: the tilt/azimuth is still used (it's the best available
+    signal, per this module's own "never a guess standing in for
+    unavailable data" discipline), but the customer is told it's a
+    partial match rather than silently presenting it as if it described
+    their whole selected roof.
+    """
     method_notes: list[str] = []
 
     performance_adjustment = config_pack.get_performance_adjustment(site.site_type)  # GEN-03
     base_ratio = config_pack.get_default_performance_ratio() * performance_adjustment
 
     lng, lat = site.centroid["coordinates"]
+    reference_irradiance = config_pack.get_reference_irradiance_w_m2()
+    multiplier_min, multiplier_max = config_pack.get_weather_refinement_multiplier_bounds()
     try:
         weather = fetch_weather(lat, lng)  # GEN-02
-        reference_irradiance = config_pack.get_reference_irradiance_w_m2()
-        multiplier_min, multiplier_max = config_pack.get_weather_refinement_multiplier_bounds()
         multiplier = weather["irradiance_w_m2"] / reference_irradiance
         multiplier = max(multiplier_min, min(multiplier_max, multiplier))
         specific_yield = config_pack.get_fallback_specific_yield_kwh_per_kwp() * multiplier
@@ -56,10 +83,24 @@ def estimate_generation_kwh(site: Site, capacity_kwp: float, params: dict | None
         method_notes.append(f"weather-refined yield (irradiance {weather['irradiance_w_m2']:.0f} W/m2)")
     except WeatherProviderError as exc:
         # A dead weather API must never crash an assessment — degrade to
-        # the fallback constant and say so, rather than silently guessing.
-        specific_yield = config_pack.get_fallback_specific_yield_kwh_per_kwp()
-        method = "fallback_constant"
-        method_notes.append(f"weather provider unavailable ({exc}); used fallback specific yield")
+        # NASA POWER's keyless climatology irradiance before falling all
+        # the way back to the flat constant.
+        method_notes.append(f"weather provider unavailable ({exc})")
+        try:
+            power = fetch_nasa_power_irradiance(lat, lng)
+            multiplier = power["irradiance_w_m2"] / reference_irradiance
+            multiplier = max(multiplier_min, min(multiplier_max, multiplier))
+            specific_yield = config_pack.get_fallback_specific_yield_kwh_per_kwp() * multiplier
+            method = "nasa_power_fallback"
+            method_notes.append(
+                f"used NASA POWER climatology fallback (irradiance {power['irradiance_w_m2']:.0f} W/m2)"
+            )
+        except NASAPowerError as power_exc:
+            specific_yield = config_pack.get_fallback_specific_yield_kwh_per_kwp()
+            method = "fallback_constant"
+            method_notes.append(
+                f"NASA POWER fallback also unavailable ({power_exc}); used flat fallback specific yield"
+            )
 
     shading = site.shading  # SHADE-03
     if shading is not None and shading.source == "solar_api" and shading.shading_score is not None:
@@ -73,6 +114,41 @@ def estimate_generation_kwh(site: Site, capacity_kwp: float, params: dict | None
 
     estimated_kwh_per_year = capacity_kwp * specific_yield * performance_ratio  # GEN-01
 
+    # GEN-04 — independent PVGIS cross-check, never a single source.
+    # Prefers the roof plane actually used for panel placement (passed by
+    # the caller); falls back to a latitude-tilt/south-facing assumption,
+    # explicitly noted, when no roof-segment data is available.
+    pvgis_annual_kwh: float | None = None
+    pvgis_monthly_kwh: list[float] | None = None
+    tilt_deg = params.get("tilt_deg") if params else None
+    azimuth_deg = params.get("azimuth_deg") if params else None
+    if tilt_deg is None or azimuth_deg is None:
+        # South-facing in the same compass convention as roofSegmentStats
+        # (0=North, 180=South) that fetch_pvgis_generation expects.
+        tilt_deg, azimuth_deg = abs(lat), 180.0
+        method_notes.append("PVGIS used default tilt/azimuth (no roof segment data available)")
+    else:
+        coverage_ratio = params.get("primary_plane_coverage_ratio") if params else None
+        if coverage_ratio is not None and coverage_ratio < _PRIMARY_PLANE_COVERAGE_CAVEAT_THRESHOLD:
+            method_notes.append(
+                f"roof tilt/orientation reflects only part of your selected area "
+                f"({coverage_ratio:.0%} of it) — the rest isn't individually modelled in this estimate"
+            )
+    try:
+        pvgis_result = fetch_pvgis_generation(
+            lat,
+            lng,
+            capacity_kwp,
+            loss_pct=config_pack.get_pvgis_system_loss_pct(),
+            tilt_deg=tilt_deg,
+            azimuth_deg=azimuth_deg,
+        )
+        pvgis_annual_kwh = pvgis_result["annual_kwh"]
+        pvgis_monthly_kwh = pvgis_result["monthly_kwh"]
+        method_notes.append(f"PVGIS cross-check: {pvgis_annual_kwh:.0f} kWh/yr")
+    except PVGISError as exc:
+        method_notes.append(f"PVGIS cross-check unavailable ({exc})")
+
     return {
         "estimated_kwh_per_year": estimated_kwh_per_year,
         "specific_yield_kwh_per_kwp": specific_yield,
@@ -82,4 +158,6 @@ def estimate_generation_kwh(site: Site, capacity_kwp: float, params: dict | None
         "p50_kwh_per_year": None,  # GEN-06, deferred
         "p90_kwh_per_year": None,  # GEN-06, deferred
         "detailed_estimate": None,  # GEN-04, deferred
+        "pvgis_annual_kwh": pvgis_annual_kwh,
+        "pvgis_monthly_kwh": pvgis_monthly_kwh,
     }

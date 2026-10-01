@@ -87,7 +87,13 @@ function buildCheckAssessment(checkId: string, verdict: Verdict, capacityKwp: nu
     generation:
       verdict === "NOT_SUITABLE" || verdict === "INSUFFICIENT_DATA"
         ? undefined
-        : { p50AnnualKwh: Math.round(capacityKwp * 1450), p90AnnualKwh: Math.round(capacityKwp * 1280) },
+        : {
+            estimatedKwhPerYear: Math.round(capacityKwp * 1450),
+            specificYieldKwhPerKwp: 1450,
+            performanceRatio: 0.8,
+            method: "fallback_constant",
+            methodNotes: "mock fixture",
+          },
     cache: { cacheHit: false },
     assessedAt: new Date(Date.now() - daysAgo * 86400000).toISOString(),
     modelVersion: "fitness-core-v2.4.0",
@@ -116,6 +122,7 @@ function buildCheck(
     updatedAt: new Date(Date.now() - daysAgo * 86400000).toISOString(),
     latestAssessment: buildCheckAssessment(id, verdict, capacityKwp, daysAgo),
     tags: [],
+    monthlyConsumptionKwh: [],
   };
 }
 

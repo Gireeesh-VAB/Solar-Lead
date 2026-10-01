@@ -135,9 +135,13 @@ def test_reject_obstacle_requires_auth(client):
     assert response.status_code == 401
 
 
-def test_reject_obstacle_supersedes_and_recomputes(client, make_auth_header):
+def test_reject_obstacle_supersedes_and_recomputes(client, make_auth_header, monkeypatch):
     site_id, obstacle_id = _create_site_with_applied_obstacle()
     headers = make_auth_header(role="admin")
+    monkeypatch.setattr(
+        "solarfit.workers.tasks_assessments.run_check_assessment",
+        lambda site_id, owner_org, on_stage: {"status": "ok", "site_id": site_id},
+    )
 
     response = client.post(f"/app/admin/sites/{site_id}/obstacles/{obstacle_id}/reject", headers=headers)
     assert response.status_code == 200
@@ -145,10 +149,55 @@ def test_reject_obstacle_supersedes_and_recomputes(client, make_auth_header):
     assert body["siteId"] == site_id
     assert body["obstacleId"] == obstacle_id
     assert body["usableAreaM2"] is not None
+    assert body["reassessmentStatus"] == "ok"
 
     with session_scope() as session:
         history = sites_repo.versions(session, site_id)
     assert history[-1].source == "obstacle_rejected"
+
+
+def test_reject_obstacle_triggers_a_fresh_assessment_run(client, make_auth_header, monkeypatch):
+    """The whole point of gap 1: a stale panel_layout from before the
+    reject must not survive it — a fresh assessment is run so the next
+    read of this site's layout reflects the reversed exclusion."""
+    site_id, obstacle_id = _create_site_with_applied_obstacle()
+    headers = make_auth_header(role="admin")
+
+    calls: list[tuple[str, str]] = []
+
+    def _fake_run_check_assessment(site_id, owner_org, on_stage):
+        calls.append((site_id, owner_org))
+        return {"status": "ok", "site_id": site_id}
+
+    monkeypatch.setattr(
+        "solarfit.workers.tasks_assessments.run_check_assessment", _fake_run_check_assessment
+    )
+
+    response = client.post(f"/app/admin/sites/{site_id}/obstacles/{obstacle_id}/reject", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["reassessmentStatus"] == "ok"
+    assert calls == [(site_id, "org-alpha")]
+
+
+def test_reject_obstacle_still_succeeds_when_reassessment_fails(client, make_auth_header, monkeypatch):
+    """The exclusion reversal already succeeded and is the durable fact —
+    a Building Insights hiccup during the follow-up reassessment must not
+    turn this into a 500."""
+    site_id, obstacle_id = _create_site_with_applied_obstacle()
+    headers = make_auth_header(role="admin")
+
+    def _raise(site_id, owner_org, on_stage):
+        raise RuntimeError("Building Insights unavailable")
+
+    monkeypatch.setattr("solarfit.workers.tasks_assessments.run_check_assessment", _raise)
+
+    response = client.post(f"/app/admin/sites/{site_id}/obstacles/{obstacle_id}/reject", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["usableAreaM2"] is not None
+    assert body["reassessmentStatus"] == "failed"
 
 
 def test_reject_obstacle_unknown_obstacle_is_404(client, make_auth_header):
@@ -168,9 +217,13 @@ def test_reject_obstacle_unknown_site_is_404(client, make_auth_header):
     assert response.status_code == 404
 
 
-def test_reject_obstacle_writes_an_audit_log_entry(client, make_auth_header, db_session):
+def test_reject_obstacle_writes_an_audit_log_entry(client, make_auth_header, db_session, monkeypatch):
     site_id, obstacle_id = _create_site_with_applied_obstacle()
     headers = make_auth_header(role="admin")
+    monkeypatch.setattr(
+        "solarfit.workers.tasks_assessments.run_check_assessment",
+        lambda site_id, owner_org, on_stage: {"status": "ok", "site_id": site_id},
+    )
 
     client.post(f"/app/admin/sites/{site_id}/obstacles/{obstacle_id}/reject", headers=headers)
 

@@ -126,6 +126,13 @@ class SiteRow(Base):
     imagery_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     imagery_quality: Mapped[str | None] = mapped_column(String(32), nullable=True)
     geometry_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # providers/solar_api.py::MaskVectorization.competing_regions, captured
+    # once at site-creation time (same "worth it once, never repeated on
+    # every assessment" billing discipline as the mask call itself) — how
+    # many OTHER disconnected mask regions (candidate buildings) were near
+    # the pin besides whichever one was actually selected. None when no
+    # mask lookup ran at all (not just "found zero").
+    competing_buildings_nearby: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # SHADE-01 — extracted from the same Building Insights response as the
     # boundary. JSONB rather than columns because ShadingEstimate is a
@@ -143,6 +150,16 @@ class SiteRow(Base):
     state: Mapped[str | None] = mapped_column(String(255), nullable=True)
     tags: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
 
+    # Map-selection UX metadata (start/StartCheckWizard.tsx) — the lat/
+    # lng/zoom/mapTypeId of the satellite view the customer actually
+    # confirmed their rooftop crop against. Reproduces the same view on
+    # demand (via Static Maps/Solar API) rather than storing image bytes,
+    # keeping VIS-06's "never retain downloaded imagery" policy intact.
+    # Same "extra column straight off this row, not the frozen Site
+    # contract" pattern as address/tags above — set once via
+    # set_map_view_metadata(), never through create()/new_geometry_version().
+    map_view_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
     # USN-01..06 (karthik + omkar, independently added and reconciled on
     # merge — both sides landed the identical columns) — the three
     # capture paths (manual/bill OCR/payment-proof OCR) all converge on
@@ -154,6 +171,60 @@ class SiteRow(Base):
     # that).
     usn: Mapped[str | None] = mapped_column(String(64), nullable=True)
     usn_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    # CON-05 input. The customer's own lowest/highest monthly bill, stored
+    # as entered rather than as derived kWh: the tariff that converts it is
+    # a config-pack placeholder that will change, and re-deriving from the
+    # original keeps old checks correct when it does.
+    monthly_bill_low_inr: Mapped[float | None] = mapped_column(Float, nullable=True)
+    monthly_bill_high_inr: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # FIN-03 — the same lowest/highest pair as the bill amounts above, but
+    # in kWh directly rather than derived from a ₹ amount via a flat
+    # tariff. Kept as a SEPARATE pair (not folded into monthly_bill_*_inr)
+    # because kWh must be the PRIMARY value for solar sizing/seasonal
+    # estimation — see engine/seasonal_consumption.py's own docstring —
+    # while the ₹ pair remains supported as a fallback when a customer
+    # only knows their bill amount.
+    highest_consumption_kwh: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lowest_consumption_kwh: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Customer-reported roof basics (spec section 2, "Roof Information") —
+    # collected once at check/site creation. Deliberately customer
+    # self-report, not vendor-verified: a rough type/material/age is
+    # enough to shape the initial feasibility check, and the vendor's own
+    # in-person structural assessment (vendor_jobs.structural_assessment)
+    # is the source of truth once a survey happens, not these. Same
+    # "extra columns straight off the row, not the frozen Site contract"
+    # pattern as address/district/state/tags above.
+    roof_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    roof_material: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    roof_slope: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    roof_construction_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Customer-reported electrical connection + consumption (spec
+    # sections 8 "Electrical Information" and 9 "Electricity
+    # Consumption") — same customer-self-report / vendor-verifies-in-
+    # person split as the roof fields above. The vendor's own physical
+    # electrical inspection (meter/DB photos, earthing, lightning
+    # protection) lives on vendor_jobs.electrical_assessment instead —
+    # only a vendor standing at the panel can capture that.
+    electricity_board: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    consumer_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    connection_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    sanctioned_load_kw: Mapped[float | None] = mapped_column(Float, nullable=True)
+    contract_demand_kva: Mapped[float | None] = mapped_column(Float, nullable=True)
+    connected_load_kw: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # list[{month: "2026-01", unitsKwh: number}], newest-appended-last.
+    monthly_consumption_kwh: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+
+    # Battery Requirement (spec section 14) — customer's own interest/
+    # need, self-reported at check creation. The vendor's own physical
+    # assessment (room/location/ventilation/fire safety, plus their own
+    # capacity/technology recommendation from the actual site) lives on
+    # vendor_jobs.battery_assessment instead.
+    battery_required: Mapped[bool | None] = mapped_column(nullable=True)
+    backup_required: Mapped[bool | None] = mapped_column(nullable=True)
+    required_backup_hours: Mapped[float | None] = mapped_column(Float, nullable=True)
+    critical_loads: Mapped[str | None] = mapped_column(String, nullable=True)
 
     current_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
@@ -267,6 +338,7 @@ def _to_domain(row: SiteRow) -> Site:
         imagery_date=row.imagery_date,
         imagery_quality=row.imagery_quality,
         geometry_confidence=row.geometry_confidence,
+        competing_buildings_nearby=row.competing_buildings_nearby,
         shading=ShadingEstimate(**row.shading) if row.shading else None,
         usn=UsnCapture(usn=row.usn, usn_source=row.usn_source) if row.usn is not None else None,  # type: ignore[arg-type]
         created_at=row.created_at,
@@ -292,6 +364,7 @@ def create(
     imagery_date: datetime | None = None,
     imagery_quality: str | None = None,
     geometry_confidence: float | None = None,
+    competing_buildings_nearby: int | None = None,
     shading: ShadingEstimate | dict | None = None,
     address: str | None = None,
     district: str | None = None,
@@ -299,6 +372,25 @@ def create(
     tags: list[str] | None = None,
     usn: str | None = None,
     usn_source: str | None = None,
+    monthly_bill_low_inr: float | None = None,
+    monthly_bill_high_inr: float | None = None,
+    highest_consumption_kwh: float | None = None,
+    lowest_consumption_kwh: float | None = None,
+    roof_type: str | None = None,
+    roof_material: str | None = None,
+    roof_slope: str | None = None,
+    roof_construction_year: int | None = None,
+    electricity_board: str | None = None,
+    consumer_number: str | None = None,
+    connection_type: str | None = None,
+    sanctioned_load_kw: float | None = None,
+    contract_demand_kva: float | None = None,
+    connected_load_kw: float | None = None,
+    monthly_consumption_kwh: list[dict] | None = None,
+    battery_required: bool | None = None,
+    backup_required: bool | None = None,
+    required_backup_hours: float | None = None,
+    critical_loads: str | None = None,
     actor: str = "system",
 ) -> Site:
     """SITE-01. Create a site.
@@ -329,6 +421,7 @@ def create(
         imagery_date=imagery_date,
         imagery_quality=imagery_quality,
         geometry_confidence=geometry_confidence,
+        competing_buildings_nearby=competing_buildings_nearby,
         shading=shading,
         address=address,
         district=district,
@@ -336,6 +429,25 @@ def create(
         tags=tags,
         usn=usn,
         usn_source=usn_source,
+        monthly_bill_low_inr=monthly_bill_low_inr,
+        monthly_bill_high_inr=monthly_bill_high_inr,
+        highest_consumption_kwh=highest_consumption_kwh,
+        lowest_consumption_kwh=lowest_consumption_kwh,
+        roof_type=roof_type,
+        roof_material=roof_material,
+        roof_slope=roof_slope,
+        roof_construction_year=roof_construction_year,
+        electricity_board=electricity_board,
+        consumer_number=consumer_number,
+        connection_type=connection_type,
+        sanctioned_load_kw=sanctioned_load_kw,
+        contract_demand_kva=contract_demand_kva,
+        connected_load_kw=connected_load_kw,
+        monthly_consumption_kwh=monthly_consumption_kwh or [],
+        battery_required=battery_required,
+        backup_required=backup_required,
+        required_backup_hours=required_backup_hours,
+        critical_loads=critical_loads,
         current_version=0,
     )
     session.add(row)
@@ -369,6 +481,129 @@ def get(session: Session, site_id: str | uuid.UUID) -> Site | None:
     return _to_domain(row) if row else None
 
 
+def set_map_view_metadata(session: Session, site_id: str | uuid.UUID, metadata: dict) -> None:
+    """Record the map-selection view (lat/lng/zoom/mapTypeId) a customer
+    confirmed their rooftop crop against. A plain field update, not a
+    SITE-05 geometry version — this describes how the boundary was
+    viewed, not the boundary itself, so it doesn't belong in the
+    append-only geometry history."""
+    row = session.get(SiteRow, uuid.UUID(str(site_id)))
+    if row is None:
+        return
+    row.map_view_metadata = metadata
+    session.flush()
+
+
+def applied_obstacles(
+    session: Session, site_id: str | uuid.UUID
+) -> list[tuple[str, dict, str | None, float | None, str | None]]:
+    """OBS-04. Every obstacle union'd into this site's exclusions, as
+    (obstacle_id, GeoJSON polygon, type, confidence, source) tuples.
+
+    `source` is the obstacle's own provenance — "vision_llm"/"cv_detector"
+    for a detection, "customer_marked" for one the homeowner placed
+    themselves. It falls back to the *version's* own audit `source` when
+    the entry doesn't carry one (every row written before this field
+    existed came from the OBS-04 auto-apply, whose version source is
+    "obstacle_detection"), so it is read from real recorded data in both
+    cases and never guessed.
+
+    Walks the version history rather than one row: obstacles are applied
+    across successive versions, and applied_obstacle_polygons on each
+    version records only what THAT version contributed. Later versions win
+    on id, so an obstacle re-applied after a rejection reports its current
+    polygon.
+
+    `applied_obstacle_polygons` values are {"polygon", "type",
+    "confidence"} dicts (engine/obstacles.py::apply_or_flag()); older rows
+    stored the bare polygon directly — detected the same way
+    engine/obstacles.py::_stored_polygon() does, since a raw GeoJSON
+    polygon always has "coordinates" at the top level and the wrapped
+    shape never does. type/confidence come back None for those older
+    rows, never guessed.
+
+    Empty is the honest answer for a site whose obstacles have never been
+    detected — which is every site until the vision pipeline has an
+    OPENAI_API_KEY to run with.
+    """
+    try:
+        key = uuid.UUID(str(site_id))
+    except (ValueError, AttributeError, TypeError):
+        return []
+
+    versions = (
+        session.query(SiteVersionRow)
+        .filter(SiteVersionRow.site_id == key)
+        .order_by(SiteVersionRow.version_no.asc())
+        .all()
+    )
+    by_id: dict[str, tuple[dict, str | None, float | None, str | None]] = {}
+    for version in versions:
+        for obstacle_id, entry in (version.applied_obstacle_polygons or {}).items():
+            if not entry:
+                continue
+            # A tombstone written when an applied obstacle is taken back
+            # out of the exclusions (routers/app_checks.py's customer
+            # "remove what I marked"). SITE-05 history is retained — the
+            # version that applied it is still there — but the obstacle
+            # is no longer part of the current geometry, so it must stop
+            # being reported as applied.
+            if entry.get("removed"):
+                by_id.pop(obstacle_id, None)
+                continue
+            if "coordinates" in entry:
+                by_id[obstacle_id] = (entry, None, None, version.source)
+            else:
+                by_id[obstacle_id] = (
+                    entry.get("polygon"),
+                    entry.get("type"),
+                    entry.get("confidence"),
+                    entry.get("source") or version.source,
+                )
+    return [
+        (obstacle_id, polygon, obs_type, confidence, source)
+        for obstacle_id, (polygon, obs_type, confidence, source) in by_id.items()
+    ]
+
+
+def get_bill_range(session: Session, site_id: str | uuid.UUID) -> tuple[float | None, float | None]:
+    """The customer's (lowest, highest) monthly bill, or (None, None).
+
+    Returned separately rather than added to the domain Site: that
+    contract is frozen Day 0 and every other person codes against it.
+    Only the capacity path needs this, so only the capacity path asks.
+
+    An id that isn't a UUID reports "no bill" rather than raising. The
+    caller is mid-lookup and has its own not-found path a line later;
+    letting a malformed id explode here turned that clean 404 into a 500.
+    """
+    try:
+        key = uuid.UUID(str(site_id))
+    except (ValueError, AttributeError, TypeError):
+        return None, None
+
+    row = session.get(SiteRow, key)
+    if row is None:
+        return None, None
+    return row.monthly_bill_low_inr, row.monthly_bill_high_inr
+
+
+def get_consumption_range(session: Session, site_id: str | uuid.UUID) -> tuple[float | None, float | None]:
+    """FIN-03. The customer's own (lowest, highest) monthly consumption in
+    kWh, or (None, None) — same "returned separately, not on the frozen
+    Site" and "malformed id reports absence, not a 500" reasoning as
+    get_bill_range() right above, which this deliberately mirrors."""
+    try:
+        key = uuid.UUID(str(site_id))
+    except (ValueError, AttributeError, TypeError):
+        return None, None
+
+    row = session.get(SiteRow, key)
+    if row is None:
+        return None, None
+    return row.lowest_consumption_kwh, row.highest_consumption_kwh
+
+
 def update_usn(session: Session, site_id: str | uuid.UUID, *, usn: str, usn_source: str) -> Site:
     """USN-01..04. Persists a captured usn/usn_source onto an existing
     site — the write-side counterpart create()'s own usn/usn_source
@@ -391,6 +626,15 @@ def update_usn(session: Session, site_id: str | uuid.UUID, *, usn: str, usn_sour
     row.updated_at = _now()
     session.flush()
     return _to_domain(row)
+
+
+def count_created_since(session: Session, since: datetime) -> int:
+    """A COUNT(*), not list_sites()+len() — the admin platform-health
+    quota display only needs the number, and fetching up to `limit`
+    full rows just to count them was real, measured latency on that
+    endpoint."""
+    stmt = select(func.count()).select_from(SiteRow).where(SiteRow.created_at >= since)
+    return session.scalar(stmt) or 0
 
 
 def list_sites(
@@ -518,7 +762,9 @@ def new_geometry_version(
         geometry_source=geometry_source or row.geometry_source,
         imagery_date=imagery_date or row.imagery_date,
         imagery_quality=imagery_quality or row.imagery_quality,
-        geometry_confidence=geometry_confidence if geometry_confidence is not None else row.geometry_confidence,
+        geometry_confidence=geometry_confidence
+        if geometry_confidence is not None
+        else row.geometry_confidence,
         actor=actor,
         source=source,
         note=note,
@@ -538,9 +784,7 @@ def new_boundary_version(
 ) -> Site:
     """Compatibility shim over the Day-0 stub signature. Prefer
     new_geometry_version(), which can also change exclusions."""
-    return new_geometry_version(
-        session, site_id, boundary=boundary, actor=actor, source=source
-    )
+    return new_geometry_version(session, site_id, boundary=boundary, actor=actor, source=source)
 
 
 def record_field_measurement(

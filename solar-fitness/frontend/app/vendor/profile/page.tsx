@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { FileText, ShieldCheck, ShieldAlert, ShieldQuestion, Wallet } from "lucide-react";
 import { getVendorProfileServer as getVendorProfile } from "@/lib/api/serverFetch";
 import { Card, PageHeader } from "@/components/ui/Primitives";
+import { ProfileTabs } from "@/components/vendor/ProfileTabs";
 import { formatDate } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -26,6 +27,7 @@ export default async function VendorProfilePage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Profile" description={`${profile.name} · Vendor since ${formatDate(profile.joinedAt)}`} />
+      <ProfileTabs />
 
       <Card className="flex items-center gap-3 p-4" style={{ borderColor: verification.color, background: verification.bg }}>
         <verification.Icon size={22} strokeWidth={1.75} style={{ color: verification.color }} aria-hidden="true" />

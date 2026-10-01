@@ -201,7 +201,7 @@ def _create_payload(**overrides) -> dict:
         "gstNumber": "36AAAAA0000A1Z5",
         "panNumber": "AAAAA0000A",
         "contactName": "Asha Rao",
-        "contactPhone": "+91-9000000000",
+        "contactPhone": "9000000000",
         "contactEmail": "asha@newvendor.example",
         "addressLine1": "12 MG Road",
         "city": "Hyderabad",
@@ -245,6 +245,81 @@ def test_create_vendor_creates_row_and_linked_login(client, make_auth_header, db
 
     rows = audit_repo.list_audit_log(db_session, action="vendor.created")
     assert any(row.target == body["vendor"]["id"] for row in rows)
+
+
+def test_create_vendor_trims_and_accepts_valid_phone(client, make_auth_header):
+    r = client.post(
+        "/app/admin/vendors",
+        json=_create_payload(contactPhone="  8123456789  ", contactEmail="trimmed-phone@newvendor.example"),
+        headers=make_auth_header(role="admin"),
+    )
+    assert r.status_code == 201
+    assert r.json()["vendor"]["contactPhone"] == "8123456789"
+
+
+def test_create_vendor_allows_missing_phone(client, make_auth_header):
+    payload = _create_payload(contactEmail="no-phone@newvendor.example")
+    del payload["contactPhone"]
+    r = client.post("/app/admin/vendors", json=payload, headers=make_auth_header(role="admin"))
+    assert r.status_code == 201
+    assert r.json()["vendor"]["contactPhone"] is None
+
+
+@pytest.mark.parametrize(
+    "phone",
+    [
+        "5123456789",  # doesn't start with 6-9
+        "123456789",  # 9 digits
+        "91234567891",  # 11 digits
+        "+91-9123456789",  # country code + separator
+        "912345678a",  # letters
+    ],
+)
+def test_create_vendor_rejects_invalid_phone(client, make_auth_header, phone):
+    r = client.post(
+        "/app/admin/vendors",
+        json=_create_payload(contactPhone=phone),
+        headers=make_auth_header(role="admin"),
+    )
+    assert r.status_code == 422
+    assert "valid 10-digit mobile number" in r.text
+
+
+@pytest.mark.parametrize(
+    ("field", "column_limit"),
+    [
+        ("panNumber", 16),
+        ("pincode", 16),
+        ("gstNumber", 32),
+        ("legalName", 255),
+        ("contactName", 255),
+        ("addressLine1", 255),
+        ("addressLine2", 255),
+        ("city", 128),
+        ("state", 128),
+    ],
+)
+def test_create_vendor_rejects_field_longer_than_its_db_column(client, make_auth_header, field, column_limit):
+    """These fields previously had no length limit at all in
+    VendorCreateRequest, so a value longer than its VendorRow column
+    (String(N)) reached Postgres directly and raised an unhandled
+    StringDataRightTruncation — a 500, not a 422. Confirms that's now
+    caught before the database ever sees it."""
+    r = client.post(
+        "/app/admin/vendors",
+        json=_create_payload(**{field: "x" * (column_limit + 1)}),
+        headers=make_auth_header(role="admin"),
+    )
+    assert r.status_code == 422
+
+
+def test_create_vendor_accepts_field_at_exactly_its_db_column_limit(client, make_auth_header):
+    r = client.post(
+        "/app/admin/vendors",
+        json=_create_payload(panNumber="x" * 16, pincode="x" * 16, contactEmail="at-limit@newvendor.example"),
+        headers=make_auth_header(role="admin"),
+    )
+    assert r.status_code == 201
 
 
 def test_create_vendor_duplicate_email_is_409(client, make_auth_header):

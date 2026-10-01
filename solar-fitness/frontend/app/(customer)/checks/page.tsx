@@ -13,7 +13,7 @@ export default async function ChecksPage() {
   // unauthenticated SSR pass or a briefly unreachable backend.
   const checks = await listChecks().catch(() => []);
   return (
-    <div className="space-y-6">
+    <div className="mx-auto flex max-w-xl flex-col gap-6 sm:gap-8">
       <PageHeader title="My checks" description="Every location you've checked, with its latest result." />
       <ChecksListClient checks={checks} />
     </div>

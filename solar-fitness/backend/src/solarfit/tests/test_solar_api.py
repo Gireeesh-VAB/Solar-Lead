@@ -339,3 +339,247 @@ def test_missing_key_raises_a_clear_error(monkeypatch):
     with pytest.raises(solar_api.SolarApiError, match="no Google API key"):
         solar_api.geocode_address("anywhere")
     get_settings.cache_clear()
+
+
+# --------------------------------------------------------------------- #
+# roof pitch at a point (StartCheckWizard Locate step)
+# --------------------------------------------------------------------- #
+
+
+def _segment(pitch=18.6, azimuth=135.0, bbox=None, center=None, height=142.3, area=32.0):
+    seg = {
+        "pitchDegrees": pitch,
+        "azimuthDegrees": azimuth,
+        "planeHeightAtCenterMeters": height,
+        "stats": {"areaMeters2": area, "groundAreaMeters2": area * 0.9},
+    }
+    if bbox is not None:
+        seg["boundingBox"] = bbox
+    if center is not None:
+        seg["center"] = center
+    return seg
+
+
+def test_compass_direction_matches_frontend_convention():
+    assert solar_api.compass_direction(0) == "N"
+    assert solar_api.compass_direction(90) == "E"
+    assert solar_api.compass_direction(180) == "S"
+    assert solar_api.compass_direction(135) == "SE"
+    assert solar_api.compass_direction(-45) == "NW"  # wraps negative into 0..360
+
+
+def test_match_roof_segment_prefers_containment_over_nearest():
+    bbox_a = {"sw": {"latitude": 10.0, "longitude": 20.0}, "ne": {"latitude": 10.001, "longitude": 20.001}}
+    bbox_b = {"sw": {"latitude": 10.002, "longitude": 20.002}, "ne": {"latitude": 10.003, "longitude": 20.003}}
+    segments = [_segment(bbox=bbox_a), _segment(bbox=bbox_b)]
+
+    match = solar_api.match_roof_segment(segments, lat=10.0005, lng=20.0005)
+    assert match == (0, "contains")
+
+
+def test_match_roof_segment_falls_back_to_nearest_center():
+    segments = [
+        _segment(center={"latitude": 10.0, "longitude": 20.0}),
+        _segment(center={"latitude": 50.0, "longitude": 60.0}),
+    ]
+    match = solar_api.match_roof_segment(segments, lat=10.001, lng=20.001)
+    assert match == (0, "nearest")
+
+
+def test_match_roof_segment_none_when_no_segment_has_geometry():
+    segments = [{"pitchDegrees": 20.0, "azimuthDegrees": 180.0}]
+    assert solar_api.match_roof_segment(segments, lat=10.0, lng=20.0) is None
+
+
+def test_roof_pitch_at_point_reports_the_matched_segments_real_values():
+    bbox = {"sw": {"latitude": 10.0, "longitude": 20.0}, "ne": {"latitude": 10.001, "longitude": 20.001}}
+    payload = {"solarPotential": {"roofSegmentStats": [_segment(pitch=18.6, azimuth=135.0, bbox=bbox)]}}
+
+    pitch = solar_api.roof_pitch_at_point(payload, lat=10.0005, lng=20.0005, imagery_quality="HIGH")
+
+    assert pitch is not None
+    assert pitch.pitch_deg == 18.6
+    assert pitch.orientation == "SE"
+    assert pitch.plane_height_m == 142.3
+    assert pitch.matched_by == "contains"
+    assert pitch.confidence == "high"  # contains + non-BASE imagery
+
+
+def test_roof_pitch_at_point_downgrades_confidence_on_base_tier():
+    bbox = {"sw": {"latitude": 10.0, "longitude": 20.0}, "ne": {"latitude": 10.001, "longitude": 20.001}}
+    payload = {"solarPotential": {"roofSegmentStats": [_segment(bbox=bbox)]}}
+
+    pitch = solar_api.roof_pitch_at_point(payload, lat=10.0005, lng=20.0005, imagery_quality="BASE")
+
+    assert pitch is not None
+    assert pitch.matched_by == "contains"
+    assert pitch.confidence == "medium"  # contains, but BASE tier
+
+
+def test_roof_pitch_at_point_is_none_without_segments():
+    payload = {"solarPotential": {"roofSegmentStats": []}}
+    assert solar_api.roof_pitch_at_point(payload, lat=10.0, lng=20.0, imagery_quality="HIGH") is None
+
+
+def test_roof_pitch_at_point_never_fabricates_a_missing_pitch():
+    """A segment with geometry but no pitch/azimuth (never seen from the
+    real API, but not impossible from a degraded response) must not
+    produce a pitch — GEO-04's 'record, don't fabricate' rule applies
+    here too."""
+    bbox = {"sw": {"latitude": 10.0, "longitude": 20.0}, "ne": {"latitude": 10.001, "longitude": 20.001}}
+    payload = {
+        "solarPotential": {
+            "roofSegmentStats": [{"boundingBox": bbox, "stats": {"areaMeters2": 10.0}}]
+        }
+    }
+    assert solar_api.roof_pitch_at_point(payload, lat=10.0005, lng=20.0005, imagery_quality="HIGH") is None
+
+
+# --------------------------------------------------------------------- #
+# GEO-10 — roof-segment match tolerance (small Google-side boundingBox
+# offsets should not automatically read as "nearest"/low confidence)
+# --------------------------------------------------------------------- #
+
+_METERS_PER_DEG_LAT = 111_320.0
+
+
+def _meters_per_deg_lng(lat: float) -> float:
+    import math
+
+    return _METERS_PER_DEG_LAT * math.cos(math.radians(lat))
+
+
+def _offset_point_m(lat: float, lng: float, *, north_m: float = 0.0, east_m: float = 0.0):
+    """A (lat, lng) shifted by the given metre offsets — flat-plane
+    approximation, accurate to well under 1% at these small offsets and
+    this latitude, which is precise enough for tolerance-boundary tests
+    that deliberately sit a few metres clear on either side."""
+    return (
+        lat + north_m / _METERS_PER_DEG_LAT,
+        lng + east_m / _meters_per_deg_lng(lat),
+    )
+
+
+def test_match_roof_segment_point_exactly_on_bbox_edge_still_contains():
+    bbox = {"sw": {"latitude": 10.0, "longitude": 20.0}, "ne": {"latitude": 10.001, "longitude": 20.001}}
+    segments = [_segment(bbox=bbox)]
+    assert solar_api.match_roof_segment(segments, lat=10.0, lng=20.0) == (0, "contains")
+
+
+def test_match_roof_segment_tolerates_small_offset_within_configured_tolerance(monkeypatch):
+    monkeypatch.setattr("solarfit.packs.config_pack.get_roof_segment_match_tolerance_m", lambda **kw: 5.0)
+    bbox = {"sw": {"latitude": LAT, "longitude": LON}, "ne": {"latitude": LAT + 0.001, "longitude": LON + 0.001}}
+    segments = [_segment(bbox=bbox)]
+
+    lat, lng = _offset_point_m(LAT, LON, north_m=-2.0)  # 2m south of the bbox, tolerance is 5m
+    assert solar_api.match_roof_segment(segments, lat=lat, lng=lng) == (0, "tolerated_contains")
+
+
+def test_match_roof_segment_beyond_tolerance_falls_back_to_nearest(monkeypatch):
+    monkeypatch.setattr("solarfit.packs.config_pack.get_roof_segment_match_tolerance_m", lambda **kw: 5.0)
+    bbox = {"sw": {"latitude": LAT, "longitude": LON}, "ne": {"latitude": LAT + 0.001, "longitude": LON + 0.001}}
+    center = {"latitude": LAT + 0.0005, "longitude": LON + 0.0005}
+    segments = [_segment(bbox=bbox, center=center)]
+
+    lat, lng = _offset_point_m(LAT, LON, north_m=-8.0)  # 8m south of the bbox, tolerance is 5m
+    assert solar_api.match_roof_segment(segments, lat=lat, lng=lng) == (0, "nearest")
+
+
+@pytest.mark.parametrize(
+    ("north_m", "east_m"),
+    [
+        (-2.0, 0.0),  # 2m south of the bbox
+        (2.0, 0.0),  # 2m north
+        (0.0, -2.0),  # 2m west
+        (0.0, 2.0),  # 2m east
+        (-2.0, -2.0),  # 2m off diagonally (SW corner)
+    ],
+)
+def test_match_roof_segment_tolerance_applies_symmetrically(monkeypatch, north_m, east_m):
+    monkeypatch.setattr("solarfit.packs.config_pack.get_roof_segment_match_tolerance_m", lambda **kw: 5.0)
+    bbox = {"sw": {"latitude": LAT, "longitude": LON}, "ne": {"latitude": LAT + 0.001, "longitude": LON + 0.001}}
+    segments = [_segment(bbox=bbox)]
+
+    # Anchor the offset from whichever corner/edge it pushes away from, so
+    # the same north_m/east_m signs read the same way on every side.
+    anchor_lat = LAT if north_m <= 0 else LAT + 0.001
+    anchor_lng = LON if east_m <= 0 else LON + 0.001
+    lat, lng = _offset_point_m(anchor_lat, anchor_lng, north_m=north_m, east_m=east_m)
+
+    assert solar_api.match_roof_segment(segments, lat=lat, lng=lng) == (0, "tolerated_contains")
+
+
+def test_match_roof_segment_prefers_closer_of_two_qualifying_tolerant_segments(monkeypatch):
+    """Ambiguous case (#6): two segments both within tolerance must pick
+    the geometrically closer one deterministically, not whichever comes
+    first in the list."""
+    monkeypatch.setattr("solarfit.packs.config_pack.get_roof_segment_match_tolerance_m", lambda **kw: 5.0)
+    # Pin sits at (LAT, LON). Both boxes' longitude range starts exactly at
+    # LON, so the pin is due south of each — a pure, easy-to-verify
+    # north-south distance to each box's own southern edge.
+    near_south_edge_lat, _ = _offset_point_m(LAT, LON, north_m=2.0)  # box starts 2m north of the pin
+    near_north_edge_lat, _ = _offset_point_m(LAT, LON, north_m=7.0)
+    far_south_edge_lat, _ = _offset_point_m(LAT, LON, north_m=4.0)  # a second box, 4m north of the pin
+    far_north_edge_lat, _ = _offset_point_m(LAT, LON, north_m=9.0)
+    _, east_edge_lng = _offset_point_m(LAT, LON, east_m=5.0)
+    near_bbox = {
+        "sw": {"latitude": near_south_edge_lat, "longitude": LON},
+        "ne": {"latitude": near_north_edge_lat, "longitude": east_edge_lng},
+    }
+    far_bbox = {
+        "sw": {"latitude": far_south_edge_lat, "longitude": LON},
+        "ne": {"latitude": far_north_edge_lat, "longitude": east_edge_lng},
+    }
+    # Farther segment listed FIRST — proves selection isn't just "first match".
+    segments = [_segment(bbox=far_bbox), _segment(bbox=near_bbox)]
+
+    match = solar_api.match_roof_segment(segments, lat=LAT, lng=LON)
+    assert match == (1, "tolerated_contains")
+
+
+def test_match_roof_segment_real_world_11m_offset_is_not_swallowed_by_default_tolerance():
+    """Regression fixture for the investigated case: a real Building
+    Insights boundingBox measured ~11m from a pin that was visually on
+    the roof. The default tolerance (5m, GEO-10) is deliberately NOT
+    tuned to absorb this — it must still fall back to 'nearest', proving
+    this fix doesn't just paper over that one example."""
+    bbox = {
+        "sw": {"latitude": 17.4419585, "longitude": 78.3961317},
+        "ne": {"latitude": 17.4420703, "longitude": 78.3962556},
+    }
+    center = {"latitude": 17.442013, "longitude": 78.3961923}
+    segments = [_segment(bbox=bbox, center=center)]
+
+    match = solar_api.match_roof_segment(segments, lat=17.441859002122328, lng=78.39619610185244)
+    assert match == (0, "nearest")
+
+
+def test_roof_pitch_at_point_tolerated_contains_is_medium_regardless_of_imagery(monkeypatch):
+    monkeypatch.setattr("solarfit.packs.config_pack.get_roof_segment_match_tolerance_m", lambda **kw: 5.0)
+    bbox = {"sw": {"latitude": LAT, "longitude": LON}, "ne": {"latitude": LAT + 0.001, "longitude": LON + 0.001}}
+    payload = {"solarPotential": {"roofSegmentStats": [_segment(bbox=bbox)]}}
+    lat, lng = _offset_point_m(LAT, LON, north_m=-2.0)
+
+    high_tier = solar_api.roof_pitch_at_point(payload, lat=lat, lng=lng, imagery_quality="HIGH")
+    base_tier = solar_api.roof_pitch_at_point(payload, lat=lat, lng=lng, imagery_quality="BASE")
+
+    assert high_tier is not None and high_tier.matched_by == "tolerated_contains"
+    assert high_tier.confidence == "medium"  # never "high" — it wasn't an exact match
+    assert base_tier is not None and base_tier.matched_by == "tolerated_contains"
+    assert base_tier.confidence == "medium"  # never "low" — the offset was validated as small
+
+
+def test_roof_pitch_at_point_nearest_confidence_by_imagery_tier():
+    """Pins the full truth table's remaining two combos: a genuine
+    nearest-only match is 'medium' on good imagery and only drops to
+    'low' when the imagery is BASE tier too."""
+    segments = [_segment(center={"latitude": 10.0, "longitude": 20.0})]
+    payload = {"solarPotential": {"roofSegmentStats": segments}}
+
+    good_imagery = solar_api.roof_pitch_at_point(payload, lat=15.0, lng=25.0, imagery_quality="HIGH")
+    base_imagery = solar_api.roof_pitch_at_point(payload, lat=15.0, lng=25.0, imagery_quality="BASE")
+
+    assert good_imagery is not None and good_imagery.matched_by == "nearest"
+    assert good_imagery.confidence == "medium"
+    assert base_imagery is not None and base_imagery.matched_by == "nearest"
+    assert base_imagery.confidence == "low"

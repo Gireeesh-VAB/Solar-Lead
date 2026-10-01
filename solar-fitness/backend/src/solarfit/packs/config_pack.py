@@ -67,6 +67,27 @@ def get_edge_setback_m(*, pack: str = "rooftop_v1") -> float:
     return float(load_pack(pack)["edge_setback_m"])
 
 
+def get_parapet_setback_m(*, pack: str = "rooftop_v1") -> float:
+    """AREA-03's sibling coefficient. Stacks with edge_setback_m as one
+    combined inward buffer on the boundary — see engine/area.py's own
+    docstring for why this is a documented simplification (uniform
+    across the whole roof) rather than a claim of per-edge parapet
+    detection: nothing in this pipeline's real data sources (Building
+    Insights, the mask, DSM-as-used-today) reports where a parapet wall
+    actually stands."""
+    return float(load_pack(pack)["parapet_setback_m"])
+
+
+def get_obstacle_setback_m(*, pack: str = "rooftop_v1") -> float:
+    """A real, physical clearance around each detected obstacle — a
+    panel installed flush against a water tank's base is not
+    installable in practice. Distinct from edge_setback_m/
+    parapet_setback_m (which act on the roof boundary): this buffers
+    OUT each exclusion polygon before it's subtracted, so panels keep
+    clear of obstacle edges too, not just their exact footprint."""
+    return float(load_pack(pack)["obstacle_setback_m"])
+
+
 def get_minimum_viable_kwp(*, pack: str = "rooftop_v1") -> float:
     """CON-07."""
     return float(load_pack(pack)["minimum_viable_kwp"])
@@ -81,6 +102,13 @@ def get_auto_apply_confidence_threshold(*, pack: str = "rooftop_v1") -> float:
 def get_shading_derate_factor(*, pack: str = "rooftop_v1") -> float:
     """SHADE-03."""
     return float(load_pack(pack)["shading_derate_factor"])
+
+
+def get_pvgis_system_loss_pct(*, pack: str = "rooftop_v1") -> float:
+    """GEN-04. System loss % passed to PVGIS's PVcalc `loss` param
+    (wiring, cabling, soiling, etc. — separate from the shading derate
+    above). 14% is PVGIS's own conventional default."""
+    return float(load_pack(pack)["pvgis_system_loss_pct"])
 
 
 def get_vision_min_confidence(*, pack: str = "rooftop_v1") -> float:
@@ -126,6 +154,57 @@ def get_panorama_grid_resolution(*, pack: str = "rooftop_v1") -> int:
     return int(load_pack(pack)["panorama_grid_resolution"])
 
 
+def get_panorama_enabled(*, pack: str = "rooftop_v1") -> bool:
+    """VIZ-05. Whether to generate a .glb at all — see the pack's note."""
+    return bool(load_pack(pack)["panorama_enabled"])
+
+
+def get_panorama_build_params(*, pack: str = "rooftop_v1") -> dict[str, float]:
+    """VIZ-01. The 3D building-assembly tunables — ground estimation,
+    height sanity bounds, ground-plane margin, and solar-panel mounting
+    geometry. Returned as one dict because engine/panorama.py needs the
+    whole set together on every call."""
+    data = load_pack(pack)
+    return {
+        "ground_search_buffer_m": float(data["panorama_ground_search_buffer_m"]),
+        "max_roof_step_m": float(data["panorama_max_roof_step_m"]),
+        "ground_percentile": float(data["panorama_ground_percentile"]),
+        "min_building_height_m": float(data["panorama_min_building_height_m"]),
+        "max_building_height_m": float(data["panorama_max_building_height_m"]),
+        "fallback_building_height_m": float(data["panorama_fallback_building_height_m"]),
+        "ground_margin_m": float(data["panorama_ground_margin_m"]),
+        "roof_smoothing_passes": float(data["panorama_roof_smoothing_passes"]),
+        "roof_smoothing_weight": float(data["panorama_roof_smoothing_weight"]),
+        "panel_thickness_m": float(data["panorama_panel_thickness_m"]),
+        "panel_clearance_m": float(data["panorama_panel_clearance_m"]),
+        "panel_gap_m": float(data["panorama_panel_gap_m"]),
+        "panel_frame_m": float(data["panorama_panel_frame_m"]),
+    }
+
+
+def get_panel_packing_params(*, pack: str = "rooftop_v1") -> dict:
+    """Panel-packing geometry — module size, gaps, walkways, tilt.
+
+    Returned whole because the packer needs the entire set together, and
+    a half-applied spacing rule is worse than none."""
+    return dict(load_pack(pack)["panel_packing"])
+
+
+def get_roof_mask_params(*, pack: str = "rooftop_v1") -> dict:
+    """GEO-04's real-outline upgrade — tuning for vectorising the Solar
+    API building mask into a roof polygon (providers/solar_api.py::
+    extract_roof_polygon_from_mask). Returned whole for the same reason
+    as panel packing above: these values only make sense together."""
+    return dict(load_pack(pack)["roof_mask"])
+
+
+def get_roof_segment_match_tolerance_m(*, pack: str = "rooftop_v1") -> float:
+    """GEO-10 — how far (metres) a pin may sit outside a Solar API roof
+    segment's own boundingBox and still count as a genuine match
+    (providers/solar_api.py::match_roof_segment)."""
+    return float(load_pack(pack)["roof_segment_match_tolerance_m"])
+
+
 def get_capacity_density_kwp_per_m2(*, pack: str = "rooftop_v1") -> float:
     """CON-07/universal.py's area-to-kWp conversion for the usable-area
     ceiling and the minimum-viable-size gate."""
@@ -138,6 +217,14 @@ def get_net_metering_export_ratio(*, pack: str = "rooftop_v1") -> float:
     return float(load_pack(pack)["net_metering_cap"]["max_export_ratio_of_sanctioned_load"])
 
 
+def get_electricity_tariff_inr_per_kwh(*, pack: str = "rooftop_v1") -> float:
+    """Effective retail tariff for turning a monthly bill into units.
+
+    A placeholder average, not a slab model — see the pack's own note.
+    Every bill-derived system size scales inversely with it."""
+    return float(load_pack(pack)["electricity_tariff_inr_per_kwh"])
+
+
 def get_consumption_offset_target_ratio(*, pack: str = "rooftop_v1") -> float:
     """CON-05."""
     return float(load_pack(pack)["consumption_offset_ceiling"]["target_offset_ratio"])
@@ -146,7 +233,9 @@ def get_consumption_offset_target_ratio(*, pack: str = "rooftop_v1") -> float:
 def get_consumption_offset_assumed_yield(*, pack: str = "rooftop_v1") -> float:
     """CON-05. kWh/kWp/year fallback used only when generation.py hasn't
     produced a real yield figure yet for this site."""
-    return float(load_pack(pack)["consumption_offset_ceiling"]["assumed_specific_yield_kwh_per_kwp"])
+    return float(
+        load_pack(pack)["consumption_offset_ceiling"]["assumed_specific_yield_kwh_per_kwp"]
+    )
 
 
 def get_transformer_headroom_max_fraction(*, pack: str = "rooftop_v1") -> float:
@@ -196,6 +285,32 @@ def get_subsidy_tier_cap(tier: str, *, pack: str = "rooftop_v1") -> float | None
     return caps.get(tier)
 
 
+def get_installation_cost_inr_per_kwp(*, pack: str = "rooftop_v1") -> dict[str, float]:
+    """FIN-01. Returned whole, same reasoning as get_panel_packing_params
+    above: these line items only make sense summed together against a
+    resolved capacity_kwp. An engine ESTIMATE, not a real vendor quote —
+    see FinancialFeasibilityOut's docstring."""
+    return {k: float(v) for k, v in load_pack(pack)["installation_cost_inr_per_kwp"].items()}
+
+
+def get_subsidy_scheme(*, pack: str = "rooftop_v1") -> dict:
+    """FIN-01. eligible_site_types/inr_per_kwp/max_capacity_kwp/
+    max_amount_inr — a central-scheme approximation, not a real
+    application outcome."""
+    return dict(load_pack(pack)["subsidy_scheme"])
+
+
+def get_panel_degradation_pct_per_year(*, pack: str = "rooftop_v1") -> float:
+    """FIN-01. Applied when projecting 10/20-year savings from the
+    current year's annual savings figure."""
+    return float(load_pack(pack)["panel_degradation_pct_per_year"])
+
+
+def get_system_lifetime_years(*, pack: str = "rooftop_v1") -> float:
+    """FIN-01."""
+    return float(load_pack(pack)["system_lifetime_years"])
+
+
 def get_async_task_timeout_s(*, pack: str = "rooftop_v1") -> float:
     """VIS-05/VIZ-05/OBS-07. Seconds to wait on `.get()` for a dispatched
     Celery task (vision refinement, obstacle apply, panorama generation)
@@ -204,6 +319,24 @@ def get_async_task_timeout_s(*, pack: str = "rooftop_v1") -> float:
     synchronous, so this bounds how long a request can block on a
     worker that's slow or unavailable."""
     return float(load_pack(pack)["async_task_timeout_s"])
+
+
+def get_vendor_sla_at_risk_window_hours(*, pack: str = "rooftop_v1") -> float:
+    """repositories/vendors.py::sweep_vendor_job_sla(). Hours before a
+    job's deadline at which an assigned-but-not-yet-submitted job is
+    flagged "sla_at_risk" — an early warning, not yet a reassignment."""
+    return float(load_pack(pack)["vendor_sla_at_risk_window_hours"])
+
+
+def get_vendor_lead_reassignment_extension_days(*, pack: str = "rooftop_v1") -> float:
+    """repositories/vendors.py::sweep_vendor_job_sla(). Days a
+    reassigned lead's fresh deadline is set out from the moment it
+    passes to the next eligible vendor — deliberately a SEPARATE
+    coefficient from the original ApproveAssessmentRequest.deadline_days
+    an admin sets at approval time (that one is the customer-facing
+    first offer; this one is how much runway the NEXT vendor in line
+    gets, which need not be the same)."""
+    return float(load_pack(pack)["vendor_lead_reassignment_extension_days"])
 
 
 def pack_version(*, pack: str = "rooftop_v1") -> str:
@@ -224,6 +357,18 @@ def get_fitness_verdict_thresholds(*, pack: str = "rooftop_v1") -> dict[str, flo
     """FIT-02. Raw-score cutoffs for suitable / suitable_subject_to_survey
     / conditional; below the lowest cutoff is NOT_SUITABLE."""
     return dict(load_pack(pack)["fitness_verdict_thresholds"])
+
+
+def get_fitness_high_shading_threshold(*, pack: str = "rooftop_v1") -> float:
+    """Phase 6 — a `shading` component (0..1, higher = less shaded) at or
+    below this raw-score threshold surfaces a HIGH_SHADING condition
+    alongside the verdict. Deliberately separate from
+    fitness_verdict_thresholds: this doesn't change the verdict itself
+    (shading is already folded into raw_score via its own weight) — it's
+    an explicit, named flag for a specific reason a borderline verdict
+    landed where it did, per Phase 6's "explicit error-condition
+    handling" goal."""
+    return float(load_pack(pack)["fitness_high_shading_threshold"])
 
 
 def get_fitness_capacity_adequacy_target_multiple(*, pack: str = "rooftop_v1") -> float:
@@ -249,8 +394,27 @@ def get_fitness_imagery_recency_full_score_days(*, pack: str = "rooftop_v1") -> 
 
 def get_fitness_imagery_recency_zero_score_days(*, pack: str = "rooftop_v1") -> int:
     """FIT-04 imagery_recency sub-component — age in days at/above which
-    recency scores 0.0."""
+    recency reaches its floor score (get_fitness_imagery_recency_floor_
+    score() — no longer 0.0; the name predates that floor)."""
     return int(load_pack(pack)["fitness_imagery_recency_zero_score_days"])
+
+
+def get_fitness_imagery_recency_intermediate_points(
+    *, pack: str = "rooftop_v1"
+) -> list[tuple[float, float]]:
+    """FIT-04 imagery_recency sub-component — (age_days, score) points
+    the curve passes through exactly between full_score_days and
+    zero_score_days, sorted ascending by age. Lets the decay step down
+    in stages instead of one straight line from 1.0 to the floor."""
+    return [tuple(point) for point in load_pack(pack)["fitness_imagery_recency_intermediate_points"]]
+
+
+def get_fitness_imagery_recency_floor_score(*, pack: str = "rooftop_v1") -> float:
+    """FIT-04 imagery_recency sub-component — the minimum score old
+    imagery can be scored down to, however old it gets. Old imagery
+    should still cost confidence, never enough on its own to read as
+    "no confidence at all"."""
+    return float(load_pack(pack)["fitness_imagery_recency_floor_score"])
 
 
 def get_calibration_variance_threshold(*, pack: str = "rooftop_v1") -> float:

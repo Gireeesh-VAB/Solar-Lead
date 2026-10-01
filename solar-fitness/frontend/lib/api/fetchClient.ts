@@ -41,12 +41,51 @@ function buildUrl(path: string, query?: Record<string, QueryValue>): string {
   return url.toString();
 }
 
+// Paths that legitimately return 401 for reasons other than "the stored
+// session expired" (bad credentials) — must not trigger the global
+// clear-and-redirect below, or a failed login attempt would bounce the user
+// away from the login form instead of showing "invalid email or password".
+const AUTH_ENDPOINTS = ["/app/auth/login", "/app/auth/signup"];
+
+function handleUnauthorized(path: string): void {
+  if (AUTH_ENDPOINTS.some((endpoint) => path.startsWith(endpoint))) return;
+  clearStoredSession();
+  // The stored token is missing/expired/invalid server-side. Force navigation
+  // to /login instead of leaving the caller to render a stale/broken page —
+  // AuthGuard only catches this on the *next* mount, not the current one.
+  if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+    // A hard navigation is intentional here, not just the router: this file
+    // has no access to useRouter (it's a plain module, not a component), and
+    // a full reload is what actually drops any stale React Query cache/state
+    // built up under the now-invalid session.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign("/login");
+  }
+}
+
+// FastAPI's 422 shape: detail is an array of {loc, msg, type}, one per
+// invalid field — not a string. Left unhandled, callers were showing the
+// raw JSON.stringify() of that array to the user instead of readable text.
+function describeValidationErrors(detail: unknown[]): string | undefined {
+  const messages = detail
+    .map((item) => {
+      if (!item || typeof item !== "object" || !("msg" in item)) return undefined;
+      const { loc, msg } = item as { loc?: unknown; msg?: unknown };
+      if (typeof msg !== "string") return undefined;
+      const field = Array.isArray(loc) ? loc.filter((part) => part !== "body").pop() : undefined;
+      return field ? `${field}: ${msg}` : msg;
+    })
+    .filter((m): m is string => !!m);
+  return messages.length ? messages.join("; ") : undefined;
+}
+
 async function extractErrorMessage(response: Response): Promise<string> {
   try {
     const data: unknown = await response.json();
     if (data && typeof data === "object" && "detail" in data) {
       const detail = (data as { detail: unknown }).detail;
       if (typeof detail === "string") return detail;
+      if (Array.isArray(detail)) return describeValidationErrors(detail) ?? JSON.stringify(detail);
       if (detail !== undefined) return JSON.stringify(detail);
     }
   } catch {
@@ -70,11 +109,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     signal,
   });
 
-  if (response.status === 401) {
-    // The stored token is missing/expired/invalid server-side — clear it so
-    // the next page load reflects "logged out" instead of a stale session.
-    clearStoredSession();
-  }
+  if (response.status === 401) handleUnauthorized(path);
 
   if (!response.ok) {
     throw new ApiError(await extractErrorMessage(response), response.status);
@@ -101,7 +136,7 @@ export async function apiUpload<T>(
     body: formData,
   });
 
-  if (response.status === 401) clearStoredSession();
+  if (response.status === 401) handleUnauthorized(path);
   if (!response.ok) {
     throw new ApiError(await extractErrorMessage(response), response.status);
   }

@@ -44,29 +44,47 @@ Day 0), solarfit.providers.base (same track).
 
 from __future__ import annotations
 
+import logging
+import math
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, ClassVar, Literal
 
 import httpx
+from pyproj import Transformer
+from rasterio.features import shapes as rasterio_shapes
+from rasterio.io import MemoryFile
+from shapely.geometry import Point, box, mapping
+from shapely.geometry import shape as shapely_shape
+from shapely.ops import transform as shapely_transform
 
 from solarfit.config import get_settings
 from solarfit.domain.site import ShadingEstimate, Site
+from solarfit.packs import config_pack
 from solarfit.providers import base
 from solarfit.providers.validation import GeometryRejected
 
 __all__ = [
     "BUILDING_INSIGHTS_URL",
     "GEOCODE_URL",
+    "MaskVectorization",
+    "RoofPitchAtPoint",
     "SolarApiError",
     "SolarApiProvider",
     "SolarApiResult",
     "bounding_box_to_polygon",
+    "compass_direction",
+    "extract_roof_polygon_from_mask",
     "extract_shading_estimate",
     "fetch_building_insights",
     "geocode_address",
+    "geocode_address_detailed",
+    "match_roof_segment",
     "resolve_via_solar_api",
+    "roof_pitch_at_point",
 ]
+
+logger = logging.getLogger(__name__)
 
 GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 BUILDING_INSIGHTS_URL = "https://solar.googleapis.com/v1/buildingInsights:findClosest"
@@ -139,6 +157,198 @@ def bounding_box_to_polygon(bbox: dict) -> dict:
     }
 
 
+def _select_building_region(regions: list, query_point_metric) -> Any | None:
+    """Of every disconnected mask region, which one is the building the
+    customer actually pinned?
+
+    The mask covers a query RADIUS, not one building — a dense street can
+    put two or three separate rooftops in frame. Never "the biggest blob
+    in the image": that silently hands the customer a neighbour's roof
+    when their own happens to be smaller. Prefer a region that actually
+    contains the pin; a pin sitting a little off the true roof edge is
+    ordinary, so fall back to the nearest region within a configured
+    margin — beyond that, nothing here is trusted to be the intended
+    building.
+    """
+    containing = [r for r in regions if r.contains(query_point_metric)]
+    if containing:
+        return max(containing, key=lambda r: r.area)
+
+    nearest = min(regions, key=lambda r: r.distance(query_point_metric))
+    max_distance_m = float(config_pack.get_roof_mask_params()["max_pin_distance_m"])
+    if nearest.distance(query_point_metric) > max_distance_m:
+        return None
+    return nearest
+
+
+@dataclass(frozen=True)
+class MaskVectorization:
+    """The mask's own read on "is this an unambiguous single building
+    near the pin" — the evidence for a customer-facing building-match
+    signal that's independent of (and complementary to) routers/
+    assessments.py::_building_match_warning()'s Building Insights
+    bounding-box check.
+
+    `competing_regions` counts OTHER disconnected mask regions inside
+    the query radius, above the noise-size floor, that were NOT the
+    selected one — e.g. a dense street with two or three separate
+    rooftops in frame. It is populated even when `polygon` ends up None
+    (a real region existed, just not one close enough to trust as the
+    pin's own building) — a customer is entitled to know other
+    buildings were nearby either way. Zero whenever the mask itself
+    couldn't be read (empty mask, no region at all)."""
+
+    polygon: dict | None
+    competing_regions: int
+
+
+def _vectorize_building_mask(mask_bytes: bytes, lat: float, lng: float) -> MaskVectorization:
+    """The Solar API's own building-mask GeoTIFF (dataLayers `maskUrl`) ->
+    a GeoJSON Polygon in EPSG:4326 — a real traced-ish outline, not a
+    bounding rectangle.
+
+    The mask is a single-band raster, already in a projected metric CRS
+    (verified: EPSG:32644/UTM, 0.1m pixels, values {0, 1} = {not
+    building, building}) — rasterio.features.shapes() vectorises it using
+    the raster's OWN embedded affine transform, so pixel coordinates never
+    get treated as map coordinates (the mistake this function exists to
+    avoid). Everything downstream — region selection, simplification —
+    stays in that same metric CRS; only the final result is reprojected
+    to WGS84, once, at the end.
+
+    `polygon` is None (never raises) whenever there's nothing safe to
+    build a polygon from: an empty mask, only noise-sized regions, or no
+    region near enough to the query point. The caller falls back to the
+    boundingBox rectangle in every one of those cases.
+    """
+    params = config_pack.get_roof_mask_params()
+
+    with MemoryFile(mask_bytes) as memfile, memfile.open() as dataset:
+        band = dataset.read(1)
+        is_building = band.astype(bool)
+        if not is_building.any():
+            return MaskVectorization(polygon=None, competing_regions=0)
+
+        regions = [
+            shapely_shape(geom)
+            for geom, value in rasterio_shapes(band, mask=is_building, transform=dataset.transform)
+            if value and shapely_shape(geom).is_valid
+        ]
+        min_region_m2 = float(params["min_region_m2"])
+        regions = [r for r in regions if r.area >= min_region_m2]
+        if not regions:
+            return MaskVectorization(polygon=None, competing_regions=0)
+
+        to_metric = Transformer.from_crs("EPSG:4326", dataset.crs, always_xy=True).transform
+        query_point = shapely_transform(to_metric, Point(lng, lat))
+
+        selected = _select_building_region(regions, query_point)
+        competing_regions = len(regions) - (1 if selected is not None else 0)
+        if selected is None:
+            return MaskVectorization(polygon=None, competing_regions=competing_regions)
+
+        # Pixel-stairstep smoothing. preserve_topology=True so a small
+        # tolerance cannot collapse the polygon into something invalid.
+        simplify_tolerance_m = float(params["simplify_tolerance_m"])
+        selected = selected.simplify(simplify_tolerance_m, preserve_topology=True)
+        # Heals any self-touching ring simplify can introduce at a
+        # near-degenerate vertex — a no-op on an already-valid polygon.
+        selected = selected.buffer(0)
+        if selected.is_empty or not selected.is_valid or selected.geom_type != "Polygon":
+            return MaskVectorization(polygon=None, competing_regions=competing_regions)
+
+        to_wgs84 = Transformer.from_crs(dataset.crs, "EPSG:4326", always_xy=True).transform
+        polygon = mapping(shapely_transform(to_wgs84, selected))
+        return MaskVectorization(polygon=polygon, competing_regions=competing_regions)
+
+
+def polygon_centroid(boundary: dict) -> dict | None:
+    """GEO-04. A GeoJSON Point centroid computed directly from
+    `boundary`'s own ring.
+
+    Exists because a caller that swaps `boundary` from Building
+    Insights' rectangle to `extract_roof_polygon_from_mask()`'s
+    vectorised polygon (`_select_building_region()` picks the mask
+    region nearest the query point independently, and can legitimately
+    settle on a different structure than Building Insights did) MUST
+    NOT keep displaying/storing whichever centroid was resolved for the
+    OTHER boundary — that mismatch is what makes a correctly-drawn crop
+    rectangle appear to "dislocate" once the next step recentres its
+    map on the stale centroid instead of the polygon actually shown.
+    Always recompute from the boundary that is actually being returned.
+
+    A naive planar centroid of raw lat/lng coordinates (no metric
+    reprojection) is an adequate approximation at building footprint
+    scale (tens of metres) — same tolerance `_select_building_region()`
+    itself already works within.
+    """
+    try:
+        centroid = shapely_shape(boundary).centroid
+    except (AttributeError, TypeError, ValueError, KeyError):
+        return None
+    if centroid.is_empty:
+        return None
+    return {"type": "Point", "coordinates": [centroid.x, centroid.y]}
+
+
+def centroid_disagreement_m(a: dict | None, b: dict | None) -> float | None:
+    """GEO-04. Planar approx distance in metres between two GeoJSON
+    Points — good enough at building scale, same tolerance
+    `_select_building_region()`'s own metric-CRS 'nearest region' check
+    already works within. Returns None when either input is missing
+    (nothing to compare — the caller should treat that as "can't rule
+    it out", not as a disagreement).
+
+    Exists to let a caller that independently resolved a boundary two
+    ways (Building Insights vs. the building mask) check whether they
+    actually agree on WHICH building before trusting the mask's answer
+    — see resolve_building_at_point()'s and create_site_core()'s use of
+    it, both guarding the same mask-swap decision."""
+    if not a or not b:
+        return None
+    try:
+        lng1, lat1 = a["coordinates"]
+        lng2, lat2 = b["coordinates"]
+    except (KeyError, TypeError, ValueError):
+        return None
+    lat0 = math.radians((lat1 + lat2) / 2)
+    m_per_lat = 111_320.0
+    m_per_lng = 111_320.0 * math.cos(lat0)
+    dx = (lng2 - lng1) * m_per_lng
+    dy = (lat2 - lat1) * m_per_lat
+    return math.hypot(dx, dy)
+
+
+def extract_roof_polygon_from_mask(
+    lat: float, lng: float, *, radius_meters: float = 25.0
+) -> MaskVectorization:
+    """GEO-04's real-outline upgrade. Fetches the Solar API's building
+    mask (a second, billed Data Layers call, deliberately separate from
+    the buildingInsights call resolve_via_solar_api() already makes) and
+    vectorises it into a roof polygon — see _vectorize_building_mask()'s
+    docstring for how.
+
+    Never raises. A missing mask URL, a download failure, or nothing
+    vectorisable all return `MaskVectorization(polygon=None,
+    competing_regions=0)` the same way — the caller (routers/sites.py::
+    create_site_core) falls back to the boundingBox rectangle whenever
+    `polygon` is None, so a mask-extraction failure never blocks site
+    creation the way it would if this propagated an exception.
+    """
+    from solarfit.providers.vision import _download_geotiff_bytes, fetch_solar_api_datalayers
+
+    try:
+        layers = fetch_solar_api_datalayers(lat, lng, radius_meters)
+        mask_url = layers.get("maskUrl")
+        if not mask_url:
+            return MaskVectorization(polygon=None, competing_regions=0)
+        mask_bytes = _download_geotiff_bytes(mask_url)
+        return _vectorize_building_mask(mask_bytes, lat, lng)
+    except Exception:
+        logger.warning("Roof mask extraction failed at (%s, %s)", lat, lng, exc_info=True)
+        return MaskVectorization(polygon=None, competing_regions=0)
+
+
 def _imagery_date(payload: dict) -> datetime | None:
     d = payload.get("imageryDate") or {}
     try:
@@ -202,6 +412,212 @@ def extract_shading_estimate(solar_api_response: dict) -> dict:
 
 
 # --------------------------------------------------------------------- #
+# Roof pitch at a point — the "which roof plane is the pin on" lookup for
+# StartCheckWizard's Locate step. Same roofSegmentStats[] every other
+# consumer in this codebase already treats as real, elevation-derived
+# per-plane data (see engine/panorama.py's _snap_to_segment_planes and
+# routers/assessments.py's _pack_panel_layout, which build the exact same
+# pitchDeg/azimuthDeg/planeHeightM shape from a resolved check's roof) —
+# this is the same lookup run standalone, before a check/site exists.
+# --------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class RoofPitchAtPoint:
+    """One roof segment's real measured plane, matched to a query point.
+
+    Never fabricated: every field here is read straight from Building
+    Insights' roofSegmentStats[] for whichever segment the point falls in
+    (or, failing that, is nearest to) — see match_roof_segment(). A
+    building with no usable segment data has no RoofPitchAtPoint at all
+    (the caller gets None), not a zeroed-out one."""
+
+    segment_index: int
+    pitch_deg: float
+    azimuth_deg: float
+    orientation: str
+    plane_height_m: float | None
+    area_m2: float | None
+    ground_area_m2: float | None
+    segment_count: int
+    matched_by: Literal["contains", "tolerated_contains", "nearest"]
+    confidence: Literal["high", "medium", "low"]
+
+
+def compass_direction(azimuth_deg: float) -> str:
+    """Azimuth (0=N, 90=E, 180=S, 270=W, Solar API's own convention — see
+    providers/pvgis.py's docstring) -> a 16-point compass label. Mirrors
+    frontend/lib/types.ts::compassDirection() so the same number reads the
+    same way on either side of the API."""
+    points = [
+        "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+        "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
+    ]  # fmt: skip
+    index = round(((azimuth_deg % 360) + 360) % 360 / 22.5) % 16
+    return points[index]
+
+
+def _segment_contains_point(segment: dict, lat: float, lng: float) -> bool:
+    """Same boundingBox-containment test as engine/panorama.py's
+    _segment_contains — kept as an independent copy here rather than a
+    cross-module import: providers/ is the lower layer engine/ already
+    depends on, and this is a small, stable, pure geometry check with no
+    reason to ever diverge between the two call sites."""
+    bbox = segment.get("boundingBox")
+    if not bbox:
+        return False
+    sw, ne = bbox.get("sw", {}), bbox.get("ne", {})
+    try:
+        return sw["longitude"] <= lng <= ne["longitude"] and sw["latitude"] <= lat <= ne["latitude"]
+    except KeyError:
+        return False
+
+
+def _utm_epsg_for(lng: float, lat: float) -> int:
+    """WGS84 UTM zone EPSG for (lng, lat) — a small local copy of
+    engine/projection.py::utm_epsg_for's formula, not a cross-module
+    import: same layering reason as _segment_contains_point above."""
+    zone = min(int((lng + 180.0) // 6.0) + 1, 60)
+    return (32600 if lat >= 0 else 32700) + zone
+
+
+def _distance_to_bbox_m(bbox: dict, lat: float, lng: float) -> float | None:
+    """GEO-10. Geodesically real distance (metres) from (lat, lng) to a
+    Solar API {sw, ne} boundingBox rectangle — 0.0 whenever the point is
+    inside or exactly on the edge. None when the bbox is missing or
+    malformed (never guessed at).
+
+    Reprojects into the point's own UTM zone rather than approximating
+    metres from raw degree deltas — the tolerance this feeds is only a
+    handful of metres, and a flat degree-to-metre conversion drifts
+    enough at that scale to matter, especially in longitude."""
+    try:
+        sw, ne = bbox["sw"], bbox["ne"]
+        west, south = float(sw["longitude"]), float(sw["latitude"])
+        east, north = float(ne["longitude"]), float(ne["latitude"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+    epsg = _utm_epsg_for(lng, lat)
+    to_metric = Transformer.from_crs("EPSG:4326", f"EPSG:{epsg}", always_xy=True).transform
+    point_metric = shapely_transform(to_metric, Point(lng, lat))
+    rect_metric = shapely_transform(to_metric, box(west, south, east, north))
+    return point_metric.distance(rect_metric)
+
+
+def match_roof_segment(
+    segments: list[dict], lat: float, lng: float
+) -> tuple[int, Literal["contains", "tolerated_contains", "nearest"]] | None:
+    """Which roofSegmentStats[] entry is the query point actually on?
+
+    Three tiers, in order:
+
+    1. "contains" — the point falls inside a segment's own boundingBox
+       exactly. The common case.
+    2. "tolerated_contains" (GEO-10) — no segment's bbox contains the
+       point, but at least one sits within
+       config_pack.get_roof_segment_match_tolerance_m() of it. Solar
+       API's boundingBox is Google's own measurement, independent of the
+       map tiles a customer taps against, and can be off by a few metres
+       purely from imagery/geometry registration — this absorbs that
+       without pretending it was an exact match. Ties go to the CLOSEST
+       qualifying segment (a deterministic, geometrically meaningful
+       rule), never to list order.
+    3. "nearest" — falls back to the segment with the nearest `center`
+       when no segment's bbox is even within tolerance (a pin genuinely
+       off the true roof is ordinary and must not read as a confident
+       match).
+
+    Returns None only when no segment carries enough geometry to judge
+    any tier — never a guess at the first segment in the list."""
+    containing = next(
+        (i for i, seg in enumerate(segments) if _segment_contains_point(seg, lat, lng)), None
+    )
+    if containing is not None:
+        return containing, "contains"
+
+    tolerance_m = config_pack.get_roof_segment_match_tolerance_m()
+    best_tolerant_index, best_tolerant_dist = None, float("inf")
+    for i, seg in enumerate(segments):
+        bbox = seg.get("boundingBox")
+        if not bbox:
+            continue
+        dist = _distance_to_bbox_m(bbox, lat, lng)
+        if dist is not None and dist <= tolerance_m and dist < best_tolerant_dist:
+            best_tolerant_index, best_tolerant_dist = i, dist
+    if best_tolerant_index is not None:
+        return best_tolerant_index, "tolerated_contains"
+
+    best_index, best_dist = None, float("inf")
+    for i, seg in enumerate(segments):
+        center = seg.get("center")
+        if not center or "longitude" not in center or "latitude" not in center:
+            continue
+        dist = (center["longitude"] - lng) ** 2 + (center["latitude"] - lat) ** 2
+        if dist < best_dist:
+            best_index, best_dist = i, dist
+    return (best_index, "nearest") if best_index is not None else None
+
+
+def roof_pitch_at_point(
+    raw_building_insights: dict, lat: float, lng: float, *, imagery_quality: str | None
+) -> RoofPitchAtPoint | None:
+    """The real, measured pitch/azimuth/height of whichever roof plane
+    (lat, lng) lands on — None when the response carries no segment with
+    both a pitch and an azimuth to report, so a caller never has a
+    fabricated value to accidentally trust.
+
+    Confidence is about how much to trust the MATCH, not the segment data
+    itself (Solar API's own numbers are taken as given, same as every
+    other consumer here) — "high" only when the point fell EXACTLY inside
+    the matched segment's own boundingBox on non-BASE imagery. GEO-10's
+    "tolerated_contains" (within config_pack.get_
+    roof_segment_match_tolerance_m() of the bbox, but not strictly inside
+    it) is never "high" — it wasn't literally the reported geometry — but
+    it's also never automatically "low": the offset was small enough to
+    validate, so it lands at "medium" regardless of imagery tier, exactly
+    like an exact match on BASE imagery. A genuine "nearest"-only match
+    stays "medium" on non-BASE imagery and only drops to "low" when
+    BOTH the match is untrustworthy AND the imagery itself is BASE
+    tier — unchanged from before this tier was added."""
+    segments = (raw_building_insights.get("solarPotential") or {}).get("roofSegmentStats") or []
+    if not segments:
+        return None
+
+    match = match_roof_segment(segments, lat, lng)
+    if match is None:
+        return None
+    index, matched_by = match
+
+    segment = segments[index]
+    pitch, azimuth = segment.get("pitchDegrees"), segment.get("azimuthDegrees")
+    if pitch is None or azimuth is None:
+        return None
+
+    high_tier = imagery_quality not in (None, "BASE")
+    if matched_by == "contains" and high_tier:
+        confidence: Literal["high", "medium", "low"] = "high"
+    elif matched_by == "nearest" and not high_tier:
+        confidence = "low"
+    else:
+        confidence = "medium"
+
+    stats = segment.get("stats") or {}
+    return RoofPitchAtPoint(
+        segment_index=index,
+        pitch_deg=float(pitch),
+        azimuth_deg=float(azimuth),
+        orientation=compass_direction(float(azimuth)),
+        plane_height_m=segment.get("planeHeightAtCenterMeters"),
+        area_m2=stats.get("areaMeters2"),
+        ground_area_m2=stats.get("groundAreaMeters2"),
+        segment_count=len(segments),
+        matched_by=matched_by,
+        confidence=confidence,
+    )
+
+
+# --------------------------------------------------------------------- #
 # HTTP
 # --------------------------------------------------------------------- #
 
@@ -225,6 +641,25 @@ def geocode_address(address: str, *, client: httpx.Client | None = None) -> dict
 
     Returns None rather than raising for ZERO_RESULTS: an address the
     geocoder does not recognise is ordinary user input, not a fault.
+
+    Kept as a pure GeoJSON accessor — callers that only want geometry get
+    exactly that, with no extra keys polluting the object. Use
+    geocode_address_detailed() when Google's own formatted address is
+    wanted too (the customer-facing search echoes it back so the user can
+    see WHICH place was matched).
+    """
+    found = geocode_address_detailed(address, client=client)
+    return found[0] if found else None
+
+
+def geocode_address_detailed(
+    address: str, *, client: httpx.Client | None = None
+) -> tuple[dict, str | None] | None:
+    """As geocode_address(), but also returns Google's formatted_address.
+
+    Same single HTTP call and the same error discipline; the only
+    difference is that the display string survives instead of being
+    discarded.
     """
     params = {"address": address, "key": _key("maps")}
     owns_client = client is None
@@ -245,12 +680,49 @@ def geocode_address(address: str, *, client: httpx.Client | None = None) -> dict
     # as "we couldn't find that address" — sending everyone hunting for a
     # geocoding problem that is really a billing one.
     if status != "OK":
-        raise SolarApiError(f"geocoding failed: {status} {payload.get('error_message', '')}".strip())
+        raise SolarApiError(
+            f"geocoding failed: {status} {payload.get('error_message', '')}".strip()
+        )
     if not payload.get("results"):
         return None
 
-    location = payload["results"][0]["geometry"]["location"]
-    return {"type": "Point", "coordinates": [float(location["lng"]), float(location["lat"])]}
+    best = payload["results"][0]
+    location = best["geometry"]["location"]
+    point = {"type": "Point", "coordinates": [float(location["lng"]), float(location["lat"])]}
+    return point, best.get("formatted_address")
+
+
+def reverse_geocode(lat: float, lng: float, *, client: httpx.Client | None = None) -> str | None:
+    """Coordinates -> Google's formatted_address, or None when nothing
+    covers that point.
+
+    Same endpoint as geocode_address_detailed(), just `latlng=` instead of
+    `address=` — Google's Geocoding API handles both directions. Used
+    after "use my current location" / a manual pin drop, so the address
+    text shown to the customer always names the point the pin is actually
+    on, not whatever they last typed."""
+    params = {"latlng": f"{lat},{lng}", "key": _key("maps")}
+    owns_client = client is None
+    client = client or httpx.Client(timeout=TIMEOUT_SECONDS)
+    try:
+        response = client.get(GEOCODE_URL, params=params)
+        response.raise_for_status()
+        payload = response.json()
+    finally:
+        if owns_client:
+            client.close()
+
+    status = payload.get("status")
+    if status == "ZERO_RESULTS":
+        return None
+    if status != "OK":
+        raise SolarApiError(
+            f"reverse geocoding failed: {status} {payload.get('error_message', '')}".strip()
+        )
+    results = payload.get("results")
+    if not results:
+        return None
+    return results[0].get("formatted_address")
 
 
 def fetch_building_insights(

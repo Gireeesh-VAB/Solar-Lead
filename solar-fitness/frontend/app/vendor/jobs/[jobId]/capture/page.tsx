@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getVendorJobServer as getVendorJob, getSiteServer as getSite } from "@/lib/api/serverFetch";
+import { getVendorJobServer as getVendorJob, getSiteServer as getSite, orRedirectToLogin } from "@/lib/api/serverFetch";
 import { PageHeader } from "@/components/ui/Primitives";
 import { CaptureTabs } from "./CaptureTabs";
 
@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: { params: Promise<{ jobId: st
 
 export default async function VendorJobCapturePage({ params }: { params: Promise<{ jobId: string }> }) {
   const { jobId } = await params;
-  const job = await getVendorJob(jobId).catch(() => null);
+  const job = await orRedirectToLogin(getVendorJob(jobId));
   if (!job) notFound();
   const site = await getSite(job.siteId).catch(() => null);
   if (!site) notFound();
@@ -25,7 +25,7 @@ export default async function VendorJobCapturePage({ params }: { params: Promise
   return (
     <div className="space-y-6">
       <PageHeader title={`Capture — ${job.siteName}`} description="Draw the site boundary and, where applicable, confirm the USN." />
-      <CaptureTabs site={site} showUsn={showUsn} />
+      <CaptureTabs jobId={job.id} site={site} showUsn={showUsn} />
     </div>
   );
 }

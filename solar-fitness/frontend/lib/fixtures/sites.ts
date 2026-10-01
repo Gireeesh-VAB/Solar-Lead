@@ -148,17 +148,18 @@ const CONSTRAINT_LIBRARY: Record<Verdict, BindingConstraint[]> = {
 
 function ceilingLedgerFor(type: SiteType, capacityKwp: number, binding: BindingConstraint | null): CeilingLedgerEntry[] {
   const base: CeilingLedgerEntry[] = [
-    { label: "Available area ceiling", kwp: Number((capacityKwp * randFloat(1.05, 1.4)).toFixed(1)), kind: "physical" },
-    { label: "Sanctioned load ceiling", kwp: Number((capacityKwp * randFloat(0.9, 1.6)).toFixed(1)), kind: "regulatory" },
-    { label: "DISCOM net-metering ceiling", kwp: Number((capacityKwp * randFloat(0.85, 1.5)).toFixed(1)), kind: "regulatory" },
-    { label: "Commercial viability ceiling", kwp: Number((capacityKwp * randFloat(1.0, 1.8)).toFixed(1)), kind: "commercial" },
+    { label: "Available area ceiling", kwp: Number((capacityKwp * randFloat(1.05, 1.4)).toFixed(1)), kind: "physical", status: "ok" },
+    { label: "Sanctioned load ceiling", kwp: Number((capacityKwp * randFloat(0.9, 1.6)).toFixed(1)), kind: "regulatory", status: "ok" },
+    { label: "DISCOM net-metering ceiling", kwp: Number((capacityKwp * randFloat(0.85, 1.5)).toFixed(1)), kind: "regulatory", status: "ok" },
+    { label: "Commercial viability ceiling", kwp: Number((capacityKwp * randFloat(1.0, 1.8)).toFixed(1)), kind: "commercial", status: "ok" },
   ];
   if (type === "FLOATING") {
-    base.push({ label: "Water body surface-coverage cap (30%)", kwp: Number((capacityKwp * randFloat(1.0, 1.3)).toFixed(1)), kind: "regulatory" });
+    base.push({ label: "Water body surface-coverage cap (30%)", kwp: Number((capacityKwp * randFloat(1.0, 1.3)).toFixed(1)), kind: "regulatory", status: "ok" });
   }
   return base
     .map((e) => ({ ...e, isBinding: binding ? e.label.toLowerCase().includes(binding.name.split(" ")[0].toLowerCase()) : false }))
-    .sort((a, b) => a.kwp - b.kwp);
+    // Unevaluated ceilings sort last rather than as zero.
+    .sort((a, b) => (a.kwp ?? Infinity) - (b.kwp ?? Infinity));
 }
 
 function buildAssessment(site: Omit<Site, "latestAssessment">, index: number): Assessment {
@@ -228,8 +229,11 @@ function buildAssessment(site: Omit<Site, "latestAssessment">, index: number): A
       verdict === "NOT_SUITABLE" || verdict === "INSUFFICIENT_DATA"
         ? undefined
         : {
-            p50AnnualKwh: Math.round(capacityKwp * randFloat(1350, 1550)),
-            p90AnnualKwh: Math.round(capacityKwp * randFloat(1200, 1350)),
+            estimatedKwhPerYear: Math.round(capacityKwp * randFloat(1350, 1550)),
+            specificYieldKwhPerKwp: Math.round(randFloat(1350, 1550)),
+            performanceRatio: Number(randFloat(0.75, 0.85, 2)),
+            method: "fallback_constant",
+            methodNotes: "mock fixture",
           },
     cache: {
       cacheHit,
@@ -270,6 +274,7 @@ function buildSite(index: number): Site {
           : null
         : null,
     tags: [pick(["priority", "shortlisted", "pilot-batch", "revisit", "field-verified"]), ...(rand() > 0.7 ? [pick(["escalated", "high-value"])] : [])],
+    monthlyConsumptionKwh: [],
   };
   return { ...base, latestAssessment: buildAssessment(base, index) };
 }

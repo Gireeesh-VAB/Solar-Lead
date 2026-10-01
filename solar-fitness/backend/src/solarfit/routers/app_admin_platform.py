@@ -28,6 +28,7 @@ from solarfit.repositories import feature_flags as feature_flags_repo
 from solarfit.repositories import service_api_keys as service_api_keys_repo
 from solarfit.repositories import sites as sites_repo
 from solarfit.repositories import usn_uploads as usn_uploads_repo
+from solarfit.routers.common import actor_audit_fields
 
 router = APIRouter(prefix="/app/admin", tags=["app-admin-platform"])
 
@@ -58,6 +59,24 @@ class AuditLogEntryOut(_CamelModel):
     target: str
     timestamp: str
     details: str = ""
+    # Structured fields (spec sections 7-8) — every one optional so an
+    # older row (or an action that genuinely has no customer/vendor, e.g.
+    # a feature-flag toggle) still round-trips as a valid entry rather
+    # than needing a fabricated placeholder value.
+    actor_id: str | None = None
+    actor_type: str | None = None
+    actor_role: str | None = None
+    entity_type: str | None = None
+    entity_id: str | None = None
+    project_id: str | None = None
+    survey_id: str | None = None
+    customer_id: str | None = None
+    vendor_id: str | None = None
+    previous_value: dict | None = None
+    new_value: dict | None = None
+    reason: str | None = None
+    ip_address: str | None = None
+    user_agent: str | None = None
 
 
 class ApiQuotaOut(_CamelModel):
@@ -106,8 +125,32 @@ def list_audit_log(
     actor: Annotated[str | None, Query()] = None,
     action: Annotated[str | None, Query()] = None,
     q: Annotated[str | None, Query()] = None,
+    actor_role: Annotated[str | None, Query(alias="actorRole")] = None,
+    entity_type: Annotated[str | None, Query(alias="entityType")] = None,
+    project_id: Annotated[str | None, Query(alias="projectId")] = None,
+    survey_id: Annotated[str | None, Query(alias="surveyId")] = None,
+    customer_id: Annotated[str | None, Query(alias="customerId")] = None,
+    vendor_id: Annotated[str | None, Query(alias="vendorId")] = None,
+    since: Annotated[datetime | None, Query()] = None,
+    until: Annotated[datetime | None, Query()] = None,
 ) -> list[AuditLogEntryOut]:
-    rows = audit_repo.list_audit_log(session, actor=actor, action=action, q=q)
+    """Super Admin activity screen (spec section 8) — every filter is an
+    exact match except `q` (a substring search over target/details), and
+    all are composable. See audit_repo.list_audit_log()'s own docstring."""
+    rows = audit_repo.list_audit_log(
+        session,
+        actor=actor,
+        action=action,
+        q=q,
+        actor_role=actor_role,
+        entity_type=entity_type,
+        project_id=project_id,
+        survey_id=survey_id,
+        customer_id=customer_id,
+        vendor_id=vendor_id,
+        since=since,
+        until=until,
+    )
     return [
         AuditLogEntryOut(
             id=str(r.id),
@@ -116,6 +159,20 @@ def list_audit_log(
             target=r.target,
             timestamp=r.created_at.isoformat(),
             details=r.details or "",
+            actor_id=r.actor_id,
+            actor_type=r.actor_type,
+            actor_role=r.actor_role,
+            entity_type=r.entity_type,
+            entity_id=r.entity_id,
+            project_id=r.project_id,
+            survey_id=r.survey_id,
+            customer_id=r.customer_id,
+            vendor_id=r.vendor_id,
+            previous_value=r.previous_value,
+            new_value=r.new_value,
+            reason=r.reason,
+            ip_address=r.ip_address,
+            user_agent=r.user_agent,
         )
         for r in rows
     ]
@@ -132,24 +189,16 @@ def get_platform_health(
     "platform.incident" — currently always 0 since nothing writes that
     action yet, which is the honest answer, not a gap in this query.
     Quota `used` figures are real counts of this month's activity used
-    as an honest proxy for each provider — see _QUOTA_LIMITS above."""
-    month_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    incidents = [
-        r
-        for r in audit_repo.list_audit_log(session, action="platform.incident", limit=10_000)
-        if r.created_at >= month_start
-    ]
+    as an honest proxy for each provider — see _QUOTA_LIMITS above.
 
-    sites_this_month = len(
-        [s for s in sites_repo.list_sites(session, limit=10_000) if s.created_at >= month_start]
-    )
-    assessments_this_month = len(
-        [
-            a
-            for a in assessments_repo.list_assessments(session, limit=10_000)
-            if a.created_at >= month_start
-        ]
-    )
+    Each figure is a SQL COUNT(*) (repositories/*.py::count_*), not a
+    list_*()-then-len() over up to 10,000 rows — this endpoint was
+    measurably the slowest thing the admin dashboard loads, and none of
+    these four counts needs the actual rows, just how many there are."""
+    month_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    incidents_this_month = audit_repo.count_since(session, month_start, action="platform.incident")
+    sites_this_month = sites_repo.count_created_since(session, month_start)
+    assessments_this_month = assessments_repo.count_created_since(session, month_start)
     vision_uploads_this_month = usn_uploads_repo.count_uploaded_since(session, month_start)
 
     used_by_service = {
@@ -161,7 +210,7 @@ def get_platform_health(
 
     return PlatformHealthOut(
         uptime_pct=99.9,
-        incidents_this_month=len(incidents),
+        incidents_this_month=incidents_this_month,
         quotas=[ApiQuotaOut(used=used_by_service[q["service"]], **q) for q in _QUOTA_LIMITS],
     )
 
@@ -207,10 +256,11 @@ def rotate_api_key(
 
     audit_repo.write_audit_log(
         session,
-        actor=admin.email,
+        **actor_audit_fields(admin),
         action="platform.api_key_rotation_requested",
         target=payload.service,
         details=f"{admin.email} requested rotation for {payload.service}",
+        entity_type="service_api_key",
     )
     return RotateApiKeyResponse(service=payload.service, rotated_at=row.last_rotated_at.isoformat())
 
@@ -239,9 +289,11 @@ def set_feature_flag(
 
     audit_repo.write_audit_log(
         session,
-        actor=admin.email,
+        **actor_audit_fields(admin),
         action="platform.feature_flag_toggled",
         target=key,
         details=f"{admin.email} set feature flag {key} to {payload.enabled}",
+        entity_type="feature_flag",
+        new_value={"enabled": payload.enabled},
     )
     return FeatureFlagOut(key=row.key, label=row.label, description=row.description, enabled=row.enabled)

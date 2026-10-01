@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Clock3, IndianRupee, MapPin } from "lucide-react";
+import { Clock3, MapPin } from "lucide-react";
 import type { VendorJob } from "@/lib/types";
 import { Card } from "@/components/ui/Primitives";
 import { SlaBadge } from "@/components/vendor/SlaBadge";
@@ -18,10 +18,10 @@ function deadlineLabel(deadline: string): string {
 
 export function JobCard({ job }: { job: VendorJob }) {
   return (
-    <Card className="flex flex-col gap-3 p-4">
+    <Card interactive className="flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <Link href={`/vendor/jobs/${job.id}`} className="font-medium text-ink hover:text-teal">
+          <Link href={`/vendor/jobs/${job.id}`} className="font-medium text-ink hover:text-brand">
             {job.siteName}
           </Link>
           <p className="mt-0.5 text-xs text-ink-soft">{siteTypeLabel(job.siteType)}</p>
@@ -32,7 +32,8 @@ export function JobCard({ job }: { job: VendorJob }) {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-soft">
         <span className="flex items-center gap-1">
           <MapPin size={13} strokeWidth={1.75} aria-hidden="true" />
-          {job.district}, {job.state} · {job.distanceKm.toFixed(1)} km
+          {job.district}, {job.state}
+          {job.distanceKm != null && ` · ${job.distanceKm.toFixed(1)} km`}
         </span>
         <span className="flex items-center gap-1">
           <Clock3 size={13} strokeWidth={1.75} aria-hidden="true" />
@@ -40,12 +41,8 @@ export function JobCard({ job }: { job: VendorJob }) {
         </span>
       </div>
 
-      <div className="flex items-center justify-between border-t border-line pt-3">
-        <span className="flex items-center gap-1 font-mono tabular text-sm font-semibold text-ink">
-          <IndianRupee size={14} strokeWidth={1.75} aria-hidden="true" />
-          {job.payoutInr.toLocaleString("en-IN")}
-        </span>
-        <Link href={`/vendor/jobs/${job.id}`} className="text-sm text-teal hover:underline">
+      <div className="flex items-center justify-end border-t border-line pt-3">
+        <Link href={`/vendor/jobs/${job.id}`} className="text-sm text-brand hover:underline">
           View job
         </Link>
       </div>

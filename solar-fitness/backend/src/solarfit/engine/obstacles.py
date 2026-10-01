@@ -58,6 +58,15 @@ from solarfit.domain.site import Site
 logger = logging.getLogger(__name__)
 
 
+def _stored_polygon(entry: dict) -> dict:
+    """applied_obstacle_polygons values are now {"polygon", "type",
+    "confidence"} dicts (see apply_or_flag() below); older rows stored
+    the bare GeoJSON polygon directly at this key. A raw polygon always
+    has "coordinates" at the top level, which the wrapped shape never
+    does — a clean, cheap discriminator between the two."""
+    return entry["polygon"] if "coordinates" not in entry else entry
+
+
 def apply_or_flag(site: Site, obstacles: list[Obstacle]) -> list[Obstacle]:
     """OBS-03/04/05. Validates each obstacle (dropping invalid ones with
     a logged reason), splits the survivors by
@@ -122,7 +131,14 @@ def apply_or_flag(site: Site, obstacles: list[Obstacle]) -> list[Obstacle]:
         if union_geom.geom_type == "Polygon":
             union_geom = MultiPolygon([union_geom])
         new_exclusions = mapping(union_geom)
-        applied_obstacle_polygons = {o.id: o.bounding_polygon for o in to_apply}
+        # Real type/confidence alongside the polygon — see
+        # repositories/sites.py::applied_obstacles()'s docstring for the
+        # backward-compatible read of older rows that stored the bare
+        # polygon at this same key.
+        applied_obstacle_polygons = {
+            o.id: {"polygon": o.bounding_polygon, "type": o.type, "confidence": o.confidence}
+            for o in to_apply
+        }
 
         try:
             with session_scope() as session:
@@ -197,7 +213,7 @@ def reject_applied_obstacle(site_id: str, obstacle_id: str, actor: str) -> Site:
         if version is None or not (version.applied_obstacle_polygons or {}).get(obstacle_id):
             raise ValueError(f"Obstacle {obstacle_id} was never auto-applied for site {site_id}")
 
-        rejected_polygon = shape(version.applied_obstacle_polygons[obstacle_id])
+        rejected_polygon = shape(_stored_polygon(version.applied_obstacle_polygons[obstacle_id]))
         current_exclusions = shape(site.exclusions) if site.exclusions else None
         new_exclusions = (
             mapping(current_exclusions.difference(rejected_polygon)) if current_exclusions else None

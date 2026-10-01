@@ -30,12 +30,14 @@ from solarfit.auth_users import AuthenticatedUser, current_user
 from solarfit.db import get_session
 from solarfit.domain.site import RoofSiteType, Site
 from solarfit.providers import manual, solar_api
+from solarfit.providers.base import is_approximate
 from solarfit.providers.validation import GeometryRejected
 from solarfit.repositories import assessments as assessments_repo
 from solarfit.repositories import calibration as calibration_repo
 from solarfit.repositories import sites as repo
 from solarfit.repositories import usn_uploads as usn_uploads_repo
 from solarfit.repositories import vendors as vendors_repo
+from solarfit.routers.assessments import FinancialEstimateOut, GenerationEstimateOut
 from solarfit.routers.sites import SiteCreate, create_site_core
 
 router = APIRouter(prefix="/app", tags=["app-sites"])
@@ -62,6 +64,43 @@ class GeoPointOut(_CamelModel):
     lng: float
 
 
+class MonthlyConsumptionEntryOut(_CamelModel):
+    month: str
+    units_kwh: float
+
+
+class ElectricalReadinessOut(_CamelModel):
+    """A customer-safe SUBSET of the vendor's real, submitted
+    ElectricalAssessment (routers/app_vendor.py) — same
+    financial_estimate-style wiring (row column -> repository/router ->
+    frontend type), never fabricated. None until a vendor has actually
+    submitted electrical-assessment data for this site's survey job.
+
+    Each field is a real signal derived from the vendor's own submitted
+    values, not a literal 1:1 field rename — documented per field below
+    since ElectricalAssessment has no boolean literally named e.g.
+    "meter available":
+    - meter_available: the vendor recorded where the meter is (a located,
+      accessible meter), from ElectricalAssessment.meter_location.
+    - panel_checked: the vendor recorded the main distribution board's
+      location, from ElectricalAssessment.main_db_location.
+    - earthing_available: ElectricalAssessment.earthing_available,
+      verbatim — the one field that already is this exact boolean.
+    - inverter_location_available: the vendor recorded a proposed
+      inverter location, from the same job's SafetyAssessment.
+      inverter_location (spec section 13's physical/fire-safety capture,
+      same vendor visit, same VendorJobRow).
+    - cable_route_available: the vendor recorded the existing cable
+      condition/route, from ElectricalAssessment.cable_condition.
+    """
+
+    meter_available: bool | None = None
+    panel_checked: bool | None = None
+    earthing_available: bool | None = None
+    inverter_location_available: bool | None = None
+    cable_route_available: bool | None = None
+
+
 class BindingConstraintOut(_CamelModel):
     name: str
     reason: str
@@ -72,17 +111,96 @@ class CacheProvenanceOut(_CamelModel):
     cache_hit: bool
 
 
+class CeilingLedgerOut(_CamelModel):
+    """One constraint the resolver weighed.
+
+    `kwp` stays nullable and `status` is carried through: a ceiling that
+    could not be evaluated is not a ceiling of zero, and flattening the
+    two would tell a customer they are limited to nothing when the truth
+    is that we have not checked yet."""
+
+    label: str
+    kwp: float | None = None
+    kind: str = "physical"
+    status: str = "ok"
+    note: str = ""
+    is_binding: bool = False
+
+
 class AssessmentOut(_CamelModel):
     id: str
     site_id: str
     verdict: str
     capacity_kwp: float
     confidence: str
+    # Enquiry workflow (repositories/assessments.py::raise_enquiry()) —
+    # "not_submitted" until the customer explicitly raises an enquiry,
+    # then "pending"/"approved"/"rejected" as an admin acts on it.
+    # "not_applicable" for a verdict that was never eligible to begin
+    # with. This is the customer-safe subset of admin's own
+    # ReviewFieldsOut (routers/app_assessments.py) — no reviewer name,
+    # no rejection reason, no vendor id; just enough for the result page
+    # to gate the "Raise Enquiry" entry point and show its own status.
+    review_status: str = "not_applicable"
+    enquiry_submitted_at: str | None = None
+    # Raw numeric alongside the tier label above — the label stays for
+    # backward compatibility with whatever already reads `confidence`.
+    # Both real: engine/fitness.py::score_fitness()'s own 0..1 figures,
+    # rescaled to 0-100 here purely for a customer-facing "X/100" figure.
+    score: float | None = None
+    confidence_score: float | None = None
+    # engine/fitness.py::FitnessResult.components — the per-factor
+    # breakdown (capacity_adequacy, constraint_headroom, geometry_quality,
+    # shading, generation_yield) behind `score` above. Each value is None
+    # when that factor's input was unavailable.
+    score_components: dict[str, float | None] = Field(default_factory=dict)
+    # FIT-04 explainability — engine/fitness.py::FitnessResult's own
+    # confidence_components (the real per-factor values blended into
+    # `confidence_score` above) and confidence_explanation (deterministic,
+    # template-generated sentences derived from them; index 0 is always
+    # the overall summary, the rest are one sentence per factor).
+    confidence_components: dict[str, float] = Field(default_factory=dict)
+    confidence_explanation: list[str] = Field(default_factory=list)
     binding_constraint: BindingConstraintOut | None
     reasons: list[str]
-    ceiling_ledger: list[dict] = []
+    # Phase 6 — see domain/assessment.py::ConditionCode's docstring.
+    conditions: list[dict] = Field(default_factory=list)
+    ceiling_ledger: list[CeilingLedgerOut] = Field(default_factory=list)
+    # CON-04 context for "how we worked this out". All three were already
+    # stored on the row; only the plumbing to the frontend was missing.
+    usable_area_m2: float | None = None
+    # AREA-01, pre-setback/pre-exclusion. Paired with usable_area_m2 above
+    # so the frontend can show total vs usable vs non-usable area, all
+    # real numbers.
+    total_area_m2: float | None = None
+    max_technical_kwp: float | None = None
+    headroom_kwp: float | None = None
+    # engine/panel_packing.py's real layout, packed into the resolved
+    # usable polygon and capped at capacity_kwp — see
+    # routers/assessments.py::_pack_panel_layout(). None when nothing
+    # could be packed (no usable area, no capacity, or Solar API/packing
+    # failure) — never a fabricated layout standing in for a real one.
+    panel_layout: dict | None = None
+    # Building Insights' per-plane roof data (pitch/azimuth/area/sunshine
+    # per segment) — see routers/assessments.py::_pack_panel_layout().
+    roof_segments: dict | None = None
+    # routers/assessments.py::_building_match_warning()'s coarse "does the
+    # returned building match the customer's pin" check, when it fired.
+    boundary_warning: str | None = None
+    # engine/fitness.py::STANDARD_LIMITATIONS — the authoritative
+    # pre-feasibility disclaimer, stored on every row since Day 0 but
+    # previously never reaching this response.
+    limitations: str | None = None
     panorama_url: str | None = None
     ml_suitability_score: float | None = None
+    # engine/generation.py::estimate_generation_kwh()'s real output —
+    # already persisted (AssessmentRow.generation) but never reached the
+    # customer-facing shape until now.
+    generation: GenerationEstimateOut | None = None
+    # engine/financials.py's real output — an engine ESTIMATE (config-pack
+    # cost/kWp, subsidy scheme, tariff), never a real vendor quote. See
+    # FinancialEstimateOut's docstring.
+    financial_estimate: FinancialEstimateOut | None = None
     cache: CacheProvenanceOut
     assessed_at: str
     model_version: str
@@ -90,16 +208,44 @@ class AssessmentOut(_CamelModel):
 
 def _assessment_out(row) -> AssessmentOut:
     data = assessments_repo.to_frontend_assessment_dict(row)
+    # engine/fitness.py's own component dict keys (capacity_adequacy, ...)
+    # are snake_case, an internal engine convention — _CamelModel's alias
+    # generator only camelCases a model's OWN declared fields, never keys
+    # inside a raw dict value, so this boundary needs its own conversion
+    # to match every other field this API already returns as camelCase.
+    score_components = {to_camel(k): v for k, v in (data.get("score_components") or {}).items()}
+    confidence_components = {to_camel(k): v for k, v in (data.get("confidence_components") or {}).items()}
     return AssessmentOut(
         id=data["id"],
         site_id=data["site_id"],
         verdict=data["verdict"],
         capacity_kwp=data["capacity_kwp"],
         confidence=data["confidence"],
-        binding_constraint=BindingConstraintOut(**data["binding_constraint"]) if data["binding_constraint"] else None,
+        review_status=data.get("review_status", "not_applicable"),
+        enquiry_submitted_at=data.get("enquiry_submitted_at"),
+        score=data.get("score"),
+        confidence_score=data.get("confidence_score"),
+        score_components=score_components,
+        confidence_components=confidence_components,
+        confidence_explanation=data.get("confidence_explanation") or [],
+        binding_constraint=BindingConstraintOut(**data["binding_constraint"])
+        if data["binding_constraint"]
+        else None,
         reasons=data["reasons"],
+        conditions=data.get("conditions") or [],
+        ceiling_ledger=[CeilingLedgerOut(**entry) for entry in data["ceiling_ledger"]],
+        usable_area_m2=data["usable_area_m2"],
+        total_area_m2=data.get("total_area_m2"),
+        max_technical_kwp=data["max_technical_kwp"],
+        headroom_kwp=data["headroom_kwp"],
+        panel_layout=data["panel_layout"],
+        roof_segments=data["roof_segments"],
+        boundary_warning=data["boundary_warning"],
+        limitations=data.get("limitations"),
         panorama_url=data["panorama_url"],
         ml_suitability_score=data["ml_suitability_score"],
+        generation=GenerationEstimateOut(**data["generation"]) if data.get("generation") else None,
+        financial_estimate=FinancialEstimateOut(**data["financial_estimate"]) if data.get("financial_estimate") else None,
         cache=CacheProvenanceOut(**data["cache"]),
         assessed_at=data["assessed_at"],
         model_version=data["model_version"],
@@ -115,12 +261,73 @@ class SiteOut(_CamelModel):
     state: str
     location: GeoPointOut
     boundary: list[GeoPointOut] | None = None
+    # GEO-09 provenance for the boundary above. Exposed because the
+    # frontend cannot otherwise tell a traced roof from GEO-04's bounding
+    # RECTANGLE, and drawing a rectangle as though it were the roof is
+    # how panels end up beside a building instead of on it.
+    geometry_source: str | None = None
+    boundary_is_approximate: bool = True
+    geometry_confidence: float | None = None
+    # providers/solar_api.py::MaskVectorization.competing_regions — real
+    # count of other candidate buildings the mask found near the pin,
+    # not a guess. None when no mask lookup ran at all; 0 means the
+    # lookup ran and found the pin's building unambiguous.
+    competing_buildings_nearby: int | None = None
+    # Never hidden, even when LOW/MEDIUM — a customer reading a panel
+    # layout is entitled to know how current/detailed the imagery behind
+    # it actually is.
+    imagery_quality: str | None = None
+    imagery_date: str | None = None
+    # SHADE-01/02 — domain/site.py::ShadingEstimate. All None when
+    # source == "unavailable" (any non-solar_api geometry source carries
+    # no shading data) — never a guessed shading figure.
+    shading_score: float | None = None
+    sunshine_hours_per_year: float | None = None
+    shading_source: str | None = None
+    # OBS-04's real, applied exclusion polygons (setbacks + obstacles
+    # already subtracted from the usable area) — one ring per polygon,
+    # same GeoJSON-ring-to-point-list convention as `boundary` above.
+    # None when the site has no exclusions at all yet.
+    exclusions: list[list[GeoPointOut]] | None = None
     created_at: str
     updated_at: str
     latest_assessment: AssessmentOut | None = None
     usn_status: str
     usn: str | None = None
     tags: list[str]
+    roof_type: str | None = None
+    roof_material: str | None = None
+    roof_slope: str | None = None
+    roof_construction_year: int | None = None
+    electricity_board: str | None = None
+    consumer_number: str | None = None
+    connection_type: str | None = None
+    sanctioned_load_kw: float | None = None
+    contract_demand_kva: float | None = None
+    connected_load_kw: float | None = None
+    monthly_consumption_kwh: list[MonthlyConsumptionEntryOut] = []
+    battery_required: bool | None = None
+    backup_required: bool | None = None
+    required_backup_hours: float | None = None
+    critical_loads: str | None = None
+    # StartCheckWizard map-selection metadata (lat/lng/zoom/mapTypeId of
+    # the confirmed view) — lets a later screen reproduce the exact same
+    # satellite view on demand, per VIS-06's never-store-imagery policy.
+    # None for every site created before this field existed, and for any
+    # site not created through the map wizard.
+    map_view_metadata: dict | None = None
+    # repositories/vendors.py::get_latest_job_for_site() — the customer-
+    # facing "vendor display" the survey-requested banner uses to say
+    # something more specific than just "queued". Deliberately NOT the
+    # vendor's name/contact details (a vendor hasn't agreed to be
+    # contacted directly by the customer before/without going through
+    # this app) — only the job's own lifecycle status. None when no
+    # survey has ever been queued for this site.
+    survey_job_status: str | None = None
+    # See ElectricalReadinessOut's own docstring. None whenever no vendor
+    # has submitted electrical-assessment data for this site yet — same
+    # "absence is data" discipline as survey_job_status above.
+    electrical_readiness: ElectricalReadinessOut | None = None
 
 
 class CompositeSiteOut(_CamelModel):
@@ -167,8 +374,8 @@ class AppSiteCreate(_CamelModel):
     address: str = Field(min_length=1)
     district: str = ""
     state: str = ""
-    lat: float
-    lng: float
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
     jurisdiction: str = _DEFAULT_JURISDICTION
 
 
@@ -198,9 +405,43 @@ def _boundary_points(site: Site) -> list[GeoPointOut] | None:
     return [GeoPointOut(lat=c[1], lng=c[0]) for c in coords]
 
 
+def _exclusion_rings(site: Site) -> list[list[GeoPointOut]] | None:
+    """site.exclusions is a GeoJSON MultiPolygon — one exterior ring per
+    polygon, same de-duplication _boundary_points() already applies to a
+    single Polygon's ring."""
+    if not site.exclusions:
+        return None
+    rings = []
+    for polygon_coords in site.exclusions["coordinates"]:
+        exterior = polygon_coords[0]
+        if len(exterior) > 1 and exterior[0] == exterior[-1]:
+            exterior = exterior[:-1]
+        rings.append([GeoPointOut(lat=c[1], lng=c[0]) for c in exterior])
+    return rings or None
+
+
+def _electrical_readiness_out(survey_job) -> ElectricalReadinessOut | None:
+    """See ElectricalReadinessOut's docstring for the field-by-field
+    derivation. survey_job is a repositories.vendors.VendorJobRow | None
+    — returns None unless the vendor has actually submitted an
+    electrical assessment (never a checklist of guesses)."""
+    if survey_job is None or not survey_job.electrical_assessment:
+        return None
+    electrical = survey_job.electrical_assessment
+    safety = survey_job.safety_assessment or {}
+    return ElectricalReadinessOut(
+        meter_available=electrical.get("meter_location") is not None,
+        panel_checked=electrical.get("main_db_location") is not None,
+        earthing_available=electrical.get("earthing_available"),
+        inverter_location_available=safety.get("inverter_location") is not None,
+        cable_route_available=electrical.get("cable_condition") is not None,
+    )
+
+
 def _site_out(session: Session, site: Site, row: repo.SiteRow) -> SiteOut:
     lng, lat = site.centroid["coordinates"]
     latest = assessments_repo.get_latest_by_site(session, site.id)
+    survey_job = vendors_repo.get_latest_job_for_site(session, site.id)
     return SiteOut(
         id=site.id,
         name=site.name,
@@ -210,12 +451,42 @@ def _site_out(session: Session, site: Site, row: repo.SiteRow) -> SiteOut:
         state=row.state or "",
         location=GeoPointOut(lat=lat, lng=lng),
         boundary=_boundary_points(site),
+        geometry_source=site.geometry_source,
+        # A site with no boundary at all is not "approximate", it is
+        # absent — say False rather than implying a rough shape exists.
+        boundary_is_approximate=is_approximate(site.geometry_source) if site.boundary else False,
+        geometry_confidence=site.geometry_confidence,
+        competing_buildings_nearby=site.competing_buildings_nearby,
+        imagery_quality=site.imagery_quality,
+        imagery_date=site.imagery_date.isoformat() if site.imagery_date else None,
+        shading_score=site.shading.shading_score if site.shading else None,
+        sunshine_hours_per_year=site.shading.sunshine_hours_per_year if site.shading else None,
+        shading_source=site.shading.source if site.shading else None,
+        exclusions=_exclusion_rings(site),
         created_at=site.created_at.isoformat(),
         updated_at=row.updated_at.isoformat(),
         latest_assessment=_assessment_out(latest) if latest else None,
         usn_status="confirmed" if site.usn else "not_started",
         usn=site.usn.usn if site.usn else None,
         tags=row.tags or [],
+        roof_type=row.roof_type,
+        roof_material=row.roof_material,
+        roof_slope=row.roof_slope,
+        roof_construction_year=row.roof_construction_year,
+        electricity_board=row.electricity_board,
+        consumer_number=row.consumer_number,
+        connection_type=row.connection_type,
+        sanctioned_load_kw=row.sanctioned_load_kw,
+        contract_demand_kva=row.contract_demand_kva,
+        connected_load_kw=row.connected_load_kw,
+        monthly_consumption_kwh=[MonthlyConsumptionEntryOut(**e) for e in (row.monthly_consumption_kwh or [])],
+        battery_required=row.battery_required,
+        backup_required=row.backup_required,
+        required_backup_hours=row.required_backup_hours,
+        critical_loads=row.critical_loads,
+        map_view_metadata=row.map_view_metadata,
+        survey_job_status=survey_job.status if survey_job else None,
+        electrical_readiness=_electrical_readiness_out(survey_job),
     )
 
 
@@ -341,7 +612,9 @@ def create_composite(
     user: Annotated[AuthenticatedUser, Depends(current_user)],
 ) -> CompositeSiteOut:
     if not user.owner_org:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "only customer accounts can create composite sites")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "only customer accounts can create composite sites"
+        )
     try:
         row = repo.create_composite_site(
             session,
@@ -415,6 +688,28 @@ def get_site(
     session: Annotated[Session, Depends(get_session)],
     user: Annotated[AuthenticatedUser, Depends(current_user)],
 ) -> SiteOut:
+    """Real gap this closes: this endpoint used to be strictly
+    owner_org-scoped, so an admin (owner_org=None) or a vendor
+    (owner_org=None, tracked by vendor_id instead) could never read a
+    customer's site at all — every vendor job detail page's `getSite()`
+    call was silently failing and falling back to district/state only.
+    Admins can read any site (matches every other admin-scoped GET in
+    this codebase); a vendor can read exactly the sites they have an
+    assigned job on, nothing else."""
+    if user.role in ("admin", "vendor"):
+        try:
+            site = repo.get(session, site_id)
+        except ValueError as exc:  # malformed UUID
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "site not found") from exc
+        allowed = site is not None and (
+            user.role == "admin"
+            or (user.vendor_id is not None and vendors_repo.vendor_has_job_for_site(session, user.vendor_id, site_id))
+        )
+        if not allowed:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "site not found")
+        row = session.get(repo.SiteRow, uuid.UUID(site.id))
+        return _site_out(session, site, row)
+
     site, row = _owned_row_or_404(session, site_id, user.owner_org or "")
     return _site_out(session, site, row)
 
@@ -467,11 +762,19 @@ def get_site_history(
     for v in repo.versions(session, site_id):
         kind = "created" if v.version_no == 1 else "boundary_edit"
         summary = (
-            f"Site created via {v.source}" if kind == "created" else f"Boundary changed by {v.actor} ({v.source})"
+            f"Site created via {v.source}"
+            if kind == "created"
+            else f"Boundary changed by {v.actor} ({v.source})"
         )
         superseded = None
         if kind == "boundary_edit":
-            superseded = [SupersededFieldOut(field="boundary", old_value="(previous version)", new_value=f"version {v.version_no}")]
+            superseded = [
+                SupersededFieldOut(
+                    field="boundary",
+                    old_value="(previous version)",
+                    new_value=f"version {v.version_no}",
+                )
+            ]
         events.append(
             HistoryEventOut(
                 id=str(v.id),
@@ -485,7 +788,9 @@ def get_site_history(
         )
 
     usn_rows = session.scalars(
-        select(usn_uploads_repo.UsnOcrUpload).where(usn_uploads_repo.UsnOcrUpload.site_id == site_id)
+        select(usn_uploads_repo.UsnOcrUpload).where(
+            usn_uploads_repo.UsnOcrUpload.site_id == site_id
+        )
     )
     for u in usn_rows:
         events.append(
@@ -500,7 +805,9 @@ def get_site_history(
         )
 
     survey_rows = session.scalars(
-        select(calibration_repo.CalibrationRecord).where(calibration_repo.CalibrationRecord.site_id == site_id)
+        select(calibration_repo.CalibrationRecord).where(
+            calibration_repo.CalibrationRecord.site_id == site_id
+        )
     )
     for c in survey_rows:
         events.append(
@@ -515,7 +822,9 @@ def get_site_history(
         )
 
     assessment_rows = session.scalars(
-        select(assessments_repo.AssessmentRow).where(assessments_repo.AssessmentRow.site_id == site_id)
+        select(assessments_repo.AssessmentRow).where(
+            assessments_repo.AssessmentRow.site_id == site_id
+        )
     )
     for a in assessment_rows:
         events.append(

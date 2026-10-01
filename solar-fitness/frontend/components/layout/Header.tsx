@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Bell, Search } from "lucide-react";
 import { UserMenu } from "@/components/layout/UserMenu";
+import { BackButton } from "@/components/ui/BackButton";
 
 export interface HeaderProps {
   /** Show the global search link. Defaults to true (original portfolio behaviour). */
@@ -17,6 +18,9 @@ export interface HeaderProps {
   profileHref?: string;
   settingsHref?: string;
   accentVar?: string;
+  /** Where the mobile Back button sends the user when this tab has no
+   *  in-app history to go back to. Defaults to this portal's own home. */
+  backFallbackHref?: string;
 }
 
 export function Header({
@@ -30,20 +34,27 @@ export function Header({
   userInitials = "DA",
   profileHref = "/settings/organisation",
   settingsHref = "/settings/organisation",
-  accentVar = "var(--amber)",
+  accentVar = "var(--brand)",
+  backFallbackHref = "/home",
 }: HeaderProps) {
   return (
     <header className="flex items-center justify-between gap-4 border-b border-line bg-paper px-4 py-3 md:px-6">
       {showSearch ? (
-        <Link
-          href={searchHref}
-          className="flex max-w-sm flex-1 items-center gap-2 rounded-[var(--radius-app)] border border-line bg-surface px-3 py-1.5 text-sm text-ink-soft hover:border-blue"
-        >
-          <Search size={15} strokeWidth={1.75} aria-hidden="true" />
-          {searchLabel}
-        </Link>
+        <div className="flex flex-1 items-center gap-2">
+          <BackButton fallbackHref={backFallbackHref} showLabel={false} />
+          <Link
+            href={searchHref}
+            className="flex max-w-sm flex-1 items-center gap-2 rounded-[var(--radius-app)] border border-line bg-surface px-3 py-1.5 text-sm text-ink-soft hover:border-blue"
+          >
+            <Search size={15} strokeWidth={1.75} aria-hidden="true" />
+            {searchLabel}
+          </Link>
+        </div>
       ) : (
-        <div className="flex flex-1 items-center gap-4">{navSlot}</div>
+        <div className="flex flex-1 items-center gap-4">
+          <BackButton fallbackHref={backFallbackHref} showLabel={false} />
+          {navSlot}
+        </div>
       )}
       <div className="flex items-center gap-3">
         {showSearch && navSlot}

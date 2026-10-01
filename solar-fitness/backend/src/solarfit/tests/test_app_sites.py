@@ -5,12 +5,14 @@ repositories/sites.py additions it depends on (composite sites, the new
 address/district/state/tags columns).
 
 POST /app/sites always triggers routers/sites.py::create_site_core()'s
-address-based Solar API resolution (AppSiteCreate has no boundary field
-of its own, only a required `address`) — every test that creates a site
-through this endpoint monkeypatches
-`solarfit.routers.sites.solar_api.resolve_for_address` rather than
-hitting the real Google Solar API, the same "patch where it's looked up"
-approach test_solar_api.py's own fixtures use.
+Solar API resolution (AppSiteCreate has no boundary field of its own) —
+by lat/lng (resolve_for_location), since app_sites.py::create_site()
+always derives a centroid from the request body. Every test that creates
+a site through this endpoint monkeypatches both
+`solarfit.routers.sites.solar_api.resolve_for_location` and
+`resolve_for_address` (the latter only reached if a caller ever omits
+lat/lng) rather than hitting the real Google Solar API, the same "patch
+where it's looked up" approach test_solar_api.py's own fixtures use.
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ from fastapi.testclient import TestClient
 
 from solarfit.db import get_session
 from solarfit.main import app
-from solarfit.providers.solar_api import SolarApiResult
+from solarfit.providers.solar_api import MaskVectorization, SolarApiResult
 
 BOUNDARY = {
     "type": "Polygon",
@@ -41,10 +43,31 @@ def client(db_session):
 @pytest.fixture(autouse=True)
 def _fake_solar_api(monkeypatch):
     """Every POST /app/sites in this file resolves via this fake unless
-    a test overrides it — a real boundary, no network call."""
+    a test overrides it — a real boundary, no network call.
+
+    _create_body() below always supplies lat/lng, which app_sites.py's
+    create_site() turns into a centroid — so create_site_core() actually
+    takes the resolve_for_location branch, not resolve_for_address
+    (this module's own older docstring claim above is stale). Both are
+    faked here; previously only resolve_for_address was, so every test
+    in this file silently depended on a real Solar API call over the
+    network succeeding.
+    """
     monkeypatch.setattr(
         "solarfit.routers.sites.solar_api.resolve_for_address",
         lambda address, **kw: SolarApiResult(status="ok", boundary=BOUNDARY),
+    )
+    monkeypatch.setattr(
+        "solarfit.routers.sites.solar_api.resolve_for_location",
+        lambda lat, lng, **kw: SolarApiResult(status="ok", boundary=BOUNDARY),
+    )
+    # GEO-04's mask upgrade (Phase 2) makes its own, separate Solar API +
+    # GeoTIFF download call — faked off here too, so tests get the
+    # deterministic BOUNDARY rectangle above rather than reaching the
+    # network.
+    monkeypatch.setattr(
+        "solarfit.routers.sites.solar_api.extract_roof_polygon_from_mask",
+        lambda lat, lng, **kw: MaskVectorization(polygon=None, competing_regions=0),
     )
 
 
@@ -82,6 +105,7 @@ def test_create_site_returns_camelcase_frontend_shape(client, make_auth_header):
     assert body["usnStatus"] == "not_started"
     assert body["usn"] is None
     assert body["latestAssessment"] is None  # documented gap until omkar's assessments table
+    assert body["surveyJobStatus"] is None  # no survey has ever been queued for this site
 
 
 def test_create_site_requires_a_customer_account(client, make_auth_header):
@@ -95,6 +119,16 @@ def test_create_site_requires_auth(client):
     assert response.status_code == 401
 
 
+def test_create_site_rejects_out_of_range_coordinates(client, make_auth_header):
+    """lat/lng used to have no range check here — an out-of-range value
+    (e.g. a typo'd 999) silently round-tripped through PostGIS geography
+    wrapping into a bogus-but-valid-looking coordinate instead of being
+    rejected at the API boundary."""
+    headers = make_auth_header(role="customer")
+    response = client.post("/app/sites", json=_create_body(lat=999, lng=999), headers=headers)
+    assert response.status_code == 422
+
+
 def test_get_site_round_trips(client, make_auth_header):
     headers = make_auth_header(role="customer")
     created = client.post("/app/sites", json=_create_body(), headers=headers).json()
@@ -102,6 +136,47 @@ def test_get_site_round_trips(client, make_auth_header):
     response = client.get(f"/app/sites/{created['id']}", headers=headers)
     assert response.status_code == 200
     assert response.json()["id"] == created["id"]
+
+
+def test_get_site_surfaces_the_latest_survey_job_status(client, make_auth_header, db_session):
+    """The customer-facing 'vendor display' — repositories/vendors.py::
+    get_latest_job_for_site(), never the vendor's own name/contact
+    details, just the job's lifecycle status."""
+    from datetime import UTC, datetime, timedelta
+
+    from solarfit.repositories.vendors import VendorJobRow, VendorRow
+
+    headers = make_auth_header(role="customer")
+    created = client.post("/app/sites", json=_create_body(), headers=headers).json()
+
+    vendor = VendorRow(
+        name="Acme Surveys",
+        verification_status="verified",
+        availability=True,
+        accuracy_score=0.9,
+        service_area={"region": "Telangana", "districts": ["Hyderabad"]},
+        payout_method_type="UPI",
+        payout_masked_account="acme@upi",
+    )
+    db_session.add(vendor)
+    db_session.flush()
+    job = VendorJobRow(
+        site_id=created["id"],
+        vendor_id=vendor.id,
+        status="accepted",
+        district="Hyderabad",
+        state="Telangana",
+        deadline=datetime.now(UTC) + timedelta(days=3),
+        payout_inr=1500,
+        requirements=[],
+    )
+    db_session.add(job)
+    db_session.flush()
+
+    response = client.get(f"/app/sites/{created['id']}", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["surveyJobStatus"] == "accepted"
 
 
 def test_get_unknown_site_is_404(client, make_auth_header):
@@ -257,7 +332,16 @@ def test_list_sites_verdict_filter_is_empty_until_assessments_exist(client, make
 # --------------------------------------------------------------------- #
 
 
-def _seed_assessment(db_session, site_id: str, *, verdict="SUITABLE", recommended_kwp=4.5):
+def _seed_assessment(
+    db_session,
+    site_id: str,
+    *,
+    verdict="SUITABLE",
+    recommended_kwp=4.5,
+    total_area_m2=None,
+    score_components=None,
+    generation=None,
+):
     from datetime import UTC, datetime
 
     from solarfit.repositories.assessments import AssessmentRow
@@ -276,6 +360,9 @@ def _seed_assessment(db_session, site_id: str, *, verdict="SUITABLE", recommende
         capacity={"recommended_kwp": recommended_kwp, "ceilings": [{"constraint": "net_metering_cap", "reason": "cap", "kind": "regulatory"}]},
         boundary={"type": "Polygon", "coordinates": [[[0, 0], [0, 1], [1, 1], [0, 0]]]},
         usable_area_m2=80.0,
+        total_area_m2=total_area_m2,
+        score_components=score_components,
+        generation=generation,
         vision_refinement=None,
         panorama_url=None,
         ml_suitability_score=None,
@@ -304,6 +391,68 @@ def test_get_site_includes_the_real_latest_assessment(client, make_auth_header, 
     assert assessment["capacityKwp"] == 5.0
     assert assessment["confidence"] == "High"  # 0.75 >= 0.7 -> High per the shared bucketing rule
     assert assessment["bindingConstraint"]["name"] == "net_metering_cap"
+
+
+def test_assessment_score_and_components_round_trip_with_camelcase_keys(
+    client, make_auth_header, db_session
+):
+    """score/confidenceScore are the real 0..1 figures rescaled to 0-100;
+    scoreComponents' inner keys must be camelCased at this boundary since
+    engine/fitness.py's own dict keys (capacity_adequacy, ...) are
+    snake_case and _CamelModel's alias generator only affects a model's
+    own declared fields, never keys inside a raw dict value."""
+    headers = make_auth_header(role="customer")
+    created = client.post("/app/sites", json=_create_body(), headers=headers).json()
+    _seed_assessment(
+        db_session,
+        created["id"],
+        total_area_m2=120.5,
+        score_components={
+            "capacity_adequacy": 1.0,
+            "constraint_headroom": 0.8,
+            "geometry_quality": None,
+            "shading": 0.9,
+            "generation_yield": 0.6,
+        },
+        generation={
+            "estimated_kwh_per_year": 6000.0,
+            "specific_yield_kwh_per_kwp": 1200.0,
+            "performance_ratio": 0.8,
+            "method": "weather_refined",
+            "method_notes": "test",
+            "p50_kwh_per_year": None,
+            "p90_kwh_per_year": None,
+        },
+    )
+
+    assessment = client.get(f"/app/sites/{created['id']}", headers=headers).json()["latestAssessment"]
+    assert assessment["score"] == 80.0  # 0.8 * 100
+    assert assessment["confidenceScore"] == 75.0  # 0.75 * 100
+    assert assessment["totalAreaM2"] == 120.5
+    assert assessment["scoreComponents"] == {
+        "capacityAdequacy": 1.0,
+        "constraintHeadroom": 0.8,
+        "geometryQuality": None,
+        "shading": 0.9,
+        "generationYield": 0.6,
+    }
+    assert assessment["generation"]["estimatedKwhPerYear"] == 6000.0
+
+
+def test_assessment_score_is_none_when_verdict_is_insufficient_data(client, make_auth_header, db_session):
+    """FIT-03: a None score must stay None through the whole pipeline —
+    never rescaled into a fabricated 0."""
+    from solarfit.repositories.assessments import AssessmentRow
+
+    headers = make_auth_header(role="customer")
+    created = client.post("/app/sites", json=_create_body(), headers=headers).json()
+    _seed_assessment(db_session, created["id"], verdict="INSUFFICIENT_DATA")
+    row = db_session.get(AssessmentRow, f"as-{created['id']}")
+    row.score = None
+    db_session.flush()
+
+    assessment = client.get(f"/app/sites/{created['id']}", headers=headers).json()["latestAssessment"]
+    assert assessment["score"] is None
 
 
 def test_site_history_includes_an_assessment_event(client, make_auth_header, db_session):

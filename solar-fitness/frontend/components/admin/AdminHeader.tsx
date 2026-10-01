@@ -2,8 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bell, Search } from "lucide-react";
+import { Search, ShieldCheck } from "lucide-react";
 import { UserMenu } from "@/components/layout/UserMenu";
+import { NotificationBell } from "@/components/layout/NotificationBell";
+import { BackButton } from "@/components/ui/BackButton";
+import { MobileNavDrawer } from "@/components/layout/MobileNavDrawer";
+import { ADMIN_NAV } from "@/components/admin/AdminSidebar";
 import { useAdminVendors } from "@/lib/query/hooks";
 
 function VendorSearch() {
@@ -82,18 +86,20 @@ function VendorSearch() {
 export function AdminHeader() {
   return (
     <header className="flex items-center justify-between gap-4 border-b border-line bg-paper px-4 py-3 md:px-6">
-      <VendorSearch />
+      <div className="flex flex-1 items-center gap-2">
+        <MobileNavDrawer title="Solar Site Fitness" subtitle="Super admin" icon={ShieldCheck} groups={ADMIN_NAV} />
+        <BackButton fallbackHref="/admin/dashboard" showLabel={false} />
+        <VendorSearch />
+      </div>
       <div className="flex items-center gap-3">
-        <Link href="/admin/audit-log" aria-label="Notifications" className="text-ink-soft hover:text-ink">
-          <Bell size={18} strokeWidth={1.75} />
-        </Link>
+        <NotificationBell />
         <UserMenu
           name="Demo Admin"
           role="Super Admin · Platform Team"
           initials="SA"
           profileHref="/admin/configuration"
           settingsHref="/admin/configuration"
-          accentVar="var(--slate)"
+          accentVar="var(--brand)"
         />
       </div>
     </header>

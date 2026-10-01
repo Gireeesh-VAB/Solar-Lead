@@ -9,8 +9,9 @@ import {
   usePlatformHealth,
   useVendorVerificationQueue,
 } from "@/lib/query/hooks";
-import { Card, CardSkeleton, ErrorState } from "@/components/ui/Primitives";
+import { Badge, Card, CardSkeleton, ErrorState } from "@/components/ui/Primitives";
 import { QuotaBar } from "@/components/admin/QuotaBar";
+import { MiniBarChart } from "@/components/admin/MiniBarChart";
 
 export function AdminDashboardClient() {
   const health = usePlatformHealth();
@@ -51,6 +52,15 @@ export function AdminDashboardClient() {
   const pendingCalibration = calibration.data.filter((c) => c.status === "pending_approval");
   const pendingModels = models.data.filter((m) => m.status === "proposed");
   const warningQuotas = health.data.quotas.filter((q) => q.used / q.limit >= 0.85);
+  // Purely a second reading of the vendor list already fetched above — no
+  // extra request, no derived numbers that aren't already on this page.
+  const countByStatus = (status: string) => vendors.data!.filter((v) => v.verificationStatus === status).length;
+  const vendorStatusBreakdown = [
+    { label: "Verified", value: countByStatus("verified"), color: "var(--good)" },
+    { label: "Pending", value: countByStatus("pending"), color: "var(--warn)" },
+    { label: "Rejected", value: countByStatus("rejected"), color: "var(--bad)" },
+    { label: "Suspended", value: countByStatus("suspended"), color: "var(--neutral-verdict)" },
+  ];
 
   return (
     <div className="space-y-8">
@@ -60,7 +70,7 @@ export function AdminDashboardClient() {
         </h2>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_2fr]">
           <Link href="/admin/configuration">
-            <Card className="p-4 h-full hover:border-slate">
+            <Card interactive className="p-4 h-full">
               <p className="flex items-center gap-1.5 text-xs text-ink-soft">
                 <ShieldCheck size={13} strokeWidth={1.75} aria-hidden="true" />
                 Uptime (30d)
@@ -83,38 +93,42 @@ export function AdminDashboardClient() {
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Link href="/admin/vendors/verification">
-            <Card className="p-4 h-full hover:border-slate">
+            <Card interactive className="p-4 h-full">
               <p className="text-xs text-ink-soft">Pending verifications</p>
-              <p className="mt-1 font-mono tabular text-2xl" style={{ color: verificationQueue.data.length > 0 ? "var(--warn)" : "var(--ink)" }}>
-                {verificationQueue.data.length}
-              </p>
+              <p className="mt-1 font-mono tabular text-2xl text-ink">{verificationQueue.data.length}</p>
+              {verificationQueue.data.length > 0 && (
+                <Badge tone="amber" className="mt-1.5">Needs review</Badge>
+              )}
             </Card>
           </Link>
           <Link href="/admin/platform/calibration">
-            <Card className="p-4 h-full hover:border-slate">
+            <Card interactive className="p-4 h-full">
               <p className="text-xs text-ink-soft">Pending calibration</p>
-              <p className="mt-1 font-mono tabular text-2xl" style={{ color: pendingCalibration.length > 0 ? "var(--warn)" : "var(--ink)" }}>
-                {pendingCalibration.length}
-              </p>
+              <p className="mt-1 font-mono tabular text-2xl text-ink">{pendingCalibration.length}</p>
+              {pendingCalibration.length > 0 && (
+                <Badge tone="amber" className="mt-1.5">Awaiting approval</Badge>
+              )}
             </Card>
           </Link>
           <Link href="/admin/platform/models">
-            <Card className="p-4 h-full hover:border-slate">
+            <Card interactive className="p-4 h-full">
               <p className="text-xs text-ink-soft">Pending model approvals</p>
-              <p className="mt-1 font-mono tabular text-2xl" style={{ color: pendingModels.length > 0 ? "var(--warn)" : "var(--ink)" }}>
-                {pendingModels.length}
-              </p>
+              <p className="mt-1 font-mono tabular text-2xl text-ink">{pendingModels.length}</p>
+              {pendingModels.length > 0 && (
+                <Badge tone="amber" className="mt-1.5">Awaiting approval</Badge>
+              )}
             </Card>
           </Link>
           <Link href="/admin/vendors">
-            <Card className="p-4 h-full hover:border-slate">
+            <Card interactive className="p-4 h-full">
               <p className="flex items-center gap-1.5 text-xs text-ink-soft">
                 <AlertTriangle size={13} strokeWidth={1.75} aria-hidden="true" />
                 Vendors at risk
               </p>
-              <p className="mt-1 font-mono tabular text-2xl" style={{ color: atRiskVendors.length > 0 ? "var(--bad)" : "var(--ink)" }}>
-                {atRiskVendors.length}
-              </p>
+              <p className="mt-1 font-mono tabular text-2xl text-ink">{atRiskVendors.length}</p>
+              {atRiskVendors.length > 0 && (
+                <Badge tone="red" className="mt-1.5">At risk</Badge>
+              )}
             </Card>
           </Link>
         </div>
@@ -131,17 +145,23 @@ export function AdminDashboardClient() {
         <h2 id="activity-heading" className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-faint">
           Vendor activity
         </h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_2fr]">
           <Link href="/admin/vendors">
-            <Card className="p-4 h-full hover:border-slate">
+            <Card interactive className="p-4 h-full">
               <p className="flex items-center gap-1.5 text-xs text-ink-soft">
                 <Sigma size={13} strokeWidth={1.75} aria-hidden="true" />
                 Verified vendors
               </p>
-              <p className="mt-1 font-mono tabular text-2xl text-ink">{vendors.data.filter((v) => v.verificationStatus === "verified").length}</p>
+              <p className="mt-1 font-mono tabular text-2xl text-brand">{vendors.data.filter((v) => v.verificationStatus === "verified").length}</p>
               <p className="mt-1 text-xs text-ink-faint">of {vendors.data.length} total</p>
             </Card>
           </Link>
+          <Card className="p-4">
+            <p className="text-xs text-ink-soft">Verification status breakdown</p>
+            <div className="mt-3">
+              <MiniBarChart title="Vendor verification status breakdown" data={vendorStatusBreakdown} />
+            </div>
+          </Card>
         </div>
       </section>
     </div>
