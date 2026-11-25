@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Obstacle model trainer</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --mute:#667085; --line:#e4e7ec; --ok:#12804b; --bad:#b42318; --acc:#1f5fbf; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14171c; --card:#1d2128; --ink:#e8ebf0; --mute:#98a2b3; --line:#2c323c; --ok:#4cc38a; --bad:#ff7a6e; --acc:#6ea8ff; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, Segoe UI, sans-serif; }
+  main { max-width:980px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:22px; margin:0 0 4px; } h2 { font-size:16px; margin:0 0 10px; }
+  p.sub { color:var(--mute); margin:0 0 20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  button { font:inherit; border:1px solid var(--line); background:var(--card); color:var(--ink); padding:8px 14px; border-radius:8px; cursor:pointer; }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+  button:disabled { opacity:.5; cursor:default; }
+  input[type=number] { font:inherit; width:90px; padding:7px 8px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:12px; }
+  .site { border:1px solid var(--line); border-radius:8px; overflow:hidden; background:var(--card); }
+  .site img { width:100%; height:130px; object-fit:cover; display:block; background:var(--line); }
+  .site .ph { height:130px; display:flex; align-items:center; justify-content:center; color:var(--mute); font-size:13px; background:var(--line); }
+  .site .meta { padding:8px 10px; font-size:13px; }
+  .g { color:var(--ok); font-weight:600; } .r { color:var(--bad); font-weight:600; } .m { color:var(--mute); }
+  .bar { height:10px; background:var(--line); border-radius:6px; overflow:hidden; margin:10px 0; } .bar > div { height:100%; background:var(--acc); width:0; transition:width .4s; }
+  pre { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px; max-height:260px; overflow:auto; font-size:12px; margin:8px 0 0; white-space:pre-wrap; }
+  table { width:100%; border-collapse:collapse; font-size:13px; } th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); } th { color:var(--mute); font-weight:500; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:99px; font-size:12px; border:1px solid var(--line); }
+  .note { color:var(--mute); font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Obstacle model trainer</h1>
+  <p class="sub">Learns from what customers did with the model's detections: <span class="g">confirmed</span> obstacles are examples to find, <span class="r">ignored</span> ones are false alarms to stop drawing.</p>
+
+  <div class="card">
+    <h2>Reviewed roofs</h2>
+    <div id="summary" class="note">Loading...</div>
+    <div id="grid" class="grid" style="margin-top:12px"></div>
+    <p class="note" style="margin-bottom:0">Green outlines = confirmed obstacles, red = ignored false alarms. Pictures appear after the first check or training run (they are downloaded once and kept on this PC). Detections still waiting for a customer's review are not used.</p>
+  </div>
+
+  <div class="card">
+    <h2>Run</h2>
+    <div class="row">
+      <label>Epochs <input id="epochs" type="number" min="10" max="1000" value="25"></label>
+      <button id="dry">Check the data (no training)</button>
+      <button id="train" class="primary">Start training</button>
+      <span id="state" class="pill">idle</span>
+    </div>
+    <p class="note">Training always uses <b>all</b> reviewed roofs and starts from the original model, so it never forgets earlier corrections. The result is installed only if it finds at least as many confirmed obstacles as the model it started from (the live model is backed up first), and the running obstacle-service is told to reload. Roughly 2 minutes per reviewed roof at 25 epochs on this CPU.</p>
+    <div class="bar"><div id="bar"></div></div>
+    <div id="result" style="font-weight:600"></div>
+    <pre id="log" hidden></pre>
+  </div>
+
+  <div class="card">
+    <h2>Installed models</h2>
+    <table><thead><tr><th>When</th><th>Roofs</th><th>Found (new)</th><th>Found (before)</th><th>Backup of the previous file</th></tr></thead><tbody id="ledger"></tbody></table>
+    <p id="noledger" class="note" hidden>Nothing installed from here yet.</p>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let busy = false;
+
+async function api(path, opts) { const r = await fetch(path, opts); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText); return j; }
+
+async function loadOverview() {
+  try {
+    const o = await api('/api/overview');
+    const conf = o.sites.reduce((a, s) => a + s.confirmed, 0), ign = o.sites.reduce((a, s) => a + s.ignored, 0);
+    $('summary').innerHTML = `<b>${o.sites.length}</b> roofs reviewed &middot; <span class="g">${conf} confirmed</span> &middot; <span class="r">${ign} ignored</span> &middot; <span class="m">${o.pending} detections waiting for review</span>`;
+    $('grid').innerHTML = o.sites.map(s => `<div class="site">${s.preview ? `<img src="/img/${s.id}.png" loading="lazy">` : '<div class="ph">picture after first run</div>'}
+      <div class="meta"><b>${s.id.slice(0, 8)}</b><br><span class="g">${s.confirmed} confirmed</span> &middot; <span class="r">${s.ignored} ignored</span></div></div>`).join('') || '<span class="note">No reviewed roofs yet: confirm or ignore some detections in the app.</span>';
+    $('ledger').innerHTML = o.installed.map(e => `<tr><td>${(e.at || '').replace('T', ' ')}</td><td>${e.roofs}</td><td>${e.found} of ${e.labels}</td><td>${e.base_found}</td><td class="note">${e.backup || ''}</td></tr>`).join('');
+    $('noledger').hidden = o.installed.length > 0;
+  } catch (e) { $('summary').textContent = 'Could not read the reviewed roofs: ' + e.message; }
+}
+
+async function poll() {
+  try {
+    const s = await api('/api/status');
+    busy = s.state === 'running';
+    $('state').textContent = s.state === 'running' ? (s.mode === 'dry' ? 'checking...' : 'training...') : s.state;
+    $('dry').disabled = $('train').disabled = busy;
+    const pct = s.epoch ? Math.round(100 * s.epoch.done / s.epoch.total) : (busy ? 3 : (s.state === 'done' ? 100 : 0));
+    $('bar').style.width = pct + '%';
+    $('result').textContent = s.result || (s.state === 'failed' ? 'The run stopped with an error - see the log below.' : '');
+    $('result').style.color = s.state === 'failed' || (s.result || '').includes('NOT installed') ? 'var(--bad)' : 'var(--ok)';
+    $('log').hidden = !s.lines.length; $('log').textContent = s.lines.join('\n'); $('log').scrollTop = 1e9;
+    if (!busy && s.state !== 'idle') loadOverview();
+  } catch (e) { $('state').textContent = 'page cannot reach its server'; }
+}
+
+async function start(mode) {
+  try { await api('/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode, epochs: +$('epochs').value }) }); poll(); }
+  catch (e) { $('result').textContent = e.message; $('result').style.color = 'var(--bad)'; }
+}
+$('dry').onclick = () => start('dry');
+$('train').onclick = () => { if (confirm('Train on all reviewed roofs now? The live model is backed up first.')) start('train'); };
+
+loadOverview(); poll(); setInterval(poll, 2500);
+</script>
+</body>
+</html>

@@ -6,7 +6,23 @@
 // issues a second network request beyond what ResultMap already fetches.
 
 import Link from "next/link";
-import { CircleHelp, Droplet, Fan, Flame, Plus, Radio, Wind, Zap } from "lucide-react";
+import {
+  ArrowUpDown,
+  Building2,
+  CircleHelp,
+  Droplet,
+  Fan,
+  Flame,
+  Minus,
+  PersonStanding,
+  Plug,
+  Plus,
+  Radio,
+  Sun,
+  TreePine,
+  Wind,
+  Zap,
+} from "lucide-react";
 import { Card } from "@/components/ui/Primitives";
 import { InfoTip } from "@/components/ui/InfoTip";
 import { useCheckObstacles } from "@/lib/query/hooks";
@@ -25,6 +41,14 @@ export const TYPE_META: Record<ObstacleType, { label: string; icon: typeof Dropl
   vent: { label: "Vent", icon: Wind },
   antenna: { label: "Antenna", icon: Radio },
   other: { label: "Other structure", icon: CircleHelp },
+  // Named by the customer in the "What type of obstacle is this?" picker.
+  staircase: { label: "Staircase / mumty", icon: Building2 },
+  lift_room: { label: "Lift room", icon: ArrowUpDown },
+  solar_water_heater: { label: "Solar water heater", icon: Sun },
+  parapet: { label: "Parapet structure", icon: Minus },
+  electrical_equipment: { label: "Electrical equipment", icon: Plug },
+  tree: { label: "Tree", icon: TreePine },
+  walkway: { label: "Walkway / maintenance access", icon: PersonStanding },
 };
 
 export function ObstructionsList({ checkId }: { checkId: string }) {

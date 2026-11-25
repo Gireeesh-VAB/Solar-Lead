@@ -26,6 +26,7 @@ def _isolate_from_local_env(monkeypatch):
     from solarfit.config import get_settings
 
     monkeypatch.setattr(get_settings(), "yolo_model_dir", "")
+    monkeypatch.setattr(get_settings(), "obstacle_service_url", "")
 
 
 def _cropped() -> CroppedImagery:
@@ -331,3 +332,20 @@ def test_scan_reports_only_what_apply_or_flag_kept(monkeypatch):
     )
 
     assert detect_site_obstacles_task("site-1") == {"status": "ok", "obstacles": []}
+
+
+def test_missing_models_are_not_remembered(tmp_path):
+    """A worker that looked before the .pt files were copied in must find them on the next call - "no models found" used to be cached for the
+    life of the process, which kept the detector off until a restart."""
+    from solarfit.providers import obstacle_detectors as od
+
+    folder = tmp_path / "obstacles"
+    folder.mkdir()
+    od._YOLO_ENSEMBLES.pop(str(folder), None)
+
+    assert od._yolo_ensemble_for(str(folder)) is None  # nothing there yet
+    (folder / "a.pt").write_bytes(b"x")  # models arrive (not loaded until first use, so a stub file is enough)
+    ensemble = od._yolo_ensemble_for(str(folder))
+    assert ensemble is not None and ensemble.n_models == 1
+    assert od._yolo_ensemble_for(str(folder)) is ensemble  # a successful load IS reused
+    od._YOLO_ENSEMBLES.pop(str(folder), None)

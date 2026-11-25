@@ -1153,3 +1153,60 @@ def test_absurd_ground_estimate_is_rejected_for_the_fallback():
     roof_z = scene.geometry["Roof"].vertices[:, 2]
     assert np.median(roof_z) == pytest.approx(params["fallback_building_height_m"], abs=0.01)
     assert roof_z.max() < params["max_building_height_m"]
+
+
+# --- obstacle height by type (config pack obstacle_heights_m) ----------------------------------------------------------------------------
+
+
+def _drawn_height(obstacle_type) -> float:
+    boundary = _boundary_covering_center_quarter()
+    obstacle = {**_applied_obstacle_near_center(), "type": obstacle_type}
+    with _patch_dsm_fetch(_make_synthetic_dsm()):
+        result = build_scene_geometry(boundary, obstacles=[obstacle])
+    assert result.status == "ok" and len(result.obstacles) == 1
+    z = [v[2] for v in result.obstacles[0].mesh.vertices]
+    return max(z) - min(z)
+
+
+@pytest.mark.parametrize(
+    "obstacle_type, expected_m",
+    [
+        ("water_tank", 2.0), ("staircase", 2.7), ("hvac_unit", 1.0), ("lift_room", 2.7), ("chimney", 3.0),
+        ("solar_water_heater", 1.6), ("parapet", 1.0), ("electrical_equipment", 1.8), ("existing_solar_panel", 1.0),
+        ("tree", 4.0), ("walkway", 0.15), ("other", 1.5),
+    ],
+)
+def test_an_obstacle_is_drawn_at_its_types_height(obstacle_type, expected_m):
+    assert _drawn_height(obstacle_type) == pytest.approx(expected_m, abs=1e-6)
+
+
+def test_an_obstacle_with_no_type_or_an_unknown_type_keeps_the_old_fixed_height():
+    assert _drawn_height(None) == pytest.approx(0.8, abs=1e-6)
+    assert _drawn_height("spaceship") == pytest.approx(0.8, abs=1e-6)
+
+
+def test_every_obstacle_type_has_a_height():
+    from typing import get_args
+
+    from solarfit.domain.assessment import ObstacleType
+    from solarfit.packs.config_pack import get_obstacle_heights_m
+
+    missing = set(get_args(ObstacleType)) - set(get_obstacle_heights_m())
+    assert not missing, f"obstacle types with no height in the config pack (they would silently fall back to the default): {sorted(missing)}"
+
+
+def test_the_pack_heights_match_the_numbers_the_type_picker_shows():
+    """The picker (frontend ObstacleTypeDialog.tsx) tells the customer "2 m high"; the 3D view must draw exactly that."""
+    import re
+    from pathlib import Path
+
+    from solarfit.packs.config_pack import get_obstacle_heights_m
+
+    picker = Path(__file__).resolve().parents[4] / "frontend" / "app" / "(customer)" / "check" / "[checkId]" / "obstacles" / "ObstacleTypeDialog.tsx"
+    if not picker.is_file():
+        pytest.skip("frontend not present next to the backend")
+    shown = re.findall(r'value:\s*"(\w+)",\s*label:\s*"[^"]*",\s*heightM:\s*([\d.]+)', picker.read_text(encoding="utf-8"))
+    assert len(shown) == 12, "could not read the picker's 12 types"
+    heights = get_obstacle_heights_m()
+    for value, height in shown:
+        assert heights[value] == pytest.approx(float(height)), f"{value}: picker says {height} m, pack says {heights[value]} m"

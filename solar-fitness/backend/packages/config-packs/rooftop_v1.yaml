@@ -90,6 +90,34 @@ min_obstacle_area_m2: 0.25
 # providers/vision.py.
 max_obstacle_area_fraction_of_boundary: 0.5
 
+# 3D VIEW ONLY - the height (m) an obstacle box is drawn at, by what the
+# customer called it. These are the "N m high" figures the "What type of
+# obstacle is this?" picker shows (the same list the VAB Design Studio uses):
+# typical real rooftop heights, NOT measurements of this customer's roof.
+# They change what the 3D view draws and nothing else - usable area and
+# panel placement use the obstacle's footprint. A test keeps this table equal
+# to the picker's numbers (frontend ObstacleTypeDialog.tsx).
+obstacle_heights_m:
+  water_tank: 2.0
+  staircase: 2.7
+  hvac_unit: 1.0
+  lift_room: 2.7
+  chimney: 3.0
+  vent: 3.0  # the picker's "Chimney / Vent" tile
+  solar_water_heater: 1.6
+  parapet: 1.0
+  electrical_equipment: 1.8
+  existing_solar_panel: 1.0
+  tree: 4.0
+  walkway: 0.15
+  antenna: 1.5  # not in the picker; drawn like "Other"
+  other: 1.5
+
+# Drawn height for an obstacle with no type (applied before types were stored)
+# or a type not in the table above: the one fixed height the 3D view used
+# before types set it.
+obstacle_height_default_m: 0.8
+
 # Phase 7 — YOLO obstacle-detection ensemble (providers/
 # yolo_obstacle_detector.py). Every model in settings.yolo_model_dir runs
 # on the roof crop; detections from different models that overlap by at
@@ -122,7 +150,12 @@ yolo_ensemble:
   crop_margin: 0.3
   # An outline with less than this share of its area on the roof is a
   # neighbouring building / tree / ground, not this roof's obstacle.
-  roof_overlap_min: 0.5
+  # Was 0.5. Measured on a real roof: large obstacles (a solar array, a stair
+  # block) that straddle the roof outline edge sit at ~40% on the roof and were
+  # thrown away at 0.5 even though the part on the roof is real. 0.3 keeps
+  # them (they are still clipped to the roof, and a pending candidate costs
+  # one click to ignore) while anything mostly off the roof is still dropped.
+  roof_overlap_min: 0.3
 
 # VIS-05/VIZ-05/OBS-07 — seconds to wait on a dispatched Celery task
 # (vision refinement, obstacle apply, panorama generation) before giving

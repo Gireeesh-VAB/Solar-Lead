@@ -188,6 +188,19 @@ def get_panorama_build_params(*, pack: str = "rooftop_v1") -> dict[str, float]:
     }
 
 
+def get_obstacle_heights_m(*, pack: str = "rooftop_v1") -> dict[str, float]:
+    """VIZ-01 (3D view only). The height an obstacle box is drawn at, by
+    obstacle type - typical rooftop heights, never a measurement. Does not
+    affect usable area or panel placement."""
+    return {str(k): float(v) for k, v in load_pack(pack)["obstacle_heights_m"].items()}
+
+
+def get_obstacle_default_height_m(*, pack: str = "rooftop_v1") -> float:
+    """VIZ-01 (3D view only). The drawn height for an obstacle whose type is
+    missing or not in obstacle_heights_m."""
+    return float(load_pack(pack)["obstacle_height_default_m"])
+
+
 def get_panel_packing_params(*, pack: str = "rooftop_v1") -> dict:
     """Panel-packing geometry — module size, gaps, walkways, tilt.
 

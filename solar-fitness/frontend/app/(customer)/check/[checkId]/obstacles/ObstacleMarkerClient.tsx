@@ -8,7 +8,9 @@
 // detection is shown as a numbered, dashed area on the map and as a row in
 // a review list — "#1 Detected obstacle · 84% confidence" — with
 //
-//   Confirm  apply it: the panels are then laid out clear of it
+//   Confirm  opens the "What type of obstacle is this?" pop-up (water tank, lift
+//            room, AC unit, …); picking one applies it with that type and closes
+//            the pop-up: the panels are then laid out clear of it
 //   Edit     correct its type and/or drag its outline to fit, then confirm
 //   Ignore   it isn't real: dismissed, and not offered again
 //
@@ -27,11 +29,13 @@ import {
   ArrowRight,
   CircleHelp,
   Loader2,
+  Pencil,
   RefreshCw,
   ScanSearch,
   Sparkles,
   Trash2,
 } from "lucide-react";
+import { FreehandDrawLayer } from "@/components/map/FreehandDrawLayer";
 import { MapView } from "@/components/map/MapView";
 import { RoofBoundaryEditor } from "@/components/map/RoofBoundaryEditor";
 import { Button } from "@/components/ui/Primitives";
@@ -40,37 +44,38 @@ import {
   useCheckObstacles,
   useConfirmCheckObstacle,
   useDetectCheckObstacles,
+  useDrawCheckObstacle,
   useIgnoreCheckObstacle,
   useMarkCheckObstacle,
   useUnmarkCheckObstacle,
 } from "@/lib/query/hooks";
 import type { Site } from "@/lib/types";
 import { TYPE_META } from "../result/ObstructionsList";
+import { OBSTACLE_CHOICES, ObstacleTypeDialog } from "./ObstacleTypeDialog";
 
-// The order the palette reads in — commonest rooftop objects first, and
-// "Other structure" last as the catch-all. The icons and labels are
-// TYPE_META's own, not a second set: a marked water tank has to look
-// exactly like a detected one on the result page.
-const PALETTE: ObstacleType[] = [
-  "water_tank",
-  "hvac_unit",
-  "chimney",
-  "existing_solar_panel",
-  "vent",
-  "antenna",
-  "other",
-];
+// The types the palette offers, in the order the "What type of obstacle is
+// this?" pop-up reads (commonest first, "Other" last), so tapping a marker,
+// editing a detection and the pop-up all name obstacles the same way. The
+// icons and labels are TYPE_META's own, not a second set: a marked water tank
+// has to look exactly like a detected one on the result page.
+const PALETTE: ObstacleType[] = OBSTACLE_CHOICES.map((choice) => choice.value);
 
 // The server's own source values (routers/app_checks.py): a customer's
 // placement, and a detection by the detector models. The customer may
 // remove both once they're on the roof.
 const CUSTOMER_MARKED = "customer_marked";
+// An obstacle the customer outlined themselves because the scan missed it.
+const CUSTOMER_DRAWN = "customer_drawn";
 const MODEL_DETECTED = "cv_detector";
-const REMOVABLE = new Set([CUSTOMER_MARKED, MODEL_DETECTED]);
+const REMOVABLE = new Set([CUSTOMER_MARKED, CUSTOMER_DRAWN, MODEL_DETECTED]);
 
 // Outline colour while a detection's corners are being dragged — the same
 // orange as its number badge.
 const EDIT_COLOR = "#ea580c";
+// Outline colour while the customer shapes an obstacle they are adding.
+const DRAW_COLOR = "#2563eb";
+
+type LatLng = { lat: number; lng: number };
 
 // One scan per roof per browser session: the scan is idempotent on the
 // server (nothing already reviewed is offered again), but it costs
@@ -110,7 +115,8 @@ function TypePalette({
   onChange,
   disabled,
 }: {
-  value: ObstacleType;
+  /** null = nothing pre-selected (the "What is it?" menu, where the tap itself is the choice). */
+  value: ObstacleType | null;
   onChange: (type: ObstacleType) => void;
   disabled?: boolean;
 }) {
@@ -149,11 +155,30 @@ export function ObstacleMarkerClient({ check }: { check: Site }) {
   const confirm = useConfirmCheckObstacle(check.id);
   const ignore = useIgnoreCheckObstacle(check.id);
   const mark = useMarkCheckObstacle(check.id);
+  const draw = useDrawCheckObstacle(check.id);
   const unmark = useUnmarkCheckObstacle(check.id);
 
   const [selected, setSelected] = useState<ObstacleType>("water_tank");
   const [error, setError] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
+
+  // The "What type of obstacle is this?" pop-up is open for this detection (the customer pressed Confirm) ...
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  // ... or for the obstacle they just drew (they pressed Save obstacle).
+  const [pickingDrawType, setPickingDrawType] = useState(false);
+
+  // "Draw an obstacle": the customer outlines something the scan missed,
+  // freehand (press, drag round it, lift). `penOn` = a drag draws; off = the
+  // map pans and zooms again. `drawInitial` is the cleaned-up outline of the
+  // finished stroke, which then gets corner handles; `drawOutline` follows it
+  // as the corners are dragged; `drawKey` rebuilds the editor for each new
+  // stroke; `addCorner` asks the editor for one more corner.
+  const [drawing, setDrawing] = useState(false);
+  const [penOn, setPenOn] = useState(true);
+  const [drawInitial, setDrawInitial] = useState<LatLng[] | null>(null);
+  const [drawOutline, setDrawOutline] = useState<LatLng[] | null>(null);
+  const [drawKey, setDrawKey] = useState(0);
+  const [addCorner, setAddCorner] = useState(0);
 
   // The detection being corrected, and its in-progress outline/type.
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -196,6 +221,7 @@ export function ObstacleMarkerClient({ check }: { check: Site }) {
     confirm.isPending ||
     ignore.isPending ||
     mark.isPending ||
+    draw.isPending ||
     unmark.isPending ||
     finishing;
 
@@ -204,13 +230,96 @@ export function ObstacleMarkerClient({ check }: { check: Site }) {
 
   const place = (lat: number, lng: number) => {
     if (scanning || editing) return;
+    // While drawing, a tap must not drop a marker: the outline is drawn freehand (FreehandDrawLayer).
+    if (drawing) return;
     setError(null);
     mark.mutate({ type: selected, lat, lng }, { onError: fail("Couldn't save that. Please try tapping again.") });
   };
 
-  const confirmOne = (obstacleId: string) => {
+  const startDrawing = () => {
     setError(null);
-    confirm.mutate({ obstacleId }, { onError: fail("Couldn't confirm that. Please try again.") });
+    setConfirmingId(null);
+    setDrawInitial(null);
+    setDrawOutline(null);
+    setPenOn(true);
+    setDrawing(true);
+  };
+
+  const stopDrawing = () => {
+    setDrawing(false);
+    setDrawInitial(null);
+    setDrawOutline(null);
+  };
+
+  // A finished stroke: show its outline with corner handles for fine-tuning.
+  const strokeDone = (outline: LatLng[]) => {
+    setError(null);
+    setDrawKey((n) => n + 1);
+    setDrawInitial(outline);
+    setDrawOutline(outline);
+  };
+
+  // Back to a blank map to draw it again.
+  const redraw = () => {
+    setError(null);
+    setDrawInitial(null);
+    setDrawOutline(null);
+    setPenOn(true);
+  };
+
+  // "Save obstacle" opens the type pop-up; the customer's pick of what it is saves the outline.
+  const openDrawTypePicker = () => {
+    if (!drawOutline || drawOutline.length < 3) return;
+    setError(null);
+    setPickingDrawType(true);
+  };
+
+  const saveDrawn = (type: ObstacleType) => {
+    if (!drawOutline || drawOutline.length < 3) return;
+    setError(null);
+    draw.mutate(
+      { type, polygon: drawOutline },
+      {
+        onSuccess: () => {
+          setPickingDrawType(false); // the pop-up goes away once a type is picked
+          stopDrawing();
+        },
+        onError: (err) => {
+          setPickingDrawType(false); // close it so the message below is seen
+          // The server's own words say what to fix (off the roof / corners crossing / too small).
+          fail("Couldn't save that outline. Check it sits on your roof and try again.")(err);
+        },
+      }
+    );
+  };
+
+  // Confirm opens the "What type of obstacle is this?" pop-up; the customer's pick of what it is applies the detection, with that type
+  // and the outline as detected. The pop-up closes on the pick, and the next obstacle's Confirm opens it again.
+  const openConfirmMenu = (obstacleId: string) => {
+    setError(null);
+    stopDrawing();
+    setEditingId(null);
+    setDraftOutline(null);
+    setConfirmingId(obstacleId);
+  };
+
+  const confirmAs = (obstacleId: string, type: ObstacleType) => {
+    setError(null);
+    confirm.mutate(
+      { obstacleId, edits: { type } },
+      {
+        onSuccess: () => setConfirmingId(null),
+        onError: (err) => {
+          setConfirmingId(null); // close it so the message below is seen
+          fail("Couldn't confirm that. Please try again.")(err);
+        },
+      }
+    );
+  };
+
+  const closeTypePicker = () => {
+    setConfirmingId(null);
+    setPickingDrawType(false);
   };
 
   const ignoreOne = (obstacleId: string) => {
@@ -227,6 +336,8 @@ export function ObstacleMarkerClient({ check }: { check: Site }) {
     const target = pending.find((p) => p.id === obstacleId);
     if (!target) return;
     setError(null);
+    stopDrawing();
+    setConfirmingId(null);
     setEditingId(obstacleId);
     setDraftOutline(target.polygon);
     setDraftType(target.type ?? "other");
@@ -311,9 +422,15 @@ export function ObstacleMarkerClient({ check }: { check: Site }) {
               ? "Scanning your roof…"
               : editing
                 ? "Drag the corners to fit the obstacle, then save."
-                : pending.length > 0
-                  ? "Dashed areas are waiting for your review."
-                  : "Missed something? Pick what it is below, then tap it on the map."
+                : drawing
+                  ? drawInitial
+                    ? "Drag the corners to fit the obstacle, then save."
+                    : penOn
+                      ? "Press and drag round the obstacle to draw it, then lift."
+                      : "Move or zoom the map, then switch back to Draw."
+                  : pending.length > 0
+                    ? "Dashed areas are waiting for your review."
+                    : "Missed something? Pick what it is below, then tap it on the map — or draw its outline."
           }
         >
           {editing && (
@@ -322,6 +439,24 @@ export function ObstacleMarkerClient({ check }: { check: Site }) {
               initial={editing.polygon}
               onChange={setDraftOutline}
               color={EDIT_COLOR}
+              simplify={false}
+            />
+          )}
+          {drawing && !drawInitial && (
+            <FreehandDrawLayer
+              active={penOn}
+              color={DRAW_COLOR}
+              onComplete={strokeDone}
+              onReject={setError}
+            />
+          )}
+          {drawing && drawInitial && (
+            <RoofBoundaryEditor
+              key={`draw-${drawKey}`}
+              initial={drawInitial}
+              onChange={setDrawOutline}
+              addPointSignal={addCorner}
+              color={DRAW_COLOR}
               simplify={false}
             />
           )}
@@ -398,7 +533,7 @@ export function ObstacleMarkerClient({ check }: { check: Site }) {
                     {!isEditing && (
                       <>
                         <Button
-                          onClick={() => confirmOne(obstacle.id)}
+                          onClick={() => openConfirmMenu(obstacle.id)}
                           disabled={busy}
                           className="px-6 font-semibold"
                         >
@@ -487,9 +622,11 @@ export function ObstacleMarkerClient({ check }: { check: Site }) {
               const origin =
                 obstacle.source === MODEL_DETECTED
                   ? "Confirmed by you"
-                  : obstacle.source === CUSTOMER_MARKED
-                    ? "Added by you"
-                    : "We spotted this one";
+                  : obstacle.source === CUSTOMER_DRAWN
+                    ? "Drawn by you"
+                    : obstacle.source === CUSTOMER_MARKED
+                      ? "Added by you"
+                      : "We spotted this one";
               return (
                 <li key={obstacle.id} className="flex items-center gap-2.5 text-sm">
                   {obstacle.number !== null && <NumberBadge n={obstacle.number} />}
@@ -520,13 +657,100 @@ export function ObstacleMarkerClient({ check }: { check: Site }) {
         )}
       </div>
 
-      {/* Add anything the scan missed. */}
-      <div>
-        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-faint">
-          Missed something? Pick what it is, then tap it on the map
-        </p>
-        <TypePalette value={selected} onChange={setSelected} disabled={busy || !!editing} />
-      </div>
+      {/* Add anything the scan missed: tap it (a quick marker), or draw its outline. */}
+      {!drawing && (
+        <div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-faint">
+            Missed something? Pick what it is, then tap it on the map
+          </p>
+          <TypePalette value={selected} onChange={setSelected} disabled={busy || !!editing} />
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <button
+              type="button"
+              onClick={startDrawing}
+              disabled={busy || !!editing || scanning}
+              className="inline-flex items-center gap-1.5 rounded-[var(--radius-app)] border border-line bg-paper px-3.5 py-2 text-sm font-medium text-ink transition-colors hover:border-blue hover:text-blue disabled:opacity-60"
+            >
+              <Pencil size={15} strokeWidth={1.75} aria-hidden="true" /> Draw an obstacle
+            </button>
+            <span className="text-xs text-ink-faint">
+              Draw round it freehand if the scan missed it or got its shape wrong.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Drawing an obstacle the scan missed. */}
+      {drawing && (
+        <div className="space-y-3 rounded-[var(--radius-app)] border border-line bg-paper p-3">
+          <p className="text-xs text-ink-soft">
+            {drawInitial
+              ? "Drag the blue corners on the map so the outline fits the obstacle (drag a midpoint to add a corner), then save it and choose what it is."
+              : "Press and drag round the obstacle with your finger or mouse, then lift. You can adjust the corners afterwards."}
+          </p>
+          {!drawInitial && (
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="What a drag does on the map">
+              {[
+                { on: true, label: "Draw" },
+                { on: false, label: "Move the map" },
+              ].map((mode) => (
+                <button
+                  key={mode.label}
+                  type="button"
+                  onClick={() => setPenOn(mode.on)}
+                  aria-pressed={penOn === mode.on}
+                  disabled={busy}
+                  className={
+                    "rounded-[var(--radius-app)] border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-60 " +
+                    (penOn === mode.on
+                      ? "border-blue bg-surface-2 text-blue"
+                      : "border-line bg-paper text-ink-soft hover:border-blue hover:text-ink")
+                  }
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {drawInitial && (
+            <>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  onClick={openDrawTypePicker}
+                  disabled={busy || !drawOutline || drawOutline.length < 3}
+                  className="px-5 font-semibold"
+                >
+                  Save obstacle
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setAddCorner((n) => n + 1)}
+                  disabled={busy}
+                  className="text-sm font-medium text-blue transition-opacity hover:opacity-80 disabled:opacity-60"
+                >
+                  Add a corner
+                </button>
+                <button
+                  type="button"
+                  onClick={redraw}
+                  disabled={busy}
+                  className="text-sm font-medium text-ink-soft hover:text-ink disabled:opacity-60"
+                >
+                  Draw it again
+                </button>
+              </div>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={stopDrawing}
+            disabled={busy}
+            className="text-sm font-medium text-ink-soft hover:text-ink disabled:opacity-60"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {error && (
         <p
@@ -538,7 +762,18 @@ export function ObstacleMarkerClient({ check }: { check: Site }) {
         </p>
       )}
 
-      <Button className="w-full" onClick={finish} disabled={busy || !!editing}>
+      {/* "What type of obstacle is this?" - opens on Confirm (and on Save obstacle for a drawn one); a pick answers it and closes it. */}
+      <ObstacleTypeDialog
+        open={confirmingId !== null || pickingDrawType}
+        saving={confirm.isPending || draw.isPending}
+        onPick={(type) => {
+          if (pickingDrawType) saveDrawn(type);
+          else if (confirmingId) confirmAs(confirmingId, type);
+        }}
+        onCancel={closeTypePicker}
+      />
+
+      <Button className="w-full" onClick={finish} disabled={busy || !!editing || drawing}>
         {finishing ? (
           <>
             <Loader2 size={16} className="animate-spin" aria-hidden="true" /> Starting your

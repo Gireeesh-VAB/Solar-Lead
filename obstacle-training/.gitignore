@@ -1,0 +1,7 @@
+data/
+work/
+runs.jsonl
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/

@@ -1180,7 +1180,15 @@ export type ObstacleType =
   | "existing_solar_panel"
   | "vent"
   | "antenna"
-  | "other";
+  | "other"
+  // Named by the customer in the "What type of obstacle is this?" picker.
+  | "staircase"
+  | "lift_room"
+  | "solar_water_heater"
+  | "parapet"
+  | "electrical_equipment"
+  | "tree"
+  | "walkway";
 
 export interface RoofObstacle {
   id: string;
@@ -1228,6 +1236,21 @@ export async function markCheckObstacle(
   input: { type: ObstacleType; lat: number; lng: number }
 ): Promise<RoofObstacle> {
   return apiFetch(`/app/checks/${checkId}/obstacles`, { method: "POST", body: input });
+}
+
+/** Adds an obstacle the detector MISSED, outlined by the customer: its type
+ *  and corners (at least three, in order round the shape). Unlike
+ *  markCheckObstacle's tap (a fixed-size square) the outline is the
+ *  customer's own, so the roof loses exactly that area. The server clips
+ *  anything past the roof edge and refuses a shape that is off the roof,
+ *  crossing over itself or too small (422, with a message to show). The
+ *  geometry is versioned at once; the numbers move once completeCheck()
+ *  re-runs the assessment. */
+export async function drawCheckObstacle(
+  checkId: string,
+  input: { type: ObstacleType; polygon: { lat: number; lng: number }[] }
+): Promise<RoofObstacle> {
+  return apiFetch(`/app/checks/${checkId}/obstacles/draw`, { method: "POST", body: input });
 }
 
 /** Scans the roof the customer just selected for obstacles (water tanks,

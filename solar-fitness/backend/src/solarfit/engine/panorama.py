@@ -105,7 +105,12 @@ from solarfit.domain.assessment import (
     SceneMesh,
     SceneObstacle,
 )
-from solarfit.packs.config_pack import get_panorama_build_params, get_panorama_grid_resolution
+from solarfit.packs.config_pack import (
+    get_obstacle_default_height_m,
+    get_obstacle_heights_m,
+    get_panorama_build_params,
+    get_panorama_grid_resolution,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -132,11 +137,13 @@ _PANEL_FRAME_COLOR = (176, 181, 190, 255)
 # roof's cooler sunshine tint.
 _OBSTACLE_COLOR = (196, 106, 64, 255)
 
-# Presentation default for an obstacle's extrusion height. OBS detection
+# An obstacle's extrusion height is NOT measured: OBS detection
 # (domain/assessment.py::Obstacle) carries a real bounding_polygon
-# footprint but no measured height — every obstacle box uses this same
-# constant rather than a per-obstacle guess dressed up as data.
-_OBSTACLE_HEIGHT_M = 0.8
+# footprint but no height. It is the typical rooftop height for what the
+# customer called it (config pack: obstacle_heights_m, the figures the
+# "What type of obstacle is this?" picker shows), or
+# obstacle_height_default_m when the obstacle has no type. Presentation
+# only - usable area and panel placement use the footprint.
 
 # Scene-prototype-only: caps the gap between the DSM-triangulated roof
 # outline and the real site boundary (see _roof_extension_mesh()) — a
@@ -1373,10 +1380,13 @@ def _obstacle_meshes(
 
     The footprint (x/y) is the obstacle's own real bounding_polygon,
     projected into the same local frame as everything else; only the
-    extrusion height is a configured default (_OBSTACLE_HEIGHT_M) — see
-    that constant's own comment for why. Skips (never raises on) any
-    obstacle whose polygon is missing, degenerate, or fails to extrude,
+    extrusion height is configured - the typical height for the obstacle's
+    type (obstacle_heights_m), or obstacle_height_default_m for an
+    untyped one - see the comment above for why. Skips (never raises on)
+    any obstacle whose polygon is missing, degenerate, or fails to extrude,
     same "degrade honestly" discipline as the rest of this module."""
+    heights = get_obstacle_heights_m()
+    default_height = get_obstacle_default_height_m()
     results: list[tuple[str, str | None, trimesh.Trimesh]] = []
     for obstacle in obstacles:
         obstacle_id = obstacle.get("id")
@@ -1396,7 +1406,7 @@ def _obstacle_meshes(
             continue
 
         try:
-            mesh = _extrude_polygon_manual(local_geom, height=_OBSTACLE_HEIGHT_M)
+            mesh = _extrude_polygon_manual(local_geom, height=heights.get(obstacle.get("type") or "", default_height))
         except Exception:
             logger.warning("Obstacle %s failed to extrude — skipped", obstacle_id, exc_info=True)
             continue

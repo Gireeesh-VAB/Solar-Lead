@@ -42,6 +42,13 @@ class Settings(BaseSettings):
     # Empty (the default) leaves the ensemble off.
     yolo_model_dir: str = ""
 
+    # URL of the stand-alone obstacle-service (the `obstacle-service` folder next to solar-fitness, e.g. http://127.0.0.1:8200). When set,
+    # obstacle detection is done by that service over HTTP (providers/remote_obstacle_detector.py) and yolo_model_dir is NOT used, so the
+    # worker loads no models. Empty (the default) keeps the in-process ensemble above - the one-line rollback.
+    obstacle_service_url: str = ""
+    # One scan = a satellite download + three models on CPU; the first call after the service starts also loads the models.
+    obstacle_service_timeout_s: float = 90.0
+
     # USN-02/03 — Google Cloud Vision (TEXT_DETECTION) service-account
     # credentials, distinct from the API-key-style GCP settings above.
     google_application_credentials_path: str = ""

@@ -31,7 +31,6 @@ forbids. This Protocol is for detectors that GENUINELY run standalone.
 """
 
 import logging
-from functools import lru_cache
 from pathlib import Path
 from typing import Protocol
 
@@ -109,19 +108,31 @@ def clip_polygon_to_boundary(geojson: dict, boundary_geom) -> dict | None:
     return mapping(clipped)
 
 
-@lru_cache(maxsize=4)
+#: One ensemble per model folder, so the weights are loaded once per worker
+#: process rather than once per assessment. Only a SUCCESSFUL load is kept:
+#: this used to be an lru_cache, which also remembered "no models found"
+#: (None) for the life of the process, so a worker started before the .pt
+#: files were copied in (or with a folder that did not resolve yet) kept the
+#: detector switched off until it was restarted.
+_YOLO_ENSEMBLES: dict[str, ObstacleDetector] = {}
+
+
 def _yolo_ensemble_for(model_dir: str) -> ObstacleDetector | None:
-    """One cached ensemble per model folder, so the weights are loaded
-    once per worker process rather than once per assessment."""
     from solarfit.providers.yolo_obstacle_detector import YoloEnsembleDetector
 
+    cached = _YOLO_ENSEMBLES.get(model_dir)
+    if cached is not None:
+        return cached
     folder = Path(model_dir)
     paths = sorted(folder.glob("*.pt")) if folder.is_dir() else []
     if not paths:
+        # Not cached: the next call looks again, so copying the models in is enough.
         logger.warning("yolo_model_dir %r has no *.pt models — YOLO ensemble disabled", model_dir)
         return None
     logger.info("YOLO obstacle ensemble: %d models from %s", len(paths), model_dir)
-    return YoloEnsembleDetector(paths)
+    ensemble = YoloEnsembleDetector(paths)
+    _YOLO_ENSEMBLES[model_dir] = ensemble
+    return ensemble
 
 
 def get_configured_detectors() -> list[ObstacleDetector]:
@@ -131,7 +142,17 @@ def get_configured_detectors() -> list[ObstacleDetector]:
     every caller of detect_obstacles() picks it up with no other
     changes."""
     detectors: list[ObstacleDetector] = []
-    model_dir = get_settings().yolo_model_dir.strip()
+    settings = get_settings()
+
+    # The stand-alone obstacle-service takes over when its URL is set: nothing is loaded in this process (no PyTorch, no weights).
+    service_url = settings.obstacle_service_url.strip()
+    if service_url:
+        from solarfit.providers.remote_obstacle_detector import RemoteObstacleDetector
+
+        detectors.append(RemoteObstacleDetector(service_url, settings.obstacle_service_timeout_s))
+        return detectors
+
+    model_dir = settings.yolo_model_dir.strip()
     if model_dir:
         # A relative path means "relative to the backend folder", not to
         # whatever directory the worker happened to be started from.

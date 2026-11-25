@@ -281,6 +281,13 @@ class YoloEnsembleDetector:
                 max_zoom=int(params.get("max_zoom", 19)),
                 crop_margin=float(params.get("crop_margin", 0.3)),
             )
+        if frame is None and api_key and boundary:
+            # Said out loud: the fallback picture (Solar API raster) is not what the
+            # models were trained on and gives weak, partial detections.
+            logger.warning(
+                "YOLO ensemble: Static Maps satellite frame unavailable - falling back to the Solar API crop "
+                "(expect weaker detections). Is 'Maps Static API' enabled for the key?"
+            )
         cropped = frame or cropped
         if cropped is None:
             # The caller skipped the Solar download because we said we would

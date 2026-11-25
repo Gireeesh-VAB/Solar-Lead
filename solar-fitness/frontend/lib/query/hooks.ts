@@ -642,6 +642,21 @@ export function useMarkCheckObstacle(checkId: string) {
   });
 }
 
+/** Add an obstacle the customer outlined because the detector missed it.
+ *  Same refresh as marking one: the write is applied at once and versions
+ *  the geometry, so the obstacles list and the site both refetch. */
+export function useDrawCheckObstacle(checkId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { type: api.ObstacleType; polygon: { lat: number; lng: number }[] }) =>
+      api.drawCheckObstacle(checkId, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["check", checkId, "obstacles"] });
+      qc.invalidateQueries({ queryKey: ["check", checkId] });
+    },
+  });
+}
+
 /** Scan the roof the customer just selected for obstacles. The detections
  *  come back as `pending` (nothing is applied until confirmed) and replace
  *  the cached obstacles query directly — no extra round trip. */

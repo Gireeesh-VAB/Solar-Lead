@@ -132,6 +132,7 @@ def test_undecodable_imagery_degrades_to_no_obstacles(tmp_path):
 
 def test_no_detectors_are_configured_without_a_model_dir(monkeypatch):
     monkeypatch.setattr(obstacle_detectors.get_settings(), "yolo_model_dir", "")
+    monkeypatch.setattr(obstacle_detectors.get_settings(), "obstacle_service_url", "")
 
     assert obstacle_detectors.get_configured_detectors() == []
 
@@ -139,23 +140,25 @@ def test_no_detectors_are_configured_without_a_model_dir(monkeypatch):
 def test_ensemble_is_registered_when_the_model_dir_has_weights(monkeypatch, tmp_path):
     for name in ("a.pt", "b.pt", "c.pt"):
         (tmp_path / name).write_bytes(b"x")
-    obstacle_detectors._yolo_ensemble_for.cache_clear()
+    obstacle_detectors._YOLO_ENSEMBLES.clear()
     monkeypatch.setattr(obstacle_detectors.get_settings(), "yolo_model_dir", str(tmp_path))
+    monkeypatch.setattr(obstacle_detectors.get_settings(), "obstacle_service_url", "")
 
     detectors = obstacle_detectors.get_configured_detectors()
 
     assert len(detectors) == 1
     assert detectors[0].name == "yolo_ensemble"
     assert detectors[0].n_models == 3
-    obstacle_detectors._yolo_ensemble_for.cache_clear()
+    obstacle_detectors._YOLO_ENSEMBLES.clear()
 
 
 def test_an_empty_model_dir_disables_the_ensemble(monkeypatch, tmp_path):
-    obstacle_detectors._yolo_ensemble_for.cache_clear()
+    obstacle_detectors._YOLO_ENSEMBLES.clear()
     monkeypatch.setattr(obstacle_detectors.get_settings(), "yolo_model_dir", str(tmp_path))
+    monkeypatch.setattr(obstacle_detectors.get_settings(), "obstacle_service_url", "")
 
     assert obstacle_detectors.get_configured_detectors() == []
-    obstacle_detectors._yolo_ensemble_for.cache_clear()
+    obstacle_detectors._YOLO_ENSEMBLES.clear()
 
 
 def test_obstacle_poking_past_the_roof_edge_is_clipped_to_the_roof():
@@ -192,10 +195,11 @@ def test_no_boundary_leaves_the_obstacle_untouched():
 def test_a_relative_model_dir_resolves_against_the_backend_folder(monkeypatch):
     from solarfit.config import _BACKEND_DIR
 
-    obstacle_detectors._yolo_ensemble_for.cache_clear()
+    obstacle_detectors._YOLO_ENSEMBLES.clear()
     seen = []
     monkeypatch.setattr(obstacle_detectors, "_yolo_ensemble_for", lambda d: seen.append(d))
     monkeypatch.setattr(obstacle_detectors.get_settings(), "yolo_model_dir", "models/obstacles")
+    monkeypatch.setattr(obstacle_detectors.get_settings(), "obstacle_service_url", "")
 
     obstacle_detectors.get_configured_detectors()
 

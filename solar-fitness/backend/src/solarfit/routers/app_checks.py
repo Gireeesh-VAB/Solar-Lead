@@ -659,7 +659,9 @@ class RoofObstacleOut(_CamelModel):
     id: str
     polygon: list[PanelCornerOut]
     # domain/assessment.py::ObstacleType (water_tank/hvac_unit/chimney/
-    # existing_solar_panel/vent/antenna/other) + its real detection
+    # existing_solar_panel/vent/antenna/other, plus the customer-chosen
+    # staircase/lift_room/solar_water_heater/parapet/electrical_equipment/
+    # tree/walkway) + its real detection
     # confidence. Both None for an obstacle applied before this field
     # existed — never guessed for an older row.
     type: str | None = None
@@ -715,7 +717,9 @@ def get_check_obstacles(
 
     if not found and not pending:
         settings = get_settings()
-        vision_configured = bool(settings.openai_api_key) or bool(settings.yolo_model_dir.strip())
+        vision_configured = (
+            bool(settings.openai_api_key) or bool(settings.yolo_model_dir.strip()) or bool(settings.obstacle_service_url.strip())
+        )
         return RoofObstaclesOut(
             detected=vision_configured,
             reason=(
@@ -846,12 +850,14 @@ def _obstacles_out(
 _CUSTOMER_OBSTACLE_SIDE_M = 1.5
 
 _CUSTOMER_OBSTACLE_SOURCE = "customer_marked"
+# An obstacle the customer OUTLINED themselves because the models missed it.
+_CUSTOMER_DRAWN_SOURCE = "customer_drawn"
 
 # What a customer may take back off their own roof: something they placed
-# themselves, or a model detection they can see is wrong (a false
+# or drew themselves, or a model detection they can see is wrong (a false
 # positive). Removal is a new SITE-05 version, so it stays in the
 # history, and a re-scan will not bring it back.
-_CUSTOMER_REMOVABLE_SOURCES = {_CUSTOMER_OBSTACLE_SOURCE, "cv_detector"}
+_CUSTOMER_REMOVABLE_SOURCES = {_CUSTOMER_OBSTACLE_SOURCE, _CUSTOMER_DRAWN_SOURCE, "cv_detector"}
 
 
 def _square_around(lat: float, lng: float, side_m: float) -> dict:
@@ -881,6 +887,13 @@ class MarkObstacleRequest(_CamelModel):
     type: ObstacleType
     lat: float = Field(ge=-90, le=90)
     lng: float = Field(ge=-180, le=180)
+
+
+class DrawObstacleRequest(_CamelModel):
+    """An obstacle the models missed, outlined by the customer: what it is, and its corners (at least three, in order round the shape)."""
+
+    type: ObstacleType
+    polygon: list[PanelCornerOut] = Field(min_length=3, max_length=64)
 
 
 def _union_exclusions(site, polygon: dict) -> dict:
@@ -973,6 +986,102 @@ def mark_check_obstacle(
         type=obstacle.type,
         confidence=None,
         source=_CUSTOMER_OBSTACLE_SOURCE,
+    )
+
+
+@router.post(
+    "/checks/{check_id}/obstacles/draw",
+    response_model=RoofObstacleOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def draw_check_obstacle(
+    check_id: str,
+    payload: DrawObstacleRequest,
+    session: Annotated[Session, Depends(get_session)],
+    user: Annotated[AuthenticatedUser, Depends(current_user)],
+) -> RoofObstacleOut:
+    """The homeowner outlining an obstacle the models MISSED.
+
+    A tap (mark_check_obstacle) can only say "something is here" and becomes
+    a fixed-size square. This takes the customer's own outline, so the roof
+    loses exactly the area the obstacle covers - and the outline is a real
+    label: it is also stored as a CONFIRMED candidate (numbered like the
+    confirmed detections, never re-offered by a re-scan), which is how the
+    training pipeline learns what the models missed.
+
+    The outline gets the same treatment as an edited detection: the part
+    sticking out past the roof edge is clipped off, and what is left must
+    pass OBS-03 (valid shape, inside the roof, plausible size) or the
+    customer is told to redraw it. Applied at once and versioned (SITE-05),
+    like a marked obstacle; the caller re-runs the assessment.
+    """
+    site, _row = _owned_check_or_404(session, check_id, _individual_owner_org(user))
+    if site.boundary is None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This roof has no outline yet, so there is nothing to draw an obstacle on.",
+        )
+
+    redraw = (
+        "That outline isn't on your roof, or its shape isn't valid (corners crossing over, or too small). "
+        "Draw it again on the roof itself."
+    )
+    ring = [[p.lng, p.lat] for p in payload.polygon]
+    drawn = {"type": "Polygon", "coordinates": [ring + [ring[0]]]}
+    if not shape(drawn).is_valid:
+        # Corners crossing over (a bow-tie). The clip below repairs shapes with buffer(0), which would quietly keep only part of it -
+        # a different shape from the one the customer drew - so refuse it instead.
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, redraw)
+    try:
+        roof = shape(site.boundary)
+        if not roof.is_valid:
+            roof = roof.buffer(0)
+    except Exception:  # noqa: BLE001 - a bad stored boundary just skips the clip; validation below still applies
+        roof = None
+    clipped = clip_polygon_to_boundary(drawn, roof) if roof is not None else drawn
+
+    obstacle = Obstacle(
+        type=payload.type,
+        bounding_polygon=clipped or drawn,
+        # Only to satisfy the frozen domain contract while OBS-03 validates;
+        # the value persisted below is None (a customer's own outline is a
+        # statement, not a probability).
+        confidence=1.0,
+        source=_CUSTOMER_DRAWN_SOURCE,
+        applied=True,
+    )
+    if clipped is None or not validate_obstacle_polygon(obstacle, site.boundary):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, redraw)
+
+    repo.new_geometry_version(
+        session,
+        check_id,
+        exclusions=_union_exclusions(site, obstacle.bounding_polygon),
+        actor=user.email,
+        source="customer_drawn_obstacle",
+        applied_obstacle_ids=[obstacle.id],
+        applied_obstacle_polygons={
+            obstacle.id: {
+                "polygon": obstacle.bounding_polygon,
+                "type": obstacle.type,
+                "confidence": None,
+                "source": _CUSTOMER_DRAWN_SOURCE,
+            }
+        },
+    )
+    # Also a confirmed candidate under the same id: it gets a stable number, a re-scan won't offer the
+    # same object again, and the training pipeline reads confirmed candidates as outlines to learn.
+    candidate = candidates_repo.add_candidates(session, check_id, [obstacle])[0]
+    candidates_repo.mark(session, candidate, candidates_repo.STATUS_CONFIRMED)
+
+    ring_out = obstacle.bounding_polygon["coordinates"][0]
+    return RoofObstacleOut(
+        id=obstacle.id,
+        polygon=[PanelCornerOut(lat=lat, lng=lng) for lng, lat in ring_out],
+        type=obstacle.type,
+        confidence=None,
+        source=_CUSTOMER_DRAWN_SOURCE,
+        number=candidate.ordinal,
     )
 
 

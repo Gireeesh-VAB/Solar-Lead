@@ -33,6 +33,16 @@ ObstacleType = Literal[
     "vent",
     "antenna",
     "other",
+    # What a customer can name when they confirm / draw an obstacle (the "What type of
+    # obstacle is this?" picker, same list as the VAB Design Studio). The vision-LLM and
+    # the models only ever produce the types above; these come from people.
+    "staircase",  # staircase head room / mumty
+    "lift_room",
+    "solar_water_heater",
+    "parapet",  # parapet structure
+    "electrical_equipment",
+    "tree",
+    "walkway",  # walkway / maintenance access
 ]
 
 
@@ -43,7 +53,12 @@ ObstacleType = Literal[
 # apply/reject are generic over `source`; nothing downstream branches
 # on it, it exists so the data model can tell a human's statement apart
 # from a machine's inference.
-ObstacleSource = Literal["vision_llm", "cv_detector", "customer_marked"]
+#
+# "customer_drawn" is the same kind of statement with a real outline: the
+# homeowner traced an obstacle the models MISSED (routers/app_checks.py::
+# draw_check_obstacle). Unlike a "customer_marked" tap (a fixed-size square)
+# its shape is the customer's own, so it is a trustworthy training label.
+ObstacleSource = Literal["vision_llm", "cv_detector", "customer_marked", "customer_drawn"]
 
 
 class Obstacle(BaseModel):
@@ -119,9 +134,10 @@ class SceneObstacle(BaseModel):
     """One OBS-04 applied obstacle, extruded to a box for the scene
     prototype. `mesh`'s footprint (x/y) is the obstacle's own real
     bounding_polygon — only its extrusion height is a configured
-    presentation default (see panorama.py::_OBSTACLE_HEIGHT_M): OBS
-    detection carries no measured height, and inventing one per-obstacle
-    would misrepresent it as real data."""
+    presentation figure: the typical rooftop height for its type (config
+    pack obstacle_heights_m), or obstacle_height_default_m when it has no
+    type. OBS detection carries no measured height, so the number is a
+    stand-in for the type, never data about this roof."""
 
     id: str
     type: str | None = None

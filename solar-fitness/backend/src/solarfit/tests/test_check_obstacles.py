@@ -86,7 +86,7 @@ def test_another_tenants_check_is_404(client, auth, check_id, make_auth_header):
 def test_no_detector_configured_is_reported_not_silently_empty(client, auth, check_id):
     """The regression this guards: an empty list rendered as a clear roof
     when detection has never run."""
-    settings = MagicMock(openai_api_key="", yolo_model_dir="")
+    settings = MagicMock(openai_api_key="", yolo_model_dir="", obstacle_service_url="")
     with (
         patch.object(sites_repo, "applied_obstacles", return_value=[]),
         patch("solarfit.routers.app_checks.get_settings", return_value=settings),
@@ -101,7 +101,7 @@ def test_no_detector_configured_is_reported_not_silently_empty(client, auth, che
 def test_detector_configured_but_clear_roof_is_detected_true(client, auth, check_id):
     """The other half of the same distinction: a detector that ran and
     found nothing genuinely means a clear roof."""
-    settings = MagicMock(openai_api_key="sk-real-key", yolo_model_dir="")
+    settings = MagicMock(openai_api_key="sk-real-key", yolo_model_dir="", obstacle_service_url="")
     with (
         patch.object(sites_repo, "applied_obstacles", return_value=[]),
         patch("solarfit.routers.app_checks.get_settings", return_value=settings),
@@ -267,7 +267,7 @@ def test_removing_a_marked_obstacle_takes_it_back_out(client, auth, roofed_check
     )
     assert deleted.status_code == 204
 
-    settings = MagicMock(openai_api_key="sk-real-key", yolo_model_dir="")
+    settings = MagicMock(openai_api_key="sk-real-key", yolo_model_dir="", obstacle_service_url="")
     with patch("solarfit.routers.app_checks.get_settings", return_value=settings):
         body = client.get(f"/app/checks/{roofed_check_id}/obstacles", headers=auth).json()
     assert body["obstacles"] == []
@@ -460,7 +460,7 @@ def test_a_removed_detection_is_still_in_the_sites_history(roofed_check_id, db_s
 def test_a_yolo_model_folder_alone_counts_as_detection_being_configured(client, auth, check_id):
     """Detection no longer depends on an OpenAI key: the YOLO ensemble is
     enough, and a clear roof it scanned is genuinely clear."""
-    settings = MagicMock(openai_api_key="", yolo_model_dir="models/obstacles")
+    settings = MagicMock(openai_api_key="", yolo_model_dir="models/obstacles", obstacle_service_url="")
     with (
         patch.object(sites_repo, "applied_obstacles", return_value=[]),
         patch("solarfit.routers.app_checks.get_settings", return_value=settings),
@@ -649,10 +649,182 @@ def test_pending_detections_alone_make_detection_count_as_having_run(client, aut
     """A roof whose only finding is a pending detection must not read as
     "no detector configured / nothing looked"."""
     _seed_candidate(db_session, roofed_check_id)
-    settings = MagicMock(openai_api_key="", yolo_model_dir="")
+    settings = MagicMock(openai_api_key="", yolo_model_dir="", obstacle_service_url="")
 
     with patch("solarfit.routers.app_checks.get_settings", return_value=settings):
         body = _get(client, auth, roofed_check_id)
 
     assert body["detected"] is True
     assert len(body["pending"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Drawing an obstacle the models MISSED: POST /app/checks/{id}/obstacles/draw
+# ---------------------------------------------------------------------------
+
+# A ~3.3 m square well inside ROOF, as the customer would drag it out on the map.
+DRAWN = [
+    {"lat": 17.38497, "lng": 78.48664},
+    {"lat": 17.38497, "lng": 78.48667},
+    {"lat": 17.38500, "lng": 78.48667},
+    {"lat": 17.38500, "lng": 78.48664},
+]
+
+
+def _draw(client, auth, check_id, polygon=DRAWN, type_="water_tank"):
+    return client.post(
+        f"/app/checks/{check_id}/obstacles/draw", json={"type": type_, "polygon": polygon}, headers=auth
+    )
+
+
+def test_drawing_an_obstacle_requires_auth(client, roofed_check_id):
+    response = client.post(
+        f"/app/checks/{roofed_check_id}/obstacles/draw", json={"type": "vent", "polygon": DRAWN}
+    )
+    assert response.status_code == 401
+
+
+def test_a_drawn_obstacle_keeps_the_customers_own_outline_and_is_numbered(client, auth, roofed_check_id):
+    response = _draw(client, auth, roofed_check_id)
+
+    assert response.status_code == 201, response.text
+    drawn = response.json()
+    assert drawn["type"] == "water_tank" and drawn["source"] == "customer_drawn"
+    assert drawn["confidence"] is None  # a customer's own outline is a statement, not a probability
+    assert drawn["number"] == 1
+    assert len(drawn["polygon"]) == 5  # the four corners, closed
+    lats = [p["lat"] for p in drawn["polygon"]]
+    assert max(lats) - min(lats) == pytest.approx(0.00003, abs=1e-7)  # NOT a fixed 1.5 m square
+
+    listed = _get(client, auth, roofed_check_id)["obstacles"]
+    assert [(o["id"], o["number"], o["source"]) for o in listed] == [(drawn["id"], 1, "customer_drawn")]
+
+
+def test_a_drawn_obstacle_really_shrinks_the_usable_area(client, auth, roofed_check_id, db_session):
+    before = compute_usable_area_m2(sites_repo.get(db_session, roofed_check_id))
+    _draw(client, auth, roofed_check_id)
+    after = compute_usable_area_m2(sites_repo.get(db_session, roofed_check_id))
+
+    # ~3.3 m x 3.3 m = ~11 m2, plus the pack's setback buffer around it.
+    assert after < before and (before - after) > 9
+
+
+def test_a_drawn_obstacle_is_stored_as_a_confirmed_candidate_for_training(
+    client, auth, roofed_check_id, db_session
+):
+    obstacle_id = _draw(client, auth, roofed_check_id).json()["id"]
+
+    confirmed = candidates_repo.list_for_site(db_session, roofed_check_id, status=candidates_repo.STATUS_CONFIRMED)
+    assert [(str(c.id), c.source, c.type) for c in confirmed] == [(obstacle_id, "customer_drawn", "water_tank")]
+
+
+def test_numbering_continues_after_detections(client, auth, roofed_check_id, db_session):
+    _seed_candidate(db_session, roofed_check_id)  # a detection is #1 ...
+    drawn = _draw(client, auth, roofed_check_id).json()
+    assert drawn["number"] == 2  # ... so the drawn one is #2
+
+
+def test_an_outline_off_the_roof_is_refused(client, auth, roofed_check_id):
+    elsewhere = [
+        {"lat": 17.4000, "lng": 78.5000},
+        {"lat": 17.4000, "lng": 78.5002},
+        {"lat": 17.4002, "lng": 78.5002},
+    ]
+    assert _draw(client, auth, roofed_check_id, elsewhere).status_code == 422
+
+
+def test_an_outline_sticking_out_past_the_roof_edge_is_clipped_to_the_roof(client, auth, roofed_check_id):
+    straddling = [  # half of it past the roof's east edge (lng 78.4868)
+        {"lat": 17.38497, "lng": 78.48677},
+        {"lat": 17.38497, "lng": 78.48683},
+        {"lat": 17.38500, "lng": 78.48683},
+        {"lat": 17.38500, "lng": 78.48677},
+    ]
+    response = _draw(client, auth, roofed_check_id, straddling)
+
+    assert response.status_code == 201, response.text
+    assert max(p["lng"] for p in response.json()["polygon"]) <= 78.4868 + 1e-9
+
+
+def test_crossing_or_tiny_outlines_are_refused(client, auth, roofed_check_id):
+    bow_tie = [  # corners in the wrong order: the edges cross
+        {"lat": 17.38497, "lng": 78.48664},
+        {"lat": 17.38500, "lng": 78.48667},
+        {"lat": 17.38497, "lng": 78.48667},
+        {"lat": 17.38500, "lng": 78.48664},
+    ]
+    speck = [{"lat": 17.38497, "lng": 78.48664}, {"lat": 17.384971, "lng": 78.48664}, {"lat": 17.384971, "lng": 78.486641}]
+    assert _draw(client, auth, roofed_check_id, bow_tie).status_code == 422
+    assert _draw(client, auth, roofed_check_id, speck).status_code == 422
+
+
+def test_fewer_than_three_corners_is_refused(client, auth, roofed_check_id):
+    assert _draw(client, auth, roofed_check_id, DRAWN[:2]).status_code == 422
+
+
+def test_drawing_on_a_roof_with_no_outline_is_a_409(client, auth, check_id):
+    assert _draw(client, auth, check_id).status_code == 409
+
+
+def test_a_refused_outline_leaves_nothing_behind(client, auth, roofed_check_id, db_session):
+    before = sites_repo.get(db_session, roofed_check_id).exclusions
+    _draw(client, auth, roofed_check_id, [{"lat": 17.4, "lng": 78.5}, {"lat": 17.4, "lng": 78.5002}, {"lat": 17.4002, "lng": 78.5002}])
+
+    assert sites_repo.get(db_session, roofed_check_id).exclusions == before
+    assert candidates_repo.list_for_site(db_session, roofed_check_id) == []
+
+
+def test_a_customer_can_remove_an_obstacle_they_drew(client, auth, roofed_check_id, db_session):
+    obstacle_id = _draw(client, auth, roofed_check_id).json()["id"]
+
+    assert client.delete(f"/app/checks/{roofed_check_id}/obstacles/{obstacle_id}", headers=auth).status_code == 204
+
+    settings = MagicMock(openai_api_key="sk-real-key", yolo_model_dir="", obstacle_service_url="")
+    with patch("solarfit.routers.app_checks.get_settings", return_value=settings):
+        assert _get(client, auth, roofed_check_id)["obstacles"] == []
+    # Taken back = as good as ignored: the candidate is kept (a re-scan won't resurface it) and training reads it as "not an obstacle".
+    candidate = candidates_repo.list_for_site(db_session, roofed_check_id)[0]
+    assert candidate.status == candidates_repo.STATUS_IGNORED
+
+
+# ---------------------------------------------------------------------------
+# The "What type of obstacle is this?" picker: every type it offers must be accepted.
+# ---------------------------------------------------------------------------
+
+PICKER_TYPES = [
+    "water_tank", "staircase", "hvac_unit", "lift_room", "chimney", "solar_water_heater",
+    "parapet", "electrical_equipment", "existing_solar_panel", "tree", "walkway", "other",
+]
+
+
+@pytest.mark.parametrize("obstacle_type", PICKER_TYPES)
+def test_confirming_a_detection_accepts_every_type_in_the_picker(
+    client, auth, roofed_check_id, db_session, obstacle_type
+):
+    oid = _seed_candidate(db_session, roofed_check_id)
+
+    response = client.post(
+        f"/app/checks/{roofed_check_id}/obstacles/{oid}/confirm", json={"type": obstacle_type}, headers=auth
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["type"] == obstacle_type
+    assert [o["type"] for o in _get(client, auth, roofed_check_id)["obstacles"]] == [obstacle_type]
+
+
+@pytest.mark.parametrize("obstacle_type", PICKER_TYPES)
+def test_drawing_accepts_every_type_in_the_picker(client, auth, roofed_check_id, obstacle_type):
+    response = _draw(client, auth, roofed_check_id, type_=obstacle_type)
+
+    assert response.status_code == 201, response.text
+    assert response.json()["type"] == obstacle_type
+
+
+def test_an_unknown_obstacle_type_is_refused(client, auth, roofed_check_id, db_session):
+    oid = _seed_candidate(db_session, roofed_check_id)
+    confirm = client.post(
+        f"/app/checks/{roofed_check_id}/obstacles/{oid}/confirm", json={"type": "spaceship"}, headers=auth
+    )
+    assert confirm.status_code == 422
+    assert _draw(client, auth, roofed_check_id, type_="spaceship").status_code == 422
+    assert [o["id"] for o in _get(client, auth, roofed_check_id)["pending"]] == [oid]  # still waiting for a valid answer
