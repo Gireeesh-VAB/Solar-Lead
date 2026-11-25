@@ -12,7 +12,13 @@ it (FIT-06, §17).
           INSUFFICIENT_DATA | NOT_SUITABLE.
   FIT-03  INSUFFICIENT_DATA takes precedence over any computed score.
   FIT-04  Confidence from geometry source, imagery recency, constraint
-          completeness, gate resolution, calibration state.
+          completeness, gate resolution, calibration state. Geometry
+          confidence is area-weighted across every real per-plane roof
+          segment when Building Insights segment data is available (see
+          _aggregate_geometry_confidence()), not just one primary/first
+          roof — falls back to the site's own single geometry_confidence
+          scalar otherwise. This is entirely separate from FIT-01's own
+          `geometry_quality` score component, which is untouched.
   FIT-05  Human-readable reason list naming the binding constraint.
   FIT-06  Verdict/capacity always ship with confidence + binding
           constraint; this stays authoritative over the ML score.
@@ -48,21 +54,26 @@ see domain/site.py's ShadingEstimate).
 """
 
 from datetime import UTC, datetime
+from itertools import pairwise
 
-from solarfit.domain.assessment import FitnessResult, FitnessVerdict
+from solarfit.domain.assessment import Condition, FitnessResult, FitnessVerdict
 from solarfit.domain.constraint import CapacityResult, Gate
 from solarfit.domain.site import Site
 from solarfit.packs.config_pack import (
     get_fitness_capacity_adequacy_target_multiple,
     get_fitness_confidence_weights,
     get_fitness_headroom_normalization_kwp,
+    get_fitness_high_shading_threshold,
+    get_fitness_imagery_recency_floor_score,
     get_fitness_imagery_recency_full_score_days,
+    get_fitness_imagery_recency_intermediate_points,
     get_fitness_imagery_recency_zero_score_days,
     get_fitness_verdict_thresholds,
     get_fitness_weights,
     get_minimum_viable_kwp,
     pack_version,
 )
+from solarfit.providers.validation import geometry_confidence as _segment_geometry_confidence
 
 STANDARD_LIMITATIONS = (
     "This is a pre-feasibility estimate based on remote geometry, modelled "
@@ -79,24 +90,44 @@ def score_fitness(site: Site, capacity: CapacityResult, params: dict | None = No
       gates: list[Gate]              — CON-03 gates evaluated for this site
       generation: dict                — engine/generation.py's return value
       calibration_state: float | None — CAL-05, 0..1, None = no data yet
+      roof_segments: dict | None      — routers/assessments.py::_pack_panel_layout()'s
+                                         real per-plane roofSegmentStats (FIT-04 only,
+                                         see _aggregate_geometry_confidence() — never
+                                         read by _compute_components(), so this can
+                                         never move the FIT-01 suitability score)
     """
     params = params or {}
     gates: list[Gate] = params.get("gates", [])
     generation: dict | None = params.get("generation")
     calibration_state: float | None = params.get("calibration_state")
+    roof_segments: dict | None = params.get("roof_segments")
 
     pv = pack_version()
 
     insufficient_reason = _insufficient_data_reason(site, capacity)
     if insufficient_reason is not None:
-        confidence = _compute_confidence(site, capacity, gates, calibration_state, degraded=True)
+        confidence, confidence_components = _compute_confidence(
+            site, capacity, gates, calibration_state, roof_segments, degraded=True
+        )
+        confidence_explanation, confidence_summary = _explain_confidence(confidence_components)
+        condition_code = (
+            "MISSING_CAPACITY_DATA" if insufficient_reason == "capacity" else "MISSING_GEOMETRY_CONFIDENCE"
+        )
         return FitnessResult(
             verdict="INSUFFICIENT_DATA",
             score=None,
             confidence=confidence,
+            confidence_components=confidence_components,
+            confidence_explanation=[confidence_summary, *confidence_explanation],
             binding_constraint=f"insufficient_data:{insufficient_reason}",
             components={},
             reasons=[f"Insufficient data: {insufficient_reason} missing or unresolved."],
+            conditions=[
+                Condition(
+                    code=condition_code,
+                    message=f"Insufficient data: {insufficient_reason} missing or unresolved.",
+                )
+            ],
             limitations=STANDARD_LIMITATIONS,
             pack_version=pv,
         )
@@ -114,7 +145,10 @@ def score_fitness(site: Site, capacity: CapacityResult, params: dict | None = No
         if verdict == "SUITABLE" and any(g.status == "PENDING" for g in gates):
             verdict = "SUITABLE_SUBJECT_TO_SURVEY"
 
-    confidence = _compute_confidence(site, capacity, gates, calibration_state, degraded=False)
+    confidence, confidence_components = _compute_confidence(
+        site, capacity, gates, calibration_state, roof_segments, degraded=False
+    )
+    confidence_explanation, confidence_summary = _explain_confidence(confidence_components)
 
     if fail_gate is not None:
         binding_constraint = f"gate:{fail_gate.gate}"
@@ -129,13 +163,38 @@ def score_fitness(site: Site, capacity: CapacityResult, params: dict | None = No
         if gate.status == "PENDING":
             reasons.append(f"Gate '{gate.gate}' pending: {gate.detail}.")
 
+    conditions: list[Condition] = []
+    if fail_gate is not None:
+        conditions.append(Condition(code="GATE_FAILED", message=fail_gate.detail, detail=fail_gate.gate))
+    for gate in gates:
+        if gate.status == "PENDING":
+            conditions.append(Condition(code="GATE_PENDING", message=gate.detail, detail=gate.gate))
+    shading_score = components.get("shading")
+    if shading_score is None:
+        conditions.append(
+            Condition(
+                code="SHADING_DATA_UNAVAILABLE",
+                message="Shading data unavailable (non-Solar-API geometry source) — excluded from score.",
+            )
+        )
+    elif shading_score <= get_fitness_high_shading_threshold():
+        conditions.append(
+            Condition(
+                code="HIGH_SHADING",
+                message=f"This roof's shading component scored {shading_score:.2f} — meaningfully less sun than an unobstructed roof.",
+            )
+        )
+
     return FitnessResult(
         verdict=verdict,
         score=round(raw_score, 4),
         confidence=confidence,
+        confidence_components=confidence_components,
+        confidence_explanation=[confidence_summary, *confidence_explanation],
         binding_constraint=binding_constraint,
         components=components,
         reasons=reasons,
+        conditions=conditions,
         limitations=STANDARD_LIMITATIONS,
         pack_version=pv,
     )
@@ -220,14 +279,20 @@ def _compute_confidence(
     capacity: CapacityResult,
     gates: list[Gate],
     calibration_state: float | None,
+    roof_segments: dict | None = None,
     *,
     degraded: bool,
-) -> float:
+) -> tuple[float, dict[str, float]]:
     """FIT-04. Never returns exactly 0 — even an INSUFFICIENT_DATA result
-    ships a real (if low) confidence figure, per FIT-06."""
+    ships a real (if low) confidence figure, per FIT-06.
+
+    Also returns the raw per-factor values that were blended into the
+    final figure (FIT-04 explainability) — real numbers, computed here
+    and otherwise discarded, never a fabricated breakdown reverse-
+    engineered from the blend."""
     weights = get_fitness_confidence_weights()
 
-    geometry = site.geometry_confidence if site.geometry_confidence is not None else 0.0
+    geometry = _aggregate_geometry_confidence(site, roof_segments)
     imagery_recency = _imagery_recency_score(site.imagery_date)
 
     ceilings = capacity.ceilings or []
@@ -257,10 +322,171 @@ def _compute_confidence(
     if degraded:
         confidence = min(confidence, 0.35)
 
-    return confidence
+    components = {
+        "geometry": geometry,
+        "imagery_recency": imagery_recency,
+        "constraint_completeness": constraint_completeness,
+        "gate_resolution": gate_resolution,
+        "calibration_state": calibration,
+        "ceiling_delta": confidence_delta,
+    }
+
+    return confidence, components
+
+
+_CONFIDENCE_FACTOR_LABELS: dict[str, str] = {
+    "geometry": "Roof boundary and geometry data",
+    "imagery_recency": "Imagery recency",
+    "constraint_completeness": "Constraint data completeness",
+    "gate_resolution": "Site-check resolution",
+    "calibration_state": "Field-calibration accuracy",
+}
+
+
+def _confidence_tier_phrase(value: float) -> str:
+    if value >= 0.8:
+        return "this strengthened the result"
+    if value <= 0.5:
+        return "this held the result back"
+    return "this was a moderate factor"
+
+
+def _explain_confidence(components: dict[str, float]) -> tuple[list[str], str]:
+    """FIT-04 explainability. Deterministic, template-based: every
+    sentence is derived straight from the same numbers that produced the
+    blended confidence figure (see _compute_confidence() above) — never
+    free-form/generated text, so the same inputs always produce the same
+    explanation (FIT-06)."""
+    weights = get_fitness_confidence_weights()
+    contributions = [
+        (name, components[name], weights.get(name, 0.0) * components[name])
+        for name in _CONFIDENCE_FACTOR_LABELS
+        if name in components
+    ]
+    contributions.sort(key=lambda item: item[2], reverse=True)
+
+    factor_sentences = [
+        f"{_CONFIDENCE_FACTOR_LABELS[name]} scored {value * 100:.0f}%, contributing "
+        f"{weighted * 100:.0f} points toward the total — {_confidence_tier_phrase(value)}."
+        for name, value, weighted in contributions
+    ]
+
+    ceiling_delta = components.get("ceiling_delta", 0.0)
+    if abs(ceiling_delta) >= 0.01:
+        direction = "raised" if ceiling_delta > 0 else "lowered"
+        factor_sentences.append(
+            f"Constraint-specific adjustments {direction} confidence by {abs(ceiling_delta) * 100:.0f} points."
+        )
+
+    if not contributions:
+        return factor_sentences, "Confidence could not be broken down into factors for this assessment."
+
+    best_name, best_value, _ = contributions[0]
+    worst_name, worst_value, _ = contributions[-1]
+    if best_name != worst_name:
+        summary = (
+            f"Confidence was driven mainly by {_CONFIDENCE_FACTOR_LABELS[best_name].lower()} "
+            f"({best_value * 100:.0f}%); the main thing holding it back was "
+            f"{_CONFIDENCE_FACTOR_LABELS[worst_name].lower()} ({worst_value * 100:.0f}%)."
+        )
+    else:
+        summary = (
+            f"Confidence was driven by {_CONFIDENCE_FACTOR_LABELS[best_name].lower()} "
+            f"({best_value * 100:.0f}%)."
+        )
+
+    return factor_sentences, summary
+
+
+def _aggregate_geometry_confidence(site: Site, roof_segments: dict | None) -> float:
+    """FIT-04/GEO-09. Real per-roof geometry confidence, area-weighted,
+    for the CONFIDENCE blend ONLY.
+
+    Deliberately never touches `_compute_components()`'s own
+    `geometry_quality` (a FIT-01 SCORE input), which keeps reading the
+    single stored `site.geometry_confidence` scalar completely unchanged
+    — so this function can never move the suitability score, only the
+    confidence figure.
+
+    "Multiple roofs" in this codebase means Building Insights' real
+    per-plane data (`roof_segments["segments"]`, built by
+    routers/assessments.py::_pack_panel_layout()) WITHIN one site
+    boundary — there is no independent-polygon-per-site data model
+    (domain/site.py's `Site.boundary` is a single Polygon, and
+    providers/validation.py::validate_boundary() rejects anything else).
+    Every segment shares the site's own `geometry_source` and
+    `imagery_date` (one Solar API capture for the whole building — there
+    is no per-segment provenance or imagery date anywhere to preserve),
+    so only each segment's OWN polygon (vertex count, area) varies
+    providers/validation.py::geometry_confidence()'s output between
+    segments; imagery recency itself stays the single site-level
+    computation in `_compute_confidence()` for exactly this reason.
+
+    Weighted by `overlapAreaM2` — each segment's area actually clipped
+    to the customer's own resolved/selected boundary (routers/
+    assessments.py::_pack_panel_layout()'s `_segment_polygon_metric()`
+    intersection), never by the segment's raw, un-clipped Google area.
+    A segment with zero overlap with what the customer selected (a
+    neighbouring plane, a wing of the building they didn't crop in) is
+    excluded from the aggregate entirely — it must not pull this site's
+    confidence at all, let alone at full weight, since it isn't part of
+    the roof the customer actually selected. A segment that only
+    partially overlaps counts only by that overlapping portion.
+
+    Falls back to the existing single `site.geometry_confidence` scalar
+    verbatim when there's nothing to aggregate (no Building Insights
+    segments at all, or none overlap the selected boundary — manual/
+    imported/field_measured sites, or a Building Insights outage) —
+    every such site's confidence is byte-identical to before this
+    function existed.
+    """
+    site_level = site.geometry_confidence if site.geometry_confidence is not None else 0.0
+    segments = (roof_segments or {}).get("segments") or []
+    if not segments:
+        return site_level
+
+    weighted_sum = 0.0
+    total_weight = 0.0
+    for segment in segments:
+        overlap_area = segment.get("overlapAreaM2")
+        if not overlap_area or overlap_area <= 0:
+            # No real overlap with the customer's own selected/cropped
+            # area — this Google segment isn't part of what they
+            # selected, so it must not stand in for it here.
+            continue
+        polygon = segment.get("polygon")
+        confidence = (
+            _segment_geometry_confidence(
+                source=site.geometry_source,
+                imagery_date=site.imagery_date,
+                # routers/assessments.py::_metric_polygon_to_wgs84_ring()
+                # returns a bare exterior ring (list[[lng, lat], ...]),
+                # not a GeoJSON dict — geometry_confidence() needs the
+                # latter to shape() it.
+                boundary={"type": "Polygon", "coordinates": [polygon]},
+            )
+            if polygon is not None
+            else site_level
+        )
+        weighted_sum += confidence * overlap_area
+        total_weight += overlap_area
+
+    if total_weight <= 0:
+        return site_level
+    return _clamp01(weighted_sum / total_weight)
 
 
 def _imagery_recency_score(imagery_date: datetime | None) -> float:
+    """FIT-04 imagery_recency sub-component. Missing imagery date is the
+    existing, unchanged fallback — 0.0, never a guessed/invented date
+    (see FIT-06's "never assume" discipline elsewhere in this module).
+
+    Otherwise: 1.0 at/below full_score_days, then a piecewise-linear
+    step-down through the pack's own intermediate (age_days, score)
+    points, holding at floor_score beyond zero_score_days — old imagery
+    still costs confidence, but never enough on its own to read as "no
+    confidence at all" the way decaying all the way to 0.0 did.
+    """
     if imagery_date is None:
         return 0.0
     aware_date = imagery_date if imagery_date.tzinfo else imagery_date.replace(tzinfo=UTC)
@@ -268,11 +494,28 @@ def _imagery_recency_score(imagery_date: datetime | None) -> float:
 
     full = get_fitness_imagery_recency_full_score_days()
     zero = get_fitness_imagery_recency_zero_score_days()
-    if age_days <= full:
-        return 1.0
-    if age_days >= zero:
-        return 0.0
-    return 1.0 - (age_days - full) / (zero - full)
+    floor = get_fitness_imagery_recency_floor_score()
+    breakpoints = [
+        (full, 1.0),
+        *get_fitness_imagery_recency_intermediate_points(),
+        (zero, floor),
+    ]
+    return _piecewise_linear(age_days, breakpoints, floor=floor)
+
+
+def _piecewise_linear(x: float, points: list[tuple[float, float]], *, floor: float) -> float:
+    """Linear interpolation through `points` (sorted ascending by x):
+    flat at the first point's y for any x at/below it, a straight-line
+    segment between each consecutive pair, and `floor` beyond the last
+    point's x. Generic — not specific to imagery dates or any other
+    single caller."""
+    first_x, first_y = points[0]
+    if x <= first_x:
+        return first_y
+    for (x0, y0), (x1, y1) in pairwise(points):
+        if x <= x1:
+            return y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+    return floor
 
 
 def _clamp01(value: float, *, floor: float = 0.0, ceiling: float = 1.0) -> float:

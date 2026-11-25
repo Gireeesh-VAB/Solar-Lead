@@ -14,7 +14,7 @@ export function QuotaBar({ quota }: { quota: ApiQuota }) {
       <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${quota.service} usage`}>
         <div
           className="h-full rounded-full transition-[width]"
-          style={{ width: `${pct}%`, background: warning ? "var(--bad)" : "var(--slate)" }}
+          style={{ width: `${pct}%`, background: warning ? "var(--bad)" : "var(--brand)" }}
         />
       </div>
       {warning && <p className="mt-1 text-[11px]" style={{ color: "var(--bad)" }}>Approaching quota limit ({pct}% used)</p>}

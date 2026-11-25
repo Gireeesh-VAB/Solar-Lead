@@ -87,7 +87,7 @@ export function Sidebar() {
                       aria-current={active ? "page" : undefined}
                       className={cn(
                         "flex items-center gap-2 rounded-[var(--radius-app)] px-2 py-1.5 text-sm",
-                        active ? "bg-amber text-white" : "text-ink-soft hover:bg-surface-2 hover:text-ink"
+                        active ? "bg-brand text-white" : "text-ink-soft hover:bg-surface-2 hover:text-ink"
                       )}
                     >
                       <item.icon size={15} strokeWidth={1.75} aria-hidden="true" />

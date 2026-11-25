@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { FileText, ShieldCheck, ShieldAlert, ShieldQuestion, Wallet } from "lucide-react";
-import { getVendorProfile } from "@/lib/api/client";
+import { getVendorProfileServer as getVendorProfile } from "@/lib/api/serverFetch";
 import { Card, PageHeader } from "@/components/ui/Primitives";
+import { ProfileTabs } from "@/components/vendor/ProfileTabs";
 import { formatDate } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -16,12 +17,17 @@ const VERIFICATION_STYLE = {
 } as const;
 
 export default async function VendorProfilePage() {
-  const profile = await getVendorProfile();
+  // Falls through to a blank render rather than crashing on an
+  // unauthenticated SSR pass — the layout's client-side AuthGuard redirects
+  // to /login a moment after hydration in that case.
+  const profile = await getVendorProfile().catch(() => null);
+  if (!profile) return null;
   const verification = VERIFICATION_STYLE[profile.verificationStatus];
 
   return (
     <div className="space-y-6">
       <PageHeader title="Profile" description={`${profile.name} · Vendor since ${formatDate(profile.joinedAt)}`} />
+      <ProfileTabs />
 
       <Card className="flex items-center gap-3 p-4" style={{ borderColor: verification.color, background: verification.bg }}>
         <verification.Icon size={22} strokeWidth={1.75} style={{ color: verification.color }} aria-hidden="true" />

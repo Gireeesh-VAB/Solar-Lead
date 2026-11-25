@@ -119,6 +119,12 @@ def get_approved_model_version(session: Session) -> MLModelVersion | None:
     return session.scalars(stmt).first()
 
 
+def list_model_versions(session: Session) -> list[MLModelVersion]:
+    """Newest-trained first."""
+    stmt = select(MLModelVersion).order_by(MLModelVersion.trained_at.desc())
+    return list(session.scalars(stmt))
+
+
 def approve_version(session: Session, version_id: str, approved_by: str) -> MLModelVersion:
     """ML-04. Single globally-active model — demotes any previously
     approved version to "rejected" before promoting this one."""

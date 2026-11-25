@@ -44,6 +44,79 @@ class ModelVersionActionResponse(_CamelModel):
     status: str
 
 
+class CalibrationProposalOut(_CamelModel):
+    id: str
+    jurisdiction: str
+    metric: str
+    remote_value: float
+    measured_value: float
+    variance_pct: float
+    sample_size: int
+    proposed_adjustment: str
+    status: str
+    proposed_at: str
+    proposed_by: str
+
+
+class ModelMetricOut(_CamelModel):
+    label: str
+    value: str
+
+
+class ModelVersionOut(_CamelModel):
+    id: str
+    model_name: str
+    version: str
+    status: str
+    metrics: list[ModelMetricOut]
+    proposed_at: str
+    proposed_by: str
+    changelog: str
+
+
+@router.get("/calibration-proposals", response_model=list[CalibrationProposalOut])
+def list_calibration_proposals(
+    _user: Annotated[AuthenticatedUser, Depends(require_role("admin"))],
+) -> list[CalibrationProposalOut]:
+    proposals = calibration_repo.list_utilisation_factor_proposals()
+    return [
+        CalibrationProposalOut(
+            id=p["id"],
+            jurisdiction=p["jurisdiction"],
+            metric=p["metric"],
+            remote_value=p["remote_value"],
+            measured_value=p["measured_value"],
+            variance_pct=p["variance_pct"],
+            sample_size=p["sample_size"],
+            proposed_adjustment=p["proposed_adjustment"],
+            status=p["status"],
+            proposed_at=p["proposed_at"].isoformat(),
+            proposed_by=p["proposed_by"],
+        )
+        for p in proposals
+    ]
+
+
+@router.get("/model-versions", response_model=list[ModelVersionOut])
+def list_model_versions(
+    _user: Annotated[AuthenticatedUser, Depends(require_role("admin"))],
+) -> list[ModelVersionOut]:
+    versions = ml_score_engine.list_model_versions()
+    return [
+        ModelVersionOut(
+            id=v["id"],
+            model_name=v["model_name"],
+            version=v["version"],
+            status=v["status"],
+            metrics=[ModelMetricOut(**m) for m in v["metrics"]],
+            proposed_at=v["proposed_at"].isoformat(),
+            proposed_by=v["proposed_by"],
+            changelog=v["changelog"],
+        )
+        for v in versions
+    ]
+
+
 @router.post(
     "/calibration-proposals/{proposal_id}/approve",
     response_model=CalibrationProposalActionResponse,

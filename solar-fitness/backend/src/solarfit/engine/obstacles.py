@@ -58,6 +58,40 @@ from solarfit.domain.site import Site
 logger = logging.getLogger(__name__)
 
 
+def _stored_polygon(entry: dict) -> dict:
+    """applied_obstacle_polygons values are now {"polygon", "type",
+    "confidence"} dicts (see apply_or_flag() below); older rows stored
+    the bare GeoJSON polygon directly at this key. A raw polygon always
+    has "coordinates" at the top level, which the wrapped shape never
+    does — a clean, cheap discriminator between the two."""
+    return entry["polygon"] if "coordinates" not in entry else entry
+
+
+# A re-detection of the same physical object overlaps the earlier one by
+# well over this much of its own area (masks are never pixel-identical run
+# to run, and the earlier one may have been clipped/buffered).
+_SAME_OBSTACLE_OVERLAP = 0.5
+
+
+def _already_known(obstacle: Obstacle, known: list) -> bool:
+    """True if `obstacle` is (mostly) the same spot as something already
+    applied to this site, or applied and since removed."""
+    try:
+        poly = shape(obstacle.bounding_polygon)
+    except Exception:  # noqa: BLE001 - malformed geometry is validation's job
+        return False
+    if poly.is_empty or poly.area <= 0:
+        return False
+    for other in known:
+        overlap = poly.intersection(other).area
+        if overlap / poly.area >= _SAME_OBSTACLE_OVERLAP:
+            return True
+        union = poly.area + other.area - overlap
+        if union > 0 and overlap / union >= 0.3:
+            return True
+    return False
+
+
 def apply_or_flag(site: Site, obstacles: list[Obstacle]) -> list[Obstacle]:
     """OBS-03/04/05. Validates each obstacle (dropping invalid ones with
     a logged reason), splits the survivors by
@@ -83,8 +117,28 @@ def apply_or_flag(site: Site, obstacles: list[Obstacle]) -> list[Obstacle]:
             obstacle.applied = False
         return obstacles  # nothing to validate containment against — advisory only
 
+    # A detector's obstacle is found on the cached (site-independent) Google
+    # boundary, which is usually larger than the roof this customer actually
+    # drew. One straddling the customer's edge would fail GEO-08 and be
+    # thrown away whole, so keep the part that is on THIS site's roof.
+    # (Entirely outside stays as-is and is dropped by validation below.)
+    site_boundary_geom = None
+    if any(o.source == "cv_detector" for o in obstacles):
+        try:
+            site_boundary_geom = shape(site.boundary)
+            if not site_boundary_geom.is_valid:
+                site_boundary_geom = site_boundary_geom.buffer(0)
+        except Exception:  # noqa: BLE001 - a bad site boundary just skips the clip
+            site_boundary_geom = None
+
     valid: list[Obstacle] = []
     for obstacle in obstacles:
+        if obstacle.source == "cv_detector" and site_boundary_geom is not None:
+            from solarfit.providers.obstacle_detectors import clip_polygon_to_boundary
+
+            clipped = clip_polygon_to_boundary(obstacle.bounding_polygon, site_boundary_geom)
+            if clipped is not None:
+                obstacle.bounding_polygon = clipped
         if validate_obstacle_polygon(obstacle, site.boundary):
             valid.append(obstacle)
         else:
@@ -95,9 +149,87 @@ def apply_or_flag(site: Site, obstacles: list[Obstacle]) -> list[Obstacle]:
                 site.id,
             )
 
+    # Detector obstacles get fresh random ids on every run, so the id-based
+    # idempotency below cannot recognise a re-detection. Without this, the
+    # roof would be scanned once on the obstacles screen and AGAIN by the
+    # assessment, listing every obstacle twice - and an obstacle the
+    # customer deliberately removed (a false positive) would come straight
+    # back. Compare geometry against everything this site has ever had.
+    if any(o.source == "cv_detector" for o in valid):
+        known: list = []
+        try:
+            from solarfit.repositories import obstacle_candidates as candidates_repo
+            from solarfit.repositories.sites import ever_applied_obstacle_polygons
+
+            with session_scope() as session:
+                # Applied or removed obstacles, plus every candidate the
+                # customer has been shown - pending, confirmed or ignored.
+                known = [
+                    shape(p)
+                    for p in (
+                        *ever_applied_obstacle_polygons(session, site.id),
+                        *candidates_repo.all_polygons(session, site.id),
+                    )
+                ]
+        except Exception:
+            logger.warning("Could not read site %s's obstacle history", site.id, exc_info=True)
+        if known:
+            fresh: list[Obstacle] = []
+            for obstacle in valid:
+                if obstacle.source == "cv_detector" and _already_known(obstacle, known):
+                    logger.info(
+                        "Skipping obstacle %s for site %s: already known (applied, removed or reviewed)",
+                        obstacle.id,
+                        site.id,
+                    )
+                    continue
+                fresh.append(obstacle)
+            valid = fresh
+
+    # MODEL DETECTIONS (the YOLO ensemble) ARE NEVER APPLIED AUTOMATICALLY.
+    # A detection must not shrink the customer's usable roof until the
+    # customer has looked at it, so each one is stored as a `pending`
+    # candidate (repositories/obstacle_candidates.py) and shown on the
+    # roof-check screen with Confirm / Edit / Ignore. Only a Confirm
+    # applies it to the exclusions. Until then it counts toward neither
+    # panel placement nor shading.
+    #
+    # The vision-LLM is different: it reports one self-assessed confidence
+    # per box, and keeps its existing strict bar
+    # (auto_apply_confidence_threshold) before it may shrink the usable
+    # area unattended.
     threshold = get_auto_apply_confidence_threshold()
-    to_apply = [o for o in valid if o.confidence >= threshold]
-    to_flag = [o for o in valid if o.confidence < threshold]
+    for_review = [o for o in valid if o.source == "cv_detector"]
+    to_apply = [o for o in valid if o.source != "cv_detector" and o.confidence >= threshold]
+    to_flag = [o for o in valid if o.source != "cv_detector" and o.confidence < threshold]
+
+    if for_review:
+        try:
+            from solarfit.repositories import obstacle_candidates as candidates_repo
+
+            with session_scope() as session:
+                candidates_repo.add_candidates(session, site.id, for_review)
+        except Exception:
+            logger.exception(
+                "Could not store %d detection(s) for review on site %s", len(for_review), site.id
+            )
+    for obstacle in for_review:
+        obstacle.applied = False
+
+    # Idempotency: the same cached vision detection (site_analysis_cache)
+    # can be handed to this function again — on a repeat assessment call
+    # for this site, or a different site reusing the same cached location
+    # (CACHE-01/03) — so anything already reflected in this site's own
+    # exclusions must be skipped here, never unioned in a second time.
+    # Already-applied ones still report .applied = True below; they're
+    # just not re-persisted.
+    already_applied: set[str] = set()
+    if to_apply:
+        from solarfit.repositories.sites import applied_obstacle_ids
+
+        with session_scope() as session:
+            already_applied = applied_obstacle_ids(session, site.id)
+        to_apply = [o for o in to_apply if o.id not in already_applied]
 
     if to_apply:
         geoms = [shape(o.bounding_polygon) for o in to_apply]
@@ -107,7 +239,21 @@ def apply_or_flag(site: Site, obstacles: list[Obstacle]) -> list[Obstacle]:
         if union_geom.geom_type == "Polygon":
             union_geom = MultiPolygon([union_geom])
         new_exclusions = mapping(union_geom)
-        applied_obstacle_polygons = {o.id: o.bounding_polygon for o in to_apply}
+        # Real type/confidence alongside the polygon — see
+        # repositories/sites.py::applied_obstacles()'s docstring for the
+        # backward-compatible read of older rows that stored the bare
+        # polygon at this same key.
+        applied_obstacle_polygons = {
+            o.id: {
+                "polygon": o.bounding_polygon,
+                "type": o.type,
+                "confidence": o.confidence,
+                # Provenance, so the customer UI can tell a detection from
+                # a hand-placed marker (see applied_obstacles()).
+                "source": o.source,
+            }
+            for o in to_apply
+        }
 
         try:
             with session_scope() as session:
@@ -147,6 +293,13 @@ def apply_or_flag(site: Site, obstacles: list[Obstacle]) -> list[Obstacle]:
     for obstacle in to_flag:
         obstacle.applied = False
 
+    # Already-applied ones (filtered out of to_apply above, never
+    # re-persisted) are genuinely applied — reflect that in the result
+    # even though this call didn't write anything new for them.
+    for obstacle in valid:
+        if obstacle.id in already_applied:
+            obstacle.applied = True
+
     return valid
 
 
@@ -175,7 +328,7 @@ def reject_applied_obstacle(site_id: str, obstacle_id: str, actor: str) -> Site:
         if version is None or not (version.applied_obstacle_polygons or {}).get(obstacle_id):
             raise ValueError(f"Obstacle {obstacle_id} was never auto-applied for site {site_id}")
 
-        rejected_polygon = shape(version.applied_obstacle_polygons[obstacle_id])
+        rejected_polygon = shape(_stored_polygon(version.applied_obstacle_polygons[obstacle_id]))
         current_exclusions = shape(site.exclusions) if site.exclusions else None
         new_exclusions = (
             mapping(current_exclusions.difference(rejected_polygon)) if current_exclusions else None

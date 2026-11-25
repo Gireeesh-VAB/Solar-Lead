@@ -1,18 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { useJurisdictions } from "@/lib/query/hooks";
+import { useJurisdictions, usePublishJurisdiction } from "@/lib/query/hooks";
 import { TableSkeleton, ErrorState, EmptyState, Button } from "@/components/ui/Primitives";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { formatDate } from "@/lib/utils";
 import type { JurisdictionConstraintPack } from "@/lib/types";
+import { ApiError } from "@/lib/api/fetchClient";
 import { Gauge, UploadCloud } from "lucide-react";
 
 export function AdminJurisdictionsClient() {
   const jurisdictions = useJurisdictions();
+  const publish = usePublishJurisdiction();
   const [publishTarget, setPublishTarget] = useState<JurisdictionConstraintPack | null>(null);
-  const [publishing, setPublishing] = useState(false);
   const [justPublished, setJustPublished] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   if (jurisdictions.isLoading) return <TableSkeleton rows={4} cols={5} />;
   if (jurisdictions.isError || !jurisdictions.data) return <ErrorState description="Could not load jurisdiction packs." onRetry={() => jurisdictions.refetch()} />;
@@ -20,22 +22,28 @@ export function AdminJurisdictionsClient() {
     return <EmptyState icon={<Gauge size={28} strokeWidth={1.5} />} title="No jurisdiction packs configured" />;
   }
 
-  function handlePublish() {
-    setPublishing(true);
-    // Mock async publish — no server mutation exists for jurisdictions yet, so
-    // this simulates the round trip and reports success locally.
-    setTimeout(() => {
-      setPublishing(false);
-      setJustPublished(publishTarget?.id ?? null);
+  async function handlePublish() {
+    if (!publishTarget) return;
+    setPublishError(null);
+    try {
+      await publish.mutateAsync(publishTarget.jurisdiction);
+      setJustPublished(publishTarget.id);
       setPublishTarget(null);
-    }, 500);
+    } catch (err) {
+      setPublishError(err instanceof ApiError ? err.message : "Could not publish this jurisdiction pack.");
+    }
   }
 
   return (
     <div className="space-y-4">
       {justPublished && (
         <div className="rounded-[var(--radius-app)] border px-3 py-2 text-sm" style={{ borderColor: "var(--good)", background: "var(--good-bg)", color: "var(--good)" }}>
-          New version queued for publish — the fitness engine will pick it up on next assessment run.
+          Published — the fitness engine will pick up the current pack on its next read.
+        </div>
+      )}
+      {publishError && (
+        <div role="alert" className="rounded-[var(--radius-app)] border px-3 py-2 text-sm" style={{ borderColor: "var(--bad)", background: "var(--bad-bg)", color: "var(--bad)" }}>
+          {publishError}
         </div>
       )}
       <div className="overflow-x-auto scrollbar-thin">
@@ -76,7 +84,7 @@ export function AdminJurisdictionsClient() {
         description="This replaces the active constraint pack used by the fitness engine for all sites in this jurisdiction. Existing assessments are not retroactively recalculated."
         confirmLabel="Publish version"
         tone="danger"
-        pending={publishing}
+        pending={publish.isPending}
         onCancel={() => setPublishTarget(null)}
         onConfirm={handlePublish}
       />

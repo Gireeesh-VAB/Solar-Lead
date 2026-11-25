@@ -5,3 +5,15 @@ version: "in_ap_v1"
 
 net_metering_cap:
   max_export_ratio_of_sanctioned_load: 0.8
+
+# Display metadata for GET /app/jurisdictions (routers/app_jurisdictions.py).
+# Every jurisdiction pack file needs this block to show up in the admin
+# jurisdictions screen — the endpoint walks packages/config-packs/jurisdictions/*.yaml
+# and reads code/state/rules from here rather than a hardcoded list.
+meta:
+  code: AP
+  state: "Andhra Pradesh"
+  rules:
+    - name: net_metering_cap
+      kind: regulatory
+      description: "Stricter net-metering export ratio than the national rooftop_v1 default."

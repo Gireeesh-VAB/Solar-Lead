@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import type { Site, Verdict } from "@/lib/types";
 import { VERDICT_LABEL } from "@/lib/utils";
 import { CheckCard } from "../_components/CheckCard";
 import { EmptyState } from "@/components/ui/Primitives";
-import { ListChecks } from "lucide-react";
+import { ListChecks, SearchX } from "lucide-react";
 
 const VERDICT_FILTERS: (Verdict | "ALL")[] = [
   "ALL",
@@ -15,6 +16,18 @@ const VERDICT_FILTERS: (Verdict | "ALL")[] = [
   "INSUFFICIENT_DATA",
   "NOT_SUITABLE",
 ];
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 14 },
+  show: { opacity: 1, y: 0 },
+};
+
+const stagger = {
+  hidden: {},
+  show: {
+    transition: { staggerChildren: 0.06, delayChildren: 0.05 },
+  },
+};
 
 export function ChecksListClient({ checks }: { checks: Site[] }) {
   const [filter, setFilter] = useState<Verdict | "ALL">("ALL");
@@ -35,31 +48,70 @@ export function ChecksListClient({ checks }: { checks: Site[] }) {
   }
 
   return (
-    <div className="space-y-4">
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium text-ink">Filter by result</span>
-        <select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value as Verdict | "ALL")}
-          className="w-full max-w-xs rounded-[var(--radius-app)] border border-line bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-blue sm:w-auto"
+    <motion.div initial="hidden" animate="show" variants={stagger} className="space-y-5">
+      <motion.div variants={fadeUp} className="min-w-0">
+        <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-ink-faint">
+          Filter by result
+        </span>
+        <div
+          role="group"
+          aria-label="Filter by result"
+          className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+          style={{ scrollbarWidth: "none" }}
         >
-          {VERDICT_FILTERS.map((v) => (
-            <option key={v} value={v}>
-              {v === "ALL" ? "All results" : VERDICT_LABEL[v]}
-            </option>
-          ))}
-        </select>
-      </label>
+          {VERDICT_FILTERS.map((v) => {
+            const active = filter === v;
+            const label = v === "ALL" ? "All results" : VERDICT_LABEL[v];
+            return (
+              <button
+                key={v}
+                type="button"
+                role="button"
+                aria-pressed={active}
+                onClick={() => setFilter(v)}
+                className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-medium transition-all duration-200 min-h-[36px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue"
+                style={
+                  active
+                    ? {
+                        background: "linear-gradient(135deg, var(--brand), var(--brand-soft))",
+                        color: "#fff",
+                        borderColor: "transparent",
+                        boxShadow: "var(--shadow-float)",
+                      }
+                    : {
+                        background: "var(--surface)",
+                        color: "var(--ink-soft)",
+                        borderColor: "var(--line)",
+                      }
+                }
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </motion.div>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-ink-soft">No checks match this filter.</p>
+        <motion.div
+          variants={fadeUp}
+          className="flex flex-col items-center gap-1.5 rounded-[var(--radius-app)] border border-dashed border-line px-6 py-12 text-center"
+        >
+          <span className="mb-1 text-ink-faint" aria-hidden="true">
+            <SearchX size={22} strokeWidth={1.5} />
+          </span>
+          <p className="text-sm font-medium text-ink">No checks match this filter</p>
+          <p className="max-w-xs text-xs text-ink-faint">Try a different result, or view all checks.</p>
+        </motion.div>
       ) : (
-        <div className="space-y-2">
+        <motion.div variants={stagger} className="space-y-2">
           {filtered.map((check) => (
-            <CheckCard key={check.id} check={check} />
+            <motion.div key={check.id} variants={fadeUp}>
+              <CheckCard check={check} />
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 }

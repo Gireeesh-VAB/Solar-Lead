@@ -2,18 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  ClipboardList,
-  Compass,
-  LayoutGrid,
-  LineChart,
-  Sun,
-  UserRound,
-  Wallet,
-} from "lucide-react";
+import { ClipboardList, Compass, HardHat, LayoutGrid, Sun, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const NAV = [
+// Exported so MobileNavDrawer (rendered in VendorHeader) reuses the exact
+// same nav tree — one source of truth, never two lists that can drift.
+export const VENDOR_NAV = [
   {
     group: "Overview",
     items: [{ href: "/vendor/dashboard", label: "Dashboard", icon: LayoutGrid }],
@@ -22,14 +16,8 @@ const NAV = [
     group: "Work",
     items: [
       { href: "/vendor/jobs", label: "Job queue", icon: ClipboardList },
+      { href: "/vendor/installations", label: "Installations", icon: HardHat },
       { href: "/vendor/submissions", label: "Submissions", icon: ClipboardList },
-    ],
-  },
-  {
-    group: "Performance",
-    items: [
-      { href: "/vendor/earnings", label: "Earnings", icon: Wallet },
-      { href: "/vendor/performance", label: "Performance", icon: LineChart },
     ],
   },
   {
@@ -45,11 +33,11 @@ export function VendorSidebar() {
   const pathname = usePathname();
   return (
     <nav
-      className="hidden w-60 shrink-0 flex-col border-r border-line bg-surface md:flex"
+      className="hidden w-60 shrink-0 flex-col border-r border-line bg-surface md:sticky md:top-0 md:flex md:h-screen"
       aria-label="Vendor navigation"
     >
       <Link href="/vendor/dashboard" className="flex items-center gap-2 border-b border-line px-4 py-4">
-        <Sun size={20} strokeWidth={1.75} className="text-teal" aria-hidden="true" />
+        <Sun size={20} strokeWidth={1.75} className="text-brand" aria-hidden="true" />
         <span className="text-sm font-semibold leading-tight text-ink">
           Solar Site Fitness
           <br />
@@ -57,7 +45,7 @@ export function VendorSidebar() {
         </span>
       </Link>
       <div className="flex-1 overflow-y-auto scrollbar-thin py-3">
-        {NAV.map((group) => (
+        {VENDOR_NAV.map((group) => (
           <div key={group.group} className="mb-4 px-3">
             <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">{group.group}</p>
             <ul className="space-y-0.5">
@@ -70,7 +58,7 @@ export function VendorSidebar() {
                       aria-current={active ? "page" : undefined}
                       className={cn(
                         "flex items-center gap-2 rounded-[var(--radius-app)] px-2 py-1.5 text-sm",
-                        active ? "bg-teal text-white" : "text-ink-soft hover:bg-surface-2 hover:text-ink"
+                        active ? "bg-brand text-white" : "text-ink-soft hover:bg-surface-2 hover:text-ink"
                       )}
                     >
                       <item.icon size={15} strokeWidth={1.75} aria-hidden="true" />

@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Building2,
   ClipboardList,
   FileBarChart,
   Gauge,
+  HardHat,
   LayoutGrid,
   ScrollText,
   Settings,
@@ -15,7 +15,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const NAV = [
+// Exported so MobileNavDrawer (rendered in AdminHeader) reuses the exact
+// same nav tree — one source of truth, never two lists that can drift.
+export const ADMIN_NAV = [
   {
     group: "Overview",
     items: [{ href: "/admin/dashboard", label: "Dashboard", icon: LayoutGrid }],
@@ -23,14 +25,16 @@ const NAV = [
   {
     group: "Accounts",
     items: [
-      { href: "/admin/tenants", label: "Tenants", icon: Building2 },
       { href: "/admin/vendors", label: "Vendors", icon: Users },
       { href: "/admin/vendors/verification", label: "Verification queue", icon: ShieldCheck },
     ],
   },
   {
     group: "Operations",
-    items: [{ href: "/admin/assessments", label: "Assessments", icon: ClipboardList }],
+    items: [
+      { href: "/admin/assessments", label: "Assessments", icon: ClipboardList },
+      { href: "/admin/installations", label: "Installations", icon: HardHat },
+    ],
   },
   {
     group: "Platform",
@@ -57,7 +61,7 @@ export function AdminSidebar() {
   const pathname = usePathname();
   return (
     <nav
-      className="hidden w-60 shrink-0 flex-col border-r border-line bg-surface md:flex"
+      className="hidden w-60 shrink-0 flex-col border-r border-line bg-surface md:sticky md:top-0 md:flex md:h-screen"
       aria-label="Admin navigation"
     >
       <Link href="/admin/dashboard" className="flex items-center gap-2 border-b border-line px-4 py-4">
@@ -69,7 +73,7 @@ export function AdminSidebar() {
         </span>
       </Link>
       <div className="flex-1 overflow-y-auto scrollbar-thin py-3">
-        {NAV.map((group) => (
+        {ADMIN_NAV.map((group) => (
           <div key={group.group} className="mb-4 px-3">
             <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">{group.group}</p>
             <ul className="space-y-0.5">
@@ -82,7 +86,7 @@ export function AdminSidebar() {
                       aria-current={active ? "page" : undefined}
                       className={cn(
                         "flex items-center gap-2 rounded-[var(--radius-app)] px-2 py-1.5 text-sm",
-                        active ? "bg-slate text-white" : "text-ink-soft hover:bg-surface-2 hover:text-ink"
+                        active ? "bg-brand text-white" : "text-ink-soft hover:bg-surface-2 hover:text-ink"
                       )}
                     >
                       <item.icon size={15} strokeWidth={1.75} aria-hidden="true" />

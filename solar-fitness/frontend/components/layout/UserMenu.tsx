@@ -5,8 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, LogOut, Settings, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { logout } from "@/lib/api/auth";
+import { getStoredSession } from "@/lib/auth/session";
 
 type UserMenuProps = {
+  /** Fallback shown until the real session loads client-side (and if none is stored). */
   name: string;
   role: string;
   initials: string;
@@ -15,10 +18,21 @@ type UserMenuProps = {
   accentVar?: string;
 };
 
+const ROLE_LABEL: Record<string, string> = {
+  customer: "Homeowner",
+  vendor: "Vendor",
+  admin: "Super Admin",
+};
+
+function initialsFor(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return (parts[0]?.[0] ?? "").concat(parts.length > 1 ? parts[parts.length - 1][0] : "").toUpperCase();
+}
+
 export function UserMenu({
-  name,
-  role,
-  initials,
+  name: fallbackName,
+  role: fallbackRole,
+  initials: fallbackInitials,
   profileHref,
   settingsHref,
   accentVar = "var(--blue)",
@@ -26,6 +40,19 @@ export function UserMenu({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const [identity, setIdentity] = useState({ name: fallbackName, role: fallbackRole, initials: fallbackInitials });
+
+  useEffect(() => {
+    const session = getStoredSession();
+    if (session) {
+      setIdentity({
+        name: session.name,
+        role: ROLE_LABEL[session.role] ?? session.role,
+        initials: initialsFor(session.name),
+      });
+    }
+  }, []);
+  const { name, role, initials } = identity;
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -44,6 +71,7 @@ export function UserMenu({
 
   const signOut = () => {
     setOpen(false);
+    logout();
     router.push("/login");
   };
 

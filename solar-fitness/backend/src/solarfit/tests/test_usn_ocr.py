@@ -50,6 +50,31 @@ def no_op_storage(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# USN-06 — evidence encrypted at rest
+# ---------------------------------------------------------------------------
+
+
+def test_upload_to_object_storage_requests_server_side_encryption(monkeypatch):
+    """Regression: USN-06 says evidence must be "encrypted at rest," but
+    that was previously only asserted in a docstring — the put_object
+    call itself never actually requested it."""
+    calls = []
+
+    class _FakeClient:
+        def put_object(self, **kwargs):
+            calls.append(kwargs)
+
+    monkeypatch.setattr(usn_ocr, "_object_storage_client", lambda: _FakeClient())
+
+    usn_ocr._upload_to_object_storage("some/key.png", b"fake-bytes")
+
+    assert len(calls) == 1
+    assert calls[0]["ServerSideEncryption"] == "AES256"
+    assert calls[0]["Key"] == "some/key.png"
+    assert calls[0]["Body"] == b"fake-bytes"
+
+
+# ---------------------------------------------------------------------------
 # USN-01 — manual entry
 # ---------------------------------------------------------------------------
 

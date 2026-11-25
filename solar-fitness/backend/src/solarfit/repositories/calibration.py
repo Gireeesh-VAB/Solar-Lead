@@ -37,9 +37,13 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from solarfit.db import Base, session_scope
 from solarfit.packs.config_pack import (
+    get_calibration_confidence_high_variance,
+    get_calibration_confidence_no_data,
+    get_calibration_confidence_validated,
     get_calibration_sample_count_threshold,
     get_calibration_variance_threshold,
     get_utilisation_factor,
+    get_utilisation_factor_proposal_bounds,
 )
 from solarfit.repositories import analysis_cache as analysis_cache_repo
 from solarfit.repositories import sites as sites_repo
@@ -157,7 +161,8 @@ def propose_utilisation_factor_update(site_type: str) -> dict | None:
             return None
 
         current_factor = get_utilisation_factor(site_type)
-        proposed_factor = max(0.3, min(1.0, current_factor * statistics.median(ratios)))
+        low, high = get_utilisation_factor_proposal_bounds()
+        proposed_factor = max(low, min(high, current_factor * statistics.median(ratios)))
 
         proposal = UtilisationFactorProposal(
             id=str(uuid4()),
@@ -231,6 +236,40 @@ def reject_utilisation_factor_proposal(proposal_id: str, rejected_by: str) -> di
         }
 
 
+def list_utilisation_factor_proposals() -> list[dict]:
+    """Closes a real gap found during a frontend/backend sync audit:
+    approve/reject existed with no way to list what's waiting for
+    review. Newest first. Same "closest honest field" mapping this
+    module's router already documents for the single-item action
+    responses: the frontend imagines a per-jurisdiction remote-vs-
+    measured variance record; UtilisationFactorProposal tracks a
+    per-site-type utilisation-factor correction instead — site_type
+    maps into the jurisdiction slot, never a fabricated jurisdiction."""
+    with session_scope() as session:
+        stmt = select(UtilisationFactorProposal).order_by(UtilisationFactorProposal.created_at.desc())
+        rows = list(session.scalars(stmt))
+        return [
+            {
+                "id": p.id,
+                "jurisdiction": p.site_type,
+                "metric": "utilisation_factor",
+                "remote_value": p.current_factor,
+                "measured_value": p.proposed_factor,
+                "variance_pct": (
+                    (p.proposed_factor - p.current_factor) / p.current_factor * 100.0
+                    if p.current_factor
+                    else 0.0
+                ),
+                "sample_size": p.sample_count,
+                "proposed_adjustment": f"utilisation_factor {p.current_factor:.3f} -> {p.proposed_factor:.3f}",
+                "status": p.status,
+                "proposed_at": p.created_at,
+                "proposed_by": "system:calibration",
+            }
+            for p in rows
+        ]
+
+
 def get_variance_distribution(
     site_type: str | None = None,
     region: str | None = None,
@@ -288,9 +327,9 @@ def get_calibration_confidence_adjustment(site_type: str, geometry_source: str |
         values = [r.variance_pct for r in session.scalars(stmt).all()]
 
     if not values:
-        return 0.5  # NO_DATA — neutral, not a penalty
+        return get_calibration_confidence_no_data()  # NO_DATA — neutral, not a penalty
 
     mean_abs_variance = statistics.mean(abs(v) for v in values)
     if mean_abs_variance > get_calibration_variance_threshold():
-        return 0.2  # HIGH_VARIANCE
-    return 0.9  # VALIDATED
+        return get_calibration_confidence_high_variance()
+    return get_calibration_confidence_validated()

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ClipboardList } from "lucide-react";
 import { useVendorJobs } from "@/lib/query/hooks";
 import { CardSkeleton, ErrorState, EmptyState } from "@/components/ui/Primitives";
+import { Select } from "@/components/ui/Select";
 import { JobCard } from "@/components/vendor/JobCard";
 import { VENDOR_STATUS_LABEL } from "@/components/vendor/SlaBadge";
 import type { VendorJobStatus } from "@/lib/types";
@@ -18,10 +19,10 @@ export function JobsListClient() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <select
+        <Select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          className="rounded-[var(--radius-app)] border border-line bg-paper px-2 py-1.5 text-sm text-ink focus:border-teal outline-none"
+          aria-label="Filter by status"
         >
           <option value="">All statuses</option>
           {STATUSES.map((s) => (
@@ -29,16 +30,16 @@ export function JobsListClient() {
               {VENDOR_STATUS_LABEL[s]}
             </option>
           ))}
-        </select>
-        <select
+        </Select>
+        <Select
           value={sort}
           onChange={(e) => setSort(e.target.value as typeof sort)}
-          className="rounded-[var(--radius-app)] border border-line bg-paper px-2 py-1.5 text-sm text-ink focus:border-teal outline-none"
+          aria-label="Sort jobs"
         >
           <option value="deadline">Sort by deadline</option>
           <option value="distance">Sort by distance</option>
           <option value="payout">Sort by payout</option>
-        </select>
+        </Select>
       </div>
 
       {jobs.isLoading && (

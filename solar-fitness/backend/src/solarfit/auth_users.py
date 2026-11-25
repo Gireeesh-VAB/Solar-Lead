@@ -30,10 +30,12 @@ from solarfit.repositories import users as users_repo
 
 __all__ = [
     "AuthenticatedUser",
+    "ROLE_PERMISSIONS",
     "create_access_token",
     "current_user",
     "decode_access_token",
     "hash_password",
+    "require_permission",
     "require_role",
     "verify_password",
 ]
@@ -125,6 +127,65 @@ def require_role(*roles: str):
     def _check(user: Annotated[AuthenticatedUser, Depends(current_user)]) -> AuthenticatedUser:
         if user.role not in roles:
             raise HTTPException(status.HTTP_403_FORBIDDEN, f"requires role: {', '.join(roles)}")
+        return user
+
+    return _check
+
+
+# Per-role permission grants for the specific admin/vendor actions granular
+# enough that "any admin" or "any vendor" (require_role's job) isn't a precise
+# enough gate. Not every route needs one — a route that's genuinely "any
+# admin action" keeps plain require_role("admin"). A fixed dict, not a DB
+# table: nothing in this app supports per-user permission overrides today,
+# and adding that surface wasn't asked for.
+ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
+    "admin": frozenset(
+        {
+            "VENDOR_VIEW",
+            "VENDOR_CREATE",
+            "VENDOR_EDIT",
+            "VENDOR_APPROVE",
+            "VENDOR_SUSPEND",
+            "PROJECT_VIEW",
+            "PROJECT_APPROVE",
+            "PROJECT_REJECT",
+            "SURVEY_VIEW",
+            "SURVEY_APPROVE",
+            "INSTALLATION_VIEW",
+            "QA_VIEW",
+            "QA_APPROVE",
+            "QA_REWORK",
+            "CUSTOMER_VIEW",
+            "REPORT_VIEW",
+            "AUDIT_LOG_VIEW",
+        }
+    ),
+    "vendor": frozenset(
+        {
+            "PROJECT_VIEW",
+            "SURVEY_VIEW",
+            "SURVEY_SUBMIT",
+            "INSTALLATION_VIEW",
+            "INSTALLATION_UPDATE",
+            "QA_VIEW",
+            "QA_SUBMIT",
+        }
+    ),
+    "customer": frozenset({"PROJECT_VIEW"}),
+}
+
+
+def require_permission(*permissions: str):
+    """Dependency factory: `Depends(require_permission("VENDOR_APPROVE"))`.
+    403s unless the caller's role is granted every listed permission in
+    ROLE_PERMISSIONS — same shape as require_role() above, one level more
+    specific. Use where a route gates one particular action rather than
+    "any admin"/"any vendor" request."""
+
+    def _check(user: Annotated[AuthenticatedUser, Depends(current_user)]) -> AuthenticatedUser:
+        granted = ROLE_PERMISSIONS.get(user.role, frozenset())
+        if not set(permissions).issubset(granted):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, f"requires permission: {', '.join(permissions)}")
         return user
 
     return _check

@@ -25,6 +25,36 @@ Copy `.env.example` to `.env` and fill in real API keys before you need `provide
 `providers/vision.py`, `providers/weather.py`, or `providers/usn_ocr.py` — the scaffold boots
 fine with an empty `.env` for everything else.
 
+## Frontend setup
+
+Requires Node.js and npm.
+
+```bash
+cd frontend
+npm install
+cp .env.example .env.local   # fill in real values — see the Google Maps note below
+npm run dev                  # http://localhost:3000
+```
+
+### Google Maps API keys — two separate keys, two separate places
+
+The app talks to Google Maps from two different places, and each needs its own key:
+
+- **`GOOGLE_MAPS_API_KEY`** (`backend/.env`) — used server-side only, for geocoding and
+  address-autocomplete requests the backend proxies on the browser's behalf (the
+  `/app/geocode*` routes). Never sent to the browser.
+- **`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`** (`frontend/.env.local`) — used client-side, to load
+  the Google Maps JavaScript SDK that renders the interactive map, satellite imagery, and
+  building/boundary selection UI directly in the browser (`components/map/MapView.tsx`).
+  Anything prefixed `NEXT_PUBLIC_` is bundled into client-side JS and is necessarily public,
+  so restrict this key (HTTP referrer + Maps JavaScript API only) in the Google Cloud Console.
+
+They can be the same underlying key (enabled for both the Maps JavaScript API and the
+Geocoding/Places APIs) or two separately-restricted keys — either works. What matters is that
+**both** are set: leaving `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` unset shows "Map unavailable" on
+the map screens even when the backend's own `GOOGLE_MAPS_API_KEY` is configured correctly,
+since the frontend and backend read their keys independently.
+
 ## Where everything lives
 
 - `backend/src/solarfit/domain/` — the frozen shared contracts (`Site`, `ShadingEstimate`,

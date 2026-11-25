@@ -1,0 +1,9 @@
+# Stray working files at the repo root — not part of solar-fitness, excluded from git.
+/My_first_board_Final_video_aFLNB1M7.mp4
+/Solar_Fitness_3D_Rooftop_Solar_Visualization_Specification.docx
+/VAB_Solar_3D_API_Developer_Guide.docx
+/s3.png
+
+# Unrelated Next.js landing-page scaffold sitting at the repo root.
+/public/
+/src/

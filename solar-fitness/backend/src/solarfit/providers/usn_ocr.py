@@ -117,9 +117,20 @@ def _object_storage_client():
 def _upload_to_object_storage(key: str, data: bytes) -> None:
     """Lazily-constructed S3-compatible client — matches the
     OBJECT_STORAGE_ENDPOINT_URL shape already in Settings. Monkeypatched
-    in tests, same as _run_text_detection."""
+    in tests, same as _run_text_detection.
+
+    USN-06 requires this evidence to be "encrypted at rest" — previously
+    asserted only in this module's docstring, never actually passed to
+    the storage call. ServerSideEncryption="AES256" (SSE-S3) is the
+    broadly-supported default across AWS S3 and S3-compatible services
+    (MinIO, DigitalOcean Spaces, etc.); this is a compliance requirement
+    on evidence handling, not a tunable business coefficient, so it's
+    fixed here rather than a config-pack value.
+    """
     settings = get_settings()
-    _object_storage_client().put_object(Bucket=settings.object_storage_bucket, Key=key, Body=data)
+    _object_storage_client().put_object(
+        Bucket=settings.object_storage_bucket, Key=key, Body=data, ServerSideEncryption="AES256"
+    )
 
 
 def delete_from_object_storage(key: str) -> None:

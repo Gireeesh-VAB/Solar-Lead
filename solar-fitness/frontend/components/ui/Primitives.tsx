@@ -1,10 +1,24 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+export function Card({
+  className,
+  interactive = false,
+  ...props
+}: HTMLAttributes<HTMLDivElement> & {
+  /** Shared hover micro-interaction (subtle lift + brand-tinted border) —
+   *  one place for the "card hover effect" every portal should share,
+   *  instead of each page reinventing its own. */
+  interactive?: boolean;
+}) {
   return (
     <div
-      className={cn("rounded-[var(--radius-app)] border border-line bg-surface", className)}
+      className={cn(
+        "rounded-[var(--radius-app)] border border-line bg-surface",
+        interactive &&
+          "transition-all duration-200 hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-[var(--shadow-float)]",
+        className
+      )}
       {...props}
     />
   );
@@ -22,7 +36,7 @@ export function Button({
   const base = "inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-app)] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
   const sizeCls = size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-3.5 py-2 text-sm";
   const variants: Record<string, string> = {
-    primary: "bg-amber text-white hover:bg-amber-soft",
+    primary: "bg-brand text-white hover:bg-brand-soft",
     secondary: "bg-surface-2 text-ink border border-line hover:bg-surface",
     ghost: "text-ink-soft hover:text-ink hover:bg-surface-2",
     danger: "bg-bad text-white hover:opacity-90",
@@ -30,12 +44,24 @@ export function Button({
   return <button className={cn(base, sizeCls, variants[variant], className)} {...props} />;
 }
 
-export function Badge({ children, className, tone = "neutral" }: { children: ReactNode; className?: string; tone?: "neutral" | "blue" | "amber" }) {
+export function Badge({
+  children,
+  className,
+  tone = "neutral",
+}: {
+  children: ReactNode;
+  className?: string;
+  tone?: "neutral" | "blue" | "amber" | "red" | "green";
+}) {
   const toneCls =
     tone === "blue"
       ? "bg-surface-2 text-blue"
       : tone === "amber"
       ? "bg-surface-2 text-amber"
+      : tone === "red"
+      ? "bg-[var(--bad-bg)] text-[var(--bad)]"
+      : tone === "green"
+      ? "bg-[var(--good-bg)] text-[var(--good)]"
       : "bg-surface-2 text-ink-soft";
   return (
     <span className={cn("inline-flex items-center rounded-[3px] px-1.5 py-0.5 text-[11px] font-medium", toneCls, className)}>

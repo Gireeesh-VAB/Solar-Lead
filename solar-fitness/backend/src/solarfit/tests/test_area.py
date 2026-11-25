@@ -104,14 +104,16 @@ def test_setback_shrinks_the_measured_area():
     # 0.5 m setback on a 100 m square -> 99 x 99 = 9,801 m^2, matching
     # tests/test_projection.py's expectation, then x utilisation.
     usable = compute_usable_area_m2(
-        site, {"edge_setback_m": 0.5, "utilisation_factor": 1.0}
+        site, {"edge_setback_m": 0.5, "parapet_setback_m": 0, "utilisation_factor": 1.0}
     )
     assert usable == pytest.approx(9_801.0, rel=1e-3)
 
 
 def test_zero_setback_leaves_the_boundary_intact():
     site = _site(_square_4326(100))
-    usable = compute_usable_area_m2(site, {"edge_setback_m": 0, "utilisation_factor": 1.0})
+    usable = compute_usable_area_m2(
+        site, {"edge_setback_m": 0, "parapet_setback_m": 0, "utilisation_factor": 1.0}
+    )
     assert usable == pytest.approx(10_000.0, rel=1e-3)
 
 
@@ -119,6 +121,21 @@ def test_negative_setback_is_rejected():
     site = _site(_square_4326(100))
     with pytest.raises(ValueError, match="must not be negative"):
         compute_usable_area_m2(site, {"edge_setback_m": -1.0})
+
+
+def test_parapet_setback_stacks_with_edge_setback():
+    site = _site(_square_4326(100))
+    # 0.5m edge + 0.5m parapet = 1.0m combined inward buffer -> 98x98.
+    usable = compute_usable_area_m2(
+        site, {"edge_setback_m": 0.5, "parapet_setback_m": 0.5, "utilisation_factor": 1.0}
+    )
+    assert usable == pytest.approx(9_604.0, rel=1e-3)
+
+
+def test_negative_parapet_setback_is_rejected():
+    site = _site(_square_4326(100))
+    with pytest.raises(ValueError, match="parapet_setback_m must not be negative"):
+        compute_usable_area_m2(site, {"parapet_setback_m": -1.0})
 
 
 # --------------------------------------------------------------------- #
@@ -132,7 +149,9 @@ def test_single_exclusion_is_deducted():
     site = _site(boundary, {"type": "MultiPolygon", "coordinates": [exclusion["coordinates"]]})
 
     assert exclusion_area_m2(site) == pytest.approx(100.0, rel=1e-2)
-    usable = compute_usable_area_m2(site, {"edge_setback_m": 0, "utilisation_factor": 1.0})
+    usable = compute_usable_area_m2(
+        site, {"edge_setback_m": 0, "parapet_setback_m": 0, "obstacle_setback_m": 0, "utilisation_factor": 1.0}
+    )
     assert usable == pytest.approx(9_900.0, rel=1e-3)
 
 
@@ -149,13 +168,36 @@ def test_overlapping_exclusions_are_unioned_not_summed():
 
     assert exclusion_area_m2(site) == pytest.approx(175.0, rel=1e-2)
 
-    usable = compute_usable_area_m2(site, {"edge_setback_m": 0, "utilisation_factor": 1.0})
+    usable = compute_usable_area_m2(
+        site, {"edge_setback_m": 0, "parapet_setback_m": 0, "obstacle_setback_m": 0, "utilisation_factor": 1.0}
+    )
     assert usable == pytest.approx(10_000.0 - 175.0, rel=1e-3)
 
 
 def test_no_exclusions_deducts_nothing():
     site = _site(_square_4326(100))
     assert exclusion_area_m2(site) == 0.0
+
+
+def test_obstacle_setback_buffers_the_exclusion_before_subtracting():
+    """A real installation clearance around the obstacle's edge, not
+    just its exact detected footprint — a 10x10 obstacle with a 1m
+    setback removes a 12x12 = 144 m^2 area, not 100."""
+    boundary = _square_4326(100)
+    exclusion = _square_4326(10, offset_m=(20.0, 20.0))  # well clear of every roof edge
+    site = _site(boundary, {"type": "MultiPolygon", "coordinates": [exclusion["coordinates"]]})
+
+    usable = compute_usable_area_m2(
+        site,
+        {"edge_setback_m": 0, "parapet_setback_m": 0, "obstacle_setback_m": 1.0, "utilisation_factor": 1.0},
+    )
+    assert usable == pytest.approx(10_000.0 - 144.0, rel=1e-2)
+
+
+def test_negative_obstacle_setback_is_rejected():
+    site = _site(_square_4326(100))
+    with pytest.raises(ValueError, match="obstacle_setback_m must not be negative"):
+        compute_usable_area_m2(site, {"obstacle_setback_m": -1.0})
 
 
 # --------------------------------------------------------------------- #
@@ -176,7 +218,7 @@ def test_edge_exclusion_is_not_double_counted_with_the_setback():
     site = _site(boundary, {"type": "MultiPolygon", "coordinates": [edge["coordinates"]]})
 
     usable = compute_usable_area_m2(
-        site, {"edge_setback_m": 1.0, "utilisation_factor": 1.0}
+        site, {"edge_setback_m": 1.0, "parapet_setback_m": 0, "obstacle_setback_m": 0, "utilisation_factor": 1.0}
     )
 
     # setback ring leaves 98x98 = 9,604. The obstacle's remaining overlap
@@ -191,7 +233,9 @@ def test_edge_exclusion_is_not_double_counted_with_the_setback():
 
 def test_utilisation_factor_scales_the_result():
     site = _site(_square_4326(100))
-    usable = compute_usable_area_m2(site, {"edge_setback_m": 0, "utilisation_factor": 0.70})
+    usable = compute_usable_area_m2(
+        site, {"edge_setback_m": 0, "parapet_setback_m": 0, "utilisation_factor": 0.70}
+    )
     assert usable == pytest.approx(7_000.0, rel=1e-3)
 
 
@@ -203,7 +247,7 @@ def test_utilisation_factor_defaults_to_the_config_pack():
 
     site = _site(_square_4326(100))
     expected = 10_000.0 * config_pack.get_utilisation_factor("ROOFTOP_RESIDENTIAL")
-    usable = compute_usable_area_m2(site, {"edge_setback_m": 0})
+    usable = compute_usable_area_m2(site, {"edge_setback_m": 0, "parapet_setback_m": 0})
     assert usable == pytest.approx(expected, rel=1e-3)
 
 

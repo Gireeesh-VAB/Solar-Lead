@@ -8,8 +8,8 @@ polygon is rejected once rather than once per provider.
   GEO-07  Reject self-intersecting geometry, <3 vertices, out-of-range
           distance from centroid, implausible area for the site type.
   GEO-08  Reject an exclusion polygon not contained within its boundary.
-  GEO-09  Geometry confidence from source, imagery recency, vertex
-          count, area plausibility.
+  GEO-09  Geometry confidence from source, imagery recency, geometry
+          validity, area plausibility.
 
 Rejection is loud (GeometryRejected) rather than silent repair. A trace
 the system quietly "fixed" is a number nobody can explain later — and
@@ -25,27 +25,14 @@ from shapely.geometry.base import BaseGeometry
 
 from solarfit.domain.site import GeometrySource
 from solarfit.engine.projection import to_metric
+from solarfit.packs import config_pack
 
 __all__ = [
-    "MAX_CENTROID_DISTANCE_M",
-    "MAX_PLAUSIBLE_AREA_M2",
-    "MIN_PLAUSIBLE_AREA_M2",
     "GeometryRejected",
     "geometry_confidence",
     "validate_boundary",
     "validate_exclusion",
 ]
-
-# GEO-07 plausibility envelope. A rooftop smaller than a parking space or
-# larger than a stadium is a units error or a mis-traced neighbourhood,
-# not a roof. Deliberately wide — this rejects nonsense, it does not
-# second-guess a genuinely large industrial roof.
-MIN_PLAUSIBLE_AREA_M2 = 5.0
-MAX_PLAUSIBLE_AREA_M2 = 500_000.0
-
-# GEO-07 — a boundary this far from the site's own centroid means the
-# geocode and the trace disagree about which building we are looking at.
-MAX_CENTROID_DISTANCE_M = 500.0
 
 MIN_VERTICES = 3
 
@@ -90,18 +77,21 @@ def validate_boundary(boundary: dict, *, centroid: dict | None = None) -> BaseGe
 
     metric, epsg = to_metric(geom)
     area = metric.area
-    if area < MIN_PLAUSIBLE_AREA_M2:
+    min_area = config_pack.get_min_plausible_boundary_area_m2()
+    max_area = config_pack.get_max_plausible_boundary_area_m2()
+    if area < min_area:
         raise GeometryRejected(f"boundary area {area:.1f} m² is implausibly small")
-    if area > MAX_PLAUSIBLE_AREA_M2:
+    if area > max_area:
         raise GeometryRejected(f"boundary area {area:.1f} m² is implausibly large")
 
     if centroid:
         centre_metric, _ = to_metric(shape(centroid), epsg=epsg)
         distance = metric.centroid.distance(centre_metric)
-        if distance > MAX_CENTROID_DISTANCE_M:
+        max_distance = config_pack.get_max_centroid_distance_m()
+        if distance > max_distance:
             raise GeometryRejected(
                 f"boundary centre is {distance:.0f} m from the site centroid "
-                f"(limit {MAX_CENTROID_DISTANCE_M:.0f} m) — likely the wrong building"
+                f"(limit {max_distance:.0f} m) — likely the wrong building"
             )
 
     return geom
@@ -147,7 +137,8 @@ def geometry_confidence(
 
     Feeds Person 4's FIT-04 directly, so it must degrade for the reasons
     a human would distrust a polygon: where it came from, how old the
-    imagery is, and how much detail the trace actually carries.
+    imagery is, whether the geometry itself is actually valid, and
+    whether its area is a plausible size for a real roof.
 
     Deliberately returns a number, never None — a site always has *some*
     confidence. Absence of geometry is the caller's INSUFFICIENT_DATA
@@ -161,6 +152,7 @@ def geometry_confidence(
         "field_measured": 0.95,
         "manual_polygon": 0.75,
         "imported": 0.65,
+        "solar_api_mask": 0.68,
         "solar_api": 0.60,
     }.get(source, 0.3)
 
@@ -180,18 +172,48 @@ def geometry_confidence(
         elif years > 1:
             score -= 0.05
 
-    # Vertex count as a proxy for detail: a four-corner box over a real
-    # roof is a rectangle someone drew quickly, not a traced outline.
+    # Geometry validity — NOT vertex count. A legitimate 4-point
+    # rectangular roof is exactly as trustworthy as a carefully traced
+    # 12-point outline; the number of corners on its own says nothing
+    # about whether the boundary is right, and rewarding more points
+    # would just teach the opposite bad lesson (pad the trace, get a
+    # higher score). What genuinely signals lower quality is geometry
+    # that fails to parse, isn't a polygon, is empty, or is self-
+    # intersecting/otherwise invalid — the same defect GEO-07's
+    # validate_boundary() hard-rejects on for callers that run it first
+    # (manual/imported edits always do). This is that same signal
+    # applied defensively here too, in case some future caller reaches
+    # geometry_confidence() with an unvalidated boundary.
     if boundary:
+        geom = None
         try:
             geom = shape(boundary)
-            vertices = _exterior_vertex_count(geom)
         except (ValueError, TypeError, AttributeError):
-            vertices = 0
-        if vertices <= 4:
+            geom = None
+
+        if geom is None or geom.geom_type != "Polygon" or geom.is_empty or not geom.is_valid:
             score -= 0.10
-        elif vertices >= 8:
-            score += 0.05
+            geom = None  # nothing usable to measure area on either
+
+        # Area plausibility (GEO-09's fourth input — validate_boundary
+        # only ever uses the plausibility envelope as a hard reject, never
+        # as a graded signal). A trace that only barely cleared GEO-07's
+        # thresholds is still less trustworthy than one comfortably
+        # inside them, even though both passed. `geom` is None here
+        # whenever the validity check above already failed — skipped
+        # rather than crashing on an unbound/unparseable geometry.
+        try:
+            metric, _ = to_metric(geom) if geom is not None else (None, None)
+            area = metric.area if metric is not None else None
+        except (ValueError, TypeError):
+            area = None
+        if area is not None and area > 0:
+            min_area = config_pack.get_min_plausible_boundary_area_m2()
+            max_area = config_pack.get_max_plausible_boundary_area_m2()
+            near_lower_bound = area < min_area * 2
+            near_upper_bound = area > max_area / 2
+            if near_lower_bound or near_upper_bound:
+                score -= 0.05
 
     return round(min(1.0, max(0.0, score)), 3)
 

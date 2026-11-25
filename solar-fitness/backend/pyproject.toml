@@ -28,6 +28,7 @@ dependencies = [
     "shapely>=2",
     "sqlalchemy>=2",
     "trimesh>=5.0.0",
+    "ultralytics>=8.4.215",
     "uvicorn[standard]>=0.52.4",
 ]
 

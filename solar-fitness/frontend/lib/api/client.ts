@@ -1,86 +1,65 @@
 // -----------------------------------------------------------------------------
-// Mock API client.
-//
-// Every function below simulates a network round trip against in-memory
-// fixtures (200-600ms latency) and returns data shaped exactly like the
-// planned FastAPI backend is expected to return it.
-//
-// TODO: replace with real fetch to NEXT_PUBLIC_API_BASE_URL
-// When the backend exists, each function body becomes:
-//   const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/...`, opts);
-//   if (!res.ok) throw new ApiError(...);
-//   return res.json();
-// The function signatures below (names, params, return types) are designed
-// to stay stable across that swap so no calling code needs to change.
+// Real API client — every function below calls the FastAPI backend via
+// lib/api/fetchClient.ts's apiFetch()/apiUpload(). Function signatures
+// (names, params, return types) are unchanged from the mock client this
+// replaced, so lib/query/hooks.ts and every component built against it
+// needed no changes beyond the handful of real contract differences noted
+// inline (USN capture's multi-step flow, admin assessments' lack of
+// server-side search/site-name, calibration/model-version approve/reject
+// returning an action receipt rather than the full updated row).
 // -----------------------------------------------------------------------------
 
-import { MOCK_SITES, getSiteById } from "@/lib/fixtures/sites";
-import {
-  MOCK_CALIBRATION,
-  MOCK_COMPOSITES,
-  MOCK_HISTORY,
-  MOCK_IMPORT_JOBS,
-  MOCK_JURISDICTIONS,
-  MOCK_MODEL_VERSIONS,
-} from "@/lib/fixtures/misc";
-import { MOCK_VENDOR_JOBS, MOCK_VENDOR_PAYOUTS, MOCK_VENDOR_PROFILE } from "@/lib/fixtures/vendor";
-import { MOCK_ADMIN_VENDORS, MOCK_AUDIT_LOG, MOCK_PLATFORM_HEALTH, MOCK_TENANTS } from "@/lib/fixtures/admin";
-import { MOCK_CHECKS, MOCK_CUSTOMER, type CustomerProfile } from "@/lib/fixtures/customer";
+import { apiFetch, apiUpload, ApiError } from "@/lib/api/fetchClient";
+import type { CustomerProfile } from "@/lib/fixtures/customer";
 import type {
   AdminVendorSummary,
   Assessment,
   AuditLogEntry,
   BindingConstraint,
   CalibrationProposal,
+  CommissioningRecord,
   CompositeSite,
   ConfidenceTier,
+  CustomerInstallation,
+  BatteryAssessment,
+  ConnectionType,
+  ConstraintKind,
+  ElectricalAssessment,
+  FinancialProjection,
+  GenerationEstimate,
+  InstallationConstraints,
+  InstallationPhoto,
+  InstallationProject,
+  InstallationQcChecklist,
+  InstallationQcItems,
+  MonthlyConsumptionEntry,
+  ObstacleSurveyItem,
+  RoofMaterial,
+  RoofSlope,
+  RoofType,
+  SafetyAssessment,
+  StructuralAssessment,
+  FeatureFlag,
   HistoryEvent,
   ImportJob,
   JurisdictionConstraintPack,
   ModelVersionProposal,
   PayoutEntry,
   PlatformHealthMetric,
+  ServiceApiKey,
   Site,
   SiteType,
-  Tenant,
-  TenantTier,
   Verdict,
   VendorJob,
+  VendorNotificationPreferences,
   VendorProfile,
-  VendorVerificationStatus,
 } from "@/lib/types";
 
-export class ApiError extends Error {
-  constructor(message: string, public status = 500) {
-    super(message);
-  }
-}
+export { ApiError } from "@/lib/api/fetchClient";
 
-function latency(): number {
-  return 200 + Math.random() * 400;
-}
-
-function delay<T>(value: T): Promise<T> {
-  return new Promise((resolve) => setTimeout(() => resolve(value), latency()));
-}
-
-// In-memory mutable copies so the app can "write" during the session.
-const sitesStore: Site[] = MOCK_SITES.map((s) => ({ ...s }));
-const jobsStore: ImportJob[] = MOCK_IMPORT_JOBS.map((j) => ({ ...j }));
-const calibrationStore: CalibrationProposal[] = MOCK_CALIBRATION.map((c) => ({ ...c }));
-const modelStore: ModelVersionProposal[] = MOCK_MODEL_VERSIONS.map((m) => ({ ...m }));
-const vendorJobsStore: VendorJob[] = MOCK_VENDOR_JOBS.map((j) => ({ ...j }));
-const vendorPayoutsStore: PayoutEntry[] = MOCK_VENDOR_PAYOUTS.map((p) => ({ ...p }));
-const vendorProfileStore: VendorProfile = { ...MOCK_VENDOR_PROFILE };
-const tenantsStore: Tenant[] = MOCK_TENANTS.map((t) => ({ ...t }));
-const adminVendorsStore: AdminVendorSummary[] = MOCK_ADMIN_VENDORS.map((v) => ({ ...v }));
-const auditLogStore: AuditLogEntry[] = MOCK_AUDIT_LOG.map((a) => ({ ...a }));
-const platformHealthStore: PlatformHealthMetric = {
-  ...MOCK_PLATFORM_HEALTH,
-  quotas: MOCK_PLATFORM_HEALTH.quotas.map((q) => ({ ...q })),
-};
-const checksStore: Site[] = MOCK_CHECKS.map((c) => ({ ...c }));
-const customerProfileStore: CustomerProfile = { ...MOCK_CUSTOMER };
+// -----------------------------------------------------------------------------
+// Site / portfolio
+// -----------------------------------------------------------------------------
 
 export interface SiteListParams {
   q?: string;
@@ -92,123 +71,142 @@ export interface SiteListParams {
 }
 
 export async function listSites(params: SiteListParams = {}): Promise<{ items: Site[]; total: number }> {
-  let items = sitesStore;
-  if (params.q) {
-    const q = params.q.toLowerCase();
-    items = items.filter(
-      (s) =>
-        s.name.toLowerCase().includes(q) ||
-        s.address.toLowerCase().includes(q) ||
-        s.district.toLowerCase().includes(q) ||
-        s.id.toLowerCase().includes(q) ||
-        (s.usn ?? "").toLowerCase().includes(q)
-    );
-  }
-  if (params.siteType) items = items.filter((s) => s.siteType === params.siteType);
-  if (params.verdict) items = items.filter((s) => s.latestAssessment?.verdict === params.verdict);
-  if (params.state) items = items.filter((s) => s.state === params.state);
-  const total = items.length;
-  const page = params.page ?? 1;
-  const pageSize = params.pageSize ?? total;
-  const start = (page - 1) * pageSize;
-  return delay({ items: items.slice(start, start + pageSize), total });
+  return apiFetch("/app/sites", { query: { ...params } });
 }
 
 export async function getSite(siteId: string): Promise<Site> {
-  const site = getSiteById(siteId) ?? sitesStore.find((s) => s.id === siteId);
-  if (!site) throw new ApiError(`Site ${siteId} not found`, 404);
-  return delay(site);
+  return apiFetch(`/app/sites/${siteId}`);
 }
 
 export async function getSiteHistory(siteId: string): Promise<HistoryEvent[]> {
-  return delay(MOCK_HISTORY[siteId] ?? []);
+  return apiFetch(`/app/sites/${siteId}/history`);
 }
 
 export async function listImportJobs(): Promise<ImportJob[]> {
-  return delay(jobsStore);
+  return apiFetch("/app/imports");
 }
 
 export async function getImportJob(jobId: string): Promise<ImportJob> {
-  const job = jobsStore.find((j) => j.id === jobId);
-  if (!job) throw new ApiError(`Job ${jobId} not found`, 404);
-  return delay(job);
+  return apiFetch(`/app/imports/${jobId}`);
 }
 
 export async function listComposites(): Promise<CompositeSite[]> {
-  return delay(MOCK_COMPOSITES);
+  return apiFetch("/app/composites");
 }
 
 export async function listCalibrationProposals(): Promise<CalibrationProposal[]> {
-  return delay(calibrationStore);
+  return apiFetch("/app/admin/calibration-proposals");
 }
 
+// The approve/reject endpoints return a small action receipt, not the full
+// updated proposal — re-fetch the list and return this item's fresh copy so
+// callers (useCalibrationDecision in lib/query/hooks.ts) keep getting a full
+// CalibrationProposal back, same as the mock always did.
 export async function approveCalibrationProposal(id: string): Promise<CalibrationProposal> {
-  const item = calibrationStore.find((c) => c.id === id);
-  if (!item) throw new ApiError("Not found", 404);
-  item.status = "approved";
-  return delay(item);
+  await apiFetch(`/app/admin/calibration-proposals/${id}/approve`, { method: "POST" });
+  return getCalibrationProposalOrThrow(id);
 }
 
 export async function rejectCalibrationProposal(id: string): Promise<CalibrationProposal> {
-  const item = calibrationStore.find((c) => c.id === id);
-  if (!item) throw new ApiError("Not found", 404);
-  item.status = "rejected";
-  return delay(item);
+  await apiFetch(`/app/admin/calibration-proposals/${id}/reject`, { method: "POST" });
+  return getCalibrationProposalOrThrow(id);
+}
+
+async function getCalibrationProposalOrThrow(id: string): Promise<CalibrationProposal> {
+  const items = await listCalibrationProposals();
+  const item = items.find((c) => c.id === id);
+  if (!item) throw new ApiError("Calibration proposal not found", 404);
+  return item;
 }
 
 export async function listModelVersions(): Promise<ModelVersionProposal[]> {
-  return delay(modelStore);
+  return apiFetch("/app/admin/model-versions");
 }
 
 export async function approveModelVersion(id: string): Promise<ModelVersionProposal> {
-  const item = modelStore.find((m) => m.id === id);
-  if (!item) throw new ApiError("Not found", 404);
-  modelStore.forEach((m) => {
-    if (m.modelName === item.modelName && m.status === "active") m.status = "rejected";
-  });
-  item.status = "active";
-  return delay(item);
+  await apiFetch(`/app/admin/model-versions/${id}/approve`, { method: "POST" });
+  return getModelVersionOrThrow(id);
 }
 
 export async function rejectModelVersion(id: string): Promise<ModelVersionProposal> {
-  const item = modelStore.find((m) => m.id === id);
-  if (!item) throw new ApiError("Not found", 404);
-  item.status = "rejected";
-  return delay(item);
+  await apiFetch(`/app/admin/model-versions/${id}/reject`, { method: "POST" });
+  return getModelVersionOrThrow(id);
+}
+
+async function getModelVersionOrThrow(id: string): Promise<ModelVersionProposal> {
+  const items = await listModelVersions();
+  const item = items.find((m) => m.id === id);
+  if (!item) throw new ApiError("Model version not found", 404);
+  return item;
 }
 
 export async function listJurisdictions(): Promise<JurisdictionConstraintPack[]> {
-  return delay(MOCK_JURISDICTIONS);
+  return apiFetch("/app/jurisdictions");
 }
 
-export async function submitUsn(siteId: string, usn: string, method: "manual" | "bill_ocr" | "payment_proof_ocr"): Promise<Site> {
-  const site = sitesStore.find((s) => s.id === siteId);
-  if (!site) throw new ApiError("Not found", 404);
-  site.usn = usn;
-  site.usnStatus = "confirmed";
-  void method;
-  return delay(site);
+export async function publishJurisdiction(pack: string): Promise<JurisdictionConstraintPack> {
+  return apiFetch(`/app/admin/jurisdictions/${pack}/publish`, { method: "POST" });
 }
 
-export interface OcrResult {
-  extractedUsn: string;
-  confidence: number;
-  sourceLabel: string;
+// -----------------------------------------------------------------------------
+// USN capture — the backend splits this into 4 endpoints (manual entry;
+// bill-OCR preview; payment-proof-OCR preview; confirm), where OCR is a
+// two-step "extract a preview, then confirm/correct it" flow rather than
+// the mock's single submitUsn() call. See components/sites/UsnCaptureFlow.tsx.
+// -----------------------------------------------------------------------------
+
+export interface UsnCaptureResult {
+  usn: string | null;
+  usnSource: string | null;
 }
 
-export async function runOcrExtraction(kind: "bill" | "payment_proof"): Promise<OcrResult> {
-  return delay({
-    extractedUsn: `USN${Math.floor(100000000 + Math.random() * 899999999)}`,
-    confidence: kind === "bill" ? 0.91 : 0.86,
-    sourceLabel: kind === "bill" ? "Electricity bill (uploaded scan)" : "Payment proof (uploaded scan)",
+export async function captureManualUsn(siteId: string, usn: string): Promise<UsnCaptureResult> {
+  return apiFetch(`/app/sites/${siteId}/usn/manual`, { method: "POST", body: { usn } });
+}
+
+export interface UsnExtractionPreview {
+  uploadId: string;
+  usn: string | null;
+  usnSource: string;
+  extractionStatus: "extracted" | "not_found" | "failed";
+}
+
+export async function extractUsnFromBill(siteId: string, file: File): Promise<UsnExtractionPreview> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload(`/app/sites/${siteId}/usn/bill`, formData);
+}
+
+export async function extractUsnFromPaymentProof(siteId: string, file: File): Promise<UsnExtractionPreview> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload(`/app/sites/${siteId}/usn/payment-proof`, formData);
+}
+
+export async function confirmUsn(siteId: string, uploadId: string, confirmedUsn: string): Promise<UsnCaptureResult> {
+  return apiFetch(`/app/sites/${siteId}/usn/confirm`, {
+    method: "POST",
+    body: { uploadId, confirmedUsn },
   });
 }
 
 export async function saveBoundary(siteId: string, points: { lat: number; lng: number }[]): Promise<Site> {
-  const site = sitesStore.find((s) => s.id === siteId);
-  if (!site) throw new ApiError("Not found", 404);
-  site.boundary = points;
-  return delay(site);
+  return apiFetch(`/app/sites/${siteId}/boundary`, { method: "PUT", body: { points } });
+}
+
+/**
+ * GEO-02 — a customer's own traced roof outline.
+ *
+ * Check-scoped rather than reusing saveBoundary() above: /app/sites/*
+ * authorises through the user's owner_org, which an individual signup
+ * does not have, so that route 404s for exactly the people this screen
+ * is for. Same validation, versioning and provenance behind it.
+ */
+export async function saveCheckBoundary(
+  checkId: string,
+  points: { lat: number; lng: number }[]
+): Promise<Site> {
+  return apiFetch(`/app/checks/${checkId}/boundary`, { method: "PUT", body: { points } });
 }
 
 export async function createSite(input: {
@@ -220,23 +218,7 @@ export async function createSite(input: {
   lat: number;
   lng: number;
 }): Promise<Site> {
-  const newSite: Site = {
-    id: `ST-${(2000 + sitesStore.length).toString()}`,
-    name: input.name,
-    siteType: input.siteType,
-    address: input.address,
-    district: input.district,
-    state: input.state,
-    location: { lat: input.lat, lng: input.lng },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    latestAssessment: null,
-    usnStatus: input.siteType === "ROOFTOP_RESIDENTIAL" || input.siteType === "ROOFTOP_CI" ? "not_started" : undefined,
-    usn: null,
-    tags: ["new"],
-  };
-  sitesStore.unshift(newSite);
-  return delay(newSite);
+  return apiFetch("/app/sites", { method: "POST", body: input });
 }
 
 export interface PortfolioSummary {
@@ -248,22 +230,7 @@ export interface PortfolioSummary {
 }
 
 export async function getPortfolioSummary(): Promise<PortfolioSummary> {
-  const verdictBreakdown: Record<string, number> = {};
-  const siteTypeBreakdown: Record<string, number> = {};
-  let totalCapacityKwp = 0;
-  for (const s of sitesStore) {
-    const v = s.latestAssessment?.verdict ?? "INSUFFICIENT_DATA";
-    verdictBreakdown[v] = (verdictBreakdown[v] ?? 0) + 1;
-    siteTypeBreakdown[s.siteType] = (siteTypeBreakdown[s.siteType] ?? 0) + 1;
-    totalCapacityKwp += s.latestAssessment?.capacityKwp ?? 0;
-  }
-  return delay({
-    totalSites: sitesStore.length,
-    totalCapacityKwp,
-    verdictBreakdown,
-    activeJobs: jobsStore.filter((j) => j.status === "running" || j.status === "queued").length,
-    siteTypeBreakdown,
-  });
+  return apiFetch("/app/sites/portfolio-summary");
 }
 
 // -----------------------------------------------------------------------------
@@ -276,145 +243,115 @@ export interface VendorJobListParams {
 }
 
 export async function listVendorJobs(params: VendorJobListParams = {}): Promise<VendorJob[]> {
-  let items = vendorJobsStore;
-  if (params.status) items = items.filter((j) => j.status === params.status);
-  items = [...items];
-  if (params.sort === "distance") items.sort((a, b) => a.distanceKm - b.distanceKm);
-  else if (params.sort === "payout") items.sort((a, b) => b.payoutInr - a.payoutInr);
-  else if (params.sort === "deadline") items.sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
-  return delay(items);
+  return apiFetch("/app/vendor/jobs", { query: { ...params } });
 }
 
 export async function getVendorJob(jobId: string): Promise<VendorJob> {
-  const job = vendorJobsStore.find((j) => j.id === jobId);
-  if (!job) throw new ApiError(`Job ${jobId} not found`, 404);
-  return delay(job);
+  return apiFetch(`/app/vendor/jobs/${jobId}`);
 }
 
 export async function acceptVendorJob(jobId: string): Promise<VendorJob> {
-  const job = vendorJobsStore.find((j) => j.id === jobId);
-  if (!job) throw new ApiError(`Job ${jobId} not found`, 404);
-  job.status = "accepted";
-  return delay(job);
+  return apiFetch(`/app/vendor/jobs/${jobId}/accept`, { method: "POST" });
 }
 
 export async function declineVendorJob(jobId: string): Promise<VendorJob> {
-  const idx = vendorJobsStore.findIndex((j) => j.id === jobId);
-  if (idx === -1) throw new ApiError(`Job ${jobId} not found`, 404);
-  const [job] = vendorJobsStore.splice(idx, 1);
-  return delay(job);
+  return apiFetch(`/app/vendor/jobs/${jobId}/decline`, { method: "POST" });
 }
 
 export async function startVendorJob(jobId: string): Promise<VendorJob> {
-  const job = vendorJobsStore.find((j) => j.id === jobId);
-  if (!job) throw new ApiError(`Job ${jobId} not found`, 404);
-  job.status = "in_progress";
-  return delay(job);
+  return apiFetch(`/app/vendor/jobs/${jobId}/start`, { method: "POST" });
 }
 
 export async function submitVendorJob(jobId: string): Promise<VendorJob> {
-  const job = vendorJobsStore.find((j) => j.id === jobId);
-  if (!job) throw new ApiError(`Job ${jobId} not found`, 404);
-  job.status = "submitted";
-  job.submittedAt = new Date().toISOString();
-  return delay(job);
+  return apiFetch(`/app/vendor/jobs/${jobId}/submit`, { method: "POST" });
+}
+
+export async function uploadPanoramaPhoto(jobId: string, dataUrl: string): Promise<VendorJob> {
+  return apiFetch(`/app/vendor/jobs/${jobId}/panorama`, { method: "PATCH", body: { dataUrl } });
+}
+
+export async function saveShadingNotes(jobId: string, notes: string): Promise<VendorJob> {
+  return apiFetch(`/app/vendor/jobs/${jobId}/shading-notes`, { method: "PATCH", body: { notes } });
+}
+
+export async function submitFieldBoundary(
+  jobId: string,
+  points: { lat: number; lng: number }[]
+): Promise<VendorJob> {
+  return apiFetch(`/app/vendor/jobs/${jobId}/boundary`, { method: "PATCH", body: { points } });
+}
+
+export async function saveObstacleSurvey(jobId: string, obstacles: ObstacleSurveyItem[]): Promise<VendorJob> {
+  return apiFetch(`/app/vendor/jobs/${jobId}/obstacles`, { method: "PATCH", body: { obstacles } });
+}
+
+export async function saveStructuralAssessment(
+  jobId: string,
+  assessment: StructuralAssessment
+): Promise<VendorJob> {
+  return apiFetch(`/app/vendor/jobs/${jobId}/structural-assessment`, { method: "PATCH", body: assessment });
+}
+
+export async function saveElectricalAssessment(
+  jobId: string,
+  assessment: ElectricalAssessment
+): Promise<VendorJob> {
+  return apiFetch(`/app/vendor/jobs/${jobId}/electrical-assessment`, { method: "PATCH", body: assessment });
+}
+
+export async function saveInstallationConstraints(
+  jobId: string,
+  constraints: InstallationConstraints
+): Promise<VendorJob> {
+  return apiFetch(`/app/vendor/jobs/${jobId}/installation-constraints`, { method: "PATCH", body: constraints });
+}
+
+export async function saveSafetyAssessment(jobId: string, assessment: SafetyAssessment): Promise<VendorJob> {
+  return apiFetch(`/app/vendor/jobs/${jobId}/safety-assessment`, { method: "PATCH", body: assessment });
+}
+
+export async function saveBatteryAssessment(jobId: string, assessment: BatteryAssessment): Promise<VendorJob> {
+  return apiFetch(`/app/vendor/jobs/${jobId}/battery-assessment`, { method: "PATCH", body: assessment });
 }
 
 export async function getVendorProfile(): Promise<VendorProfile> {
-  return delay(vendorProfileStore);
+  return apiFetch("/app/vendor/profile");
 }
 
 export async function updateVendorAvailability(available: boolean): Promise<VendorProfile> {
-  vendorProfileStore.availability = available;
-  return delay(vendorProfileStore);
+  return apiFetch("/app/vendor/profile/availability", { method: "PATCH", body: { available } });
 }
 
-export async function listVendorPayouts(): Promise<PayoutEntry[]> {
-  return delay(vendorPayoutsStore);
+export async function getVendorNotificationPreferences(): Promise<VendorNotificationPreferences> {
+  return apiFetch("/app/vendor/profile/notification-preferences");
 }
 
-export interface VendorEarningsSummary {
-  weekTotalInr: number;
-  pendingInr: number;
-  paidInr: number;
-  disputedInr: number;
-  jobsCompletedThisWeek: number;
+export async function updateVendorNotificationPreferences(
+  preferences: VendorNotificationPreferences
+): Promise<VendorNotificationPreferences> {
+  return apiFetch("/app/vendor/profile/notification-preferences", { method: "PATCH", body: preferences });
 }
 
-export async function getVendorEarningsSummary(): Promise<VendorEarningsSummary> {
-  const pendingInr = vendorPayoutsStore.filter((p) => p.status === "pending").reduce((sum, p) => sum + p.amount, 0);
-  const paidInr = vendorPayoutsStore.filter((p) => p.status === "paid").reduce((sum, p) => sum + p.amount, 0);
-  const disputedInr = vendorPayoutsStore.filter((p) => p.status === "disputed").reduce((sum, p) => sum + p.amount, 0);
-  const weekAgo = Date.now() - 7 * 86400000;
-  const recent = vendorPayoutsStore.filter((p) => new Date(p.date).getTime() >= weekAgo);
-  return delay({
-    weekTotalInr: recent.reduce((sum, p) => sum + p.amount, 0),
-    pendingInr,
-    paidInr,
-    disputedInr,
-    jobsCompletedThisWeek: recent.length,
-  });
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export async function changePassword(input: ChangePasswordInput): Promise<void> {
+  return apiFetch("/app/auth/change-password", { method: "POST", body: input });
 }
 
 export async function listVendorSubmissions(): Promise<VendorJob[]> {
-  return delay(vendorJobsStore.filter((j) => j.status === "submitted"));
+  return apiFetch("/app/vendor/submissions");
 }
 
 export async function disputeSubmission(id: string, reason: string): Promise<VendorJob> {
-  const job = vendorJobsStore.find((j) => j.id === id);
-  if (!job) throw new ApiError(`Job ${id} not found`, 404);
-  job.disputeStatus = "open";
-  job.disputeReason = reason;
-  return delay(job);
+  return apiFetch(`/app/vendor/submissions/${id}/dispute`, { method: "POST", body: { reason } });
 }
 
 // -----------------------------------------------------------------------------
 // Super admin portal
 // -----------------------------------------------------------------------------
-
-export interface TenantListParams {
-  q?: string;
-  tier?: string;
-  status?: string;
-}
-
-export async function listTenants(params: TenantListParams = {}): Promise<Tenant[]> {
-  let items = tenantsStore;
-  if (params.q) {
-    const q = params.q.toLowerCase();
-    items = items.filter((t) => t.name.toLowerCase().includes(q) || t.id.toLowerCase().includes(q) || t.billingContactEmail.toLowerCase().includes(q));
-  }
-  if (params.tier) items = items.filter((t) => t.tier === params.tier);
-  if (params.status) items = items.filter((t) => t.status === params.status);
-  return delay(items);
-}
-
-export async function getTenant(id: string): Promise<Tenant> {
-  const tenant = tenantsStore.find((t) => t.id === id);
-  if (!tenant) throw new ApiError(`Tenant ${id} not found`, 404);
-  return delay(tenant);
-}
-
-export async function updateTenantTier(id: string, tier: TenantTier): Promise<Tenant> {
-  const tenant = tenantsStore.find((t) => t.id === id);
-  if (!tenant) throw new ApiError(`Tenant ${id} not found`, 404);
-  tenant.tier = tier;
-  return delay(tenant);
-}
-
-export async function suspendTenant(id: string): Promise<Tenant> {
-  const tenant = tenantsStore.find((t) => t.id === id);
-  if (!tenant) throw new ApiError(`Tenant ${id} not found`, 404);
-  tenant.status = "suspended";
-  return delay(tenant);
-}
-
-export async function reinstateTenant(id: string): Promise<Tenant> {
-  const tenant = tenantsStore.find((t) => t.id === id);
-  if (!tenant) throw new ApiError(`Tenant ${id} not found`, 404);
-  tenant.status = "active";
-  return delay(tenant);
-}
 
 export interface AdminVendorListParams {
   q?: string;
@@ -423,130 +360,494 @@ export interface AdminVendorListParams {
 }
 
 export async function listAdminVendors(params: AdminVendorListParams = {}): Promise<AdminVendorSummary[]> {
-  let items = adminVendorsStore;
-  if (params.q) {
-    const q = params.q.toLowerCase();
-    items = items.filter((v) => v.name.toLowerCase().includes(q) || v.serviceArea.toLowerCase().includes(q));
-  }
-  if (params.verificationStatus) items = items.filter((v) => v.verificationStatus === params.verificationStatus);
-  items = [...items];
-  if (params.sort === "accuracy") items.sort((a, b) => b.accuracyScore - a.accuracyScore);
-  else if (params.sort === "sla") items.sort((a, b) => b.slaCompliancePct - a.slaCompliancePct);
-  return delay(items);
+  return apiFetch("/app/admin/vendors", { query: { ...params } });
 }
 
 export async function getAdminVendor(id: string): Promise<AdminVendorSummary> {
-  const vendor = adminVendorsStore.find((v) => v.id === id);
-  if (!vendor) throw new ApiError(`Vendor ${id} not found`, 404);
-  return delay(vendor);
+  return apiFetch(`/app/admin/vendors/${id}`);
 }
 
 export async function suspendVendor(id: string): Promise<AdminVendorSummary> {
-  const vendor = adminVendorsStore.find((v) => v.id === id);
-  if (!vendor) throw new ApiError(`Vendor ${id} not found`, 404);
-  vendor.verificationStatus = "suspended";
-  return delay(vendor);
+  return apiFetch(`/app/admin/vendors/${id}/suspend`, { method: "POST" });
 }
 
 export async function reinstateVendor(id: string): Promise<AdminVendorSummary> {
-  const vendor = adminVendorsStore.find((v) => v.id === id);
-  if (!vendor) throw new ApiError(`Vendor ${id} not found`, 404);
-  vendor.verificationStatus = "verified";
-  return delay(vendor);
+  return apiFetch(`/app/admin/vendors/${id}/reinstate`, { method: "POST" });
 }
 
 export async function listVendorVerificationQueue(): Promise<AdminVendorSummary[]> {
-  return delay(adminVendorsStore.filter((v) => v.verificationStatus === "pending"));
+  return apiFetch("/app/admin/vendors/verification-queue");
 }
 
 export async function approveVendorVerification(id: string): Promise<AdminVendorSummary> {
-  const vendor = adminVendorsStore.find((v) => v.id === id);
-  if (!vendor) throw new ApiError(`Vendor ${id} not found`, 404);
-  vendor.verificationStatus = "verified";
-  return delay(vendor);
+  return apiFetch(`/app/admin/vendors/${id}/verification/approve`, { method: "POST" });
 }
 
 export async function rejectVendorVerification(id: string): Promise<AdminVendorSummary> {
-  const vendor = adminVendorsStore.find((v) => v.id === id);
-  if (!vendor) throw new ApiError(`Vendor ${id} not found`, 404);
-  vendor.verificationStatus = "rejected";
-  return delay(vendor);
+  return apiFetch(`/app/admin/vendors/${id}/verification/reject`, { method: "POST" });
 }
+
+export interface NewVendorInput {
+  name: string;
+  legalName?: string;
+  gstNumber?: string;
+  panNumber?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  serviceAreaRegion: string;
+  serviceAreaDistricts: string[];
+  payoutMethodType: "UPI" | "Bank transfer";
+  payoutMaskedAccount: string;
+  certifications: string[];
+  documents: string[];
+}
+
+export interface NewVendorResult {
+  vendor: AdminVendorSummary;
+  loginEmail: string;
+  temporaryPassword: string;
+}
+
+export async function createAdminVendor(input: NewVendorInput): Promise<NewVendorResult> {
+  return apiFetch("/app/admin/vendors", { method: "POST", body: input });
+}
+
+export async function listAdminVendorJobs(vendorId: string): Promise<VendorJob[]> {
+  return apiFetch(`/app/admin/vendors/${vendorId}/jobs`);
+}
+
+export async function listAdminVendorPayouts(vendorId: string): Promise<PayoutEntry[]> {
+  return apiFetch(`/app/admin/vendors/${vendorId}/payouts`);
+}
+
+export interface VendorUser {
+  id: string;
+  email: string;
+  name: string;
+  status: "active" | "inactive";
+  createdAt: string;
+  lastLoginAt: string | null;
+}
+
+export interface NewVendorUserInput {
+  name: string;
+  email: string;
+}
+
+export interface NewVendorUserResult {
+  user: VendorUser;
+  loginEmail: string;
+  temporaryPassword: string;
+}
+
+export async function listVendorUsers(vendorId: string): Promise<VendorUser[]> {
+  return apiFetch(`/app/admin/vendors/${vendorId}/users`);
+}
+
+export async function createVendorUser(
+  vendorId: string,
+  input: NewVendorUserInput,
+): Promise<NewVendorUserResult> {
+  return apiFetch(`/app/admin/vendors/${vendorId}/users`, { method: "POST", body: input });
+}
+
+export async function setVendorUserStatus(
+  vendorId: string,
+  userId: string,
+  status: "active" | "inactive",
+): Promise<VendorUser> {
+  return apiFetch(`/app/admin/vendors/${vendorId}/users/${userId}/status`, {
+    method: "PATCH",
+    body: { status },
+  });
+}
+
+// -----------------------------------------------------------------------------
+// Notifications
+// -----------------------------------------------------------------------------
+
+export interface AppNotification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export async function listNotifications(): Promise<AppNotification[]> {
+  return apiFetch("/app/notifications");
+}
+
+export async function markNotificationRead(id: string): Promise<AppNotification> {
+  return apiFetch(`/app/notifications/${id}/read`, { method: "POST" });
+}
+
+// Customer -> [customer raises an enquiry] -> Admin Review -> Admin
+// Approval -> Vendor Access. "not_submitted" = a good verdict the
+// customer hasn't turned into an enquiry yet (the check and the enquiry
+// are deliberately separate stages); "pending" = the enquiry was raised
+// and awaits admin action; "not_applicable" = verdict (CONDITIONAL /
+// INSUFFICIENT_DATA / NOT_SUITABLE) never leads to vendor work, so
+// there's nothing to raise an enquiry on.
+export type ReviewStatus = "not_submitted" | "pending" | "approved" | "rejected" | "not_applicable";
 
 export interface AdminAssessmentRow {
   siteId: string;
   siteName: string;
+  address: string | null;
   district: string;
   state: string;
+  reviewStatus: ReviewStatus;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+  assignedVendorId: string | null;
+  vendorJobId: string | null;
+  // Enquiry workflow — the customer's own action, distinct from the
+  // admin's approve/reject/reassign action above.
+  customerSelectedVendorId: string | null;
+  enquirySubmittedAt: string | null;
+  // A district-matched vendor hint (real matching logic — repositories/
+  // vendors.py::best_available_vendor_for_district()), shown only when
+  // no customer selection exists. Null when nothing matches.
+  suggestedVendorId: string | null;
   assessment: Assessment;
 }
 
 export interface AssessmentListParams {
   q?: string;
   verdict?: string;
+  reviewStatus?: ReviewStatus;
   page?: number;
   pageSize?: number;
+}
+
+// The backend's admin listing has no server-side search/pagination — just
+// limit/offset. Fetch a generous page, then filter/paginate client-side the
+// same way the mock always did. siteName/address/district/state and the
+// review fields are now real (joined from the sites table server-side).
+interface RawCapacityResult {
+  recommended_kwp: number | null;
+}
+
+interface RawAdminAssessment {
+  id: string;
+  siteId: string;
+  siteName: string;
+  address: string | null;
+  district: string;
+  state: string;
+  verdict: string;
+  confidence: ConfidenceTier;
+  bindingConstraint: BindingConstraint;
+  reasons: string[];
+  capacity: RawCapacityResult;
+  panoramaUrl: string | null;
+  mlSuitabilityScore: number | null;
+  cacheHit: boolean;
+  engineVersion: string;
+  createdAt: string;
+  generation: GenerationEstimate | null;
+  reviewStatus: ReviewStatus;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+  assignedVendorId: string | null;
+  vendorJobId: string | null;
+  customerSelectedVendorId: string | null;
+  enquirySubmittedAt: string | null;
+  suggestedVendorId: string | null;
+}
+
+interface RawChecklistItem {
+  label: string;
+  kwp: number | null;
+  kind: ConstraintKind;
+  note: string;
+  status: "ok" | "estimated" | "insufficient_data" | "not_applicable";
+  isBinding: boolean;
+}
+
+export type GridConnectionStatus =
+  | "not_started"
+  | "application_submitted"
+  | "under_review"
+  | "approved"
+  | "connected"
+  | "rejected";
+
+export interface GridFeasibility {
+  discom?: string | null;
+  distributionArea?: string | null;
+  netMeteringAvailable?: boolean | null;
+  grossMeteringAvailable?: boolean | null;
+  applicationRequired?: boolean | null;
+  gridApprovalRequired?: boolean | null;
+  transformerCapacityKva?: number | null;
+  maxPermissibleCapacityKwp?: number | null;
+  gridConnectionStatus: GridConnectionStatus;
+  applicationReference?: string | null;
+  notes?: string | null;
+}
+
+export interface FinancialFeasibility {
+  panelCostInr?: number | null;
+  inverterCostInr?: number | null;
+  mountingStructureCostInr?: number | null;
+  dcCableCostInr?: number | null;
+  acCableCostInr?: number | null;
+  protectionEquipmentCostInr?: number | null;
+  installationCostInr?: number | null;
+  civilWorkCostInr?: number | null;
+  transportationCostInr?: number | null;
+  otherChargesInr?: number | null;
+  totalProjectCostInr?: number | null;
+  subsidyApplicable?: boolean | null;
+  subsidyCategory?: string | null;
+  subsidyAmountInr?: number | null;
+  customerContributionInr?: number | null;
+  monthlySavingsInr?: number | null;
+  annualSavingsInr?: number | null;
+  paybackPeriodYears?: number | null;
+  tenYearSavingsInr?: number | null;
+  twentyYearSavingsInr?: number | null;
+  estimatedSystemLifetimeYears?: number | null;
+  notes?: string | null;
+}
+
+interface RawAdminAssessmentDetail extends RawAdminAssessment {
+  checklist: RawChecklistItem[];
+  gridFeasibility: GridFeasibility | null;
+  financialFeasibility: FinancialFeasibility | null;
+}
+
+function toAdminAssessmentRow(raw: RawAdminAssessment): AdminAssessmentRow {
+  return {
+    siteId: raw.siteId,
+    siteName: raw.siteName,
+    address: raw.address,
+    district: raw.district,
+    state: raw.state,
+    reviewStatus: raw.reviewStatus,
+    reviewedBy: raw.reviewedBy,
+    reviewedAt: raw.reviewedAt,
+    rejectionReason: raw.rejectionReason,
+    assignedVendorId: raw.assignedVendorId,
+    vendorJobId: raw.vendorJobId,
+    customerSelectedVendorId: raw.customerSelectedVendorId,
+    enquirySubmittedAt: raw.enquirySubmittedAt,
+    suggestedVendorId: raw.suggestedVendorId,
+    assessment: {
+      id: raw.id,
+      siteId: raw.siteId,
+      verdict: raw.verdict as Verdict,
+      capacityKwp: raw.capacity.recommended_kwp ?? 0,
+      confidence: raw.confidence,
+      bindingConstraint: raw.bindingConstraint,
+      reasons: raw.reasons,
+      ceilingLedger: [],
+      panoramaUrl: raw.panoramaUrl,
+      mlSuitabilityScore: raw.mlSuitabilityScore,
+      generation: raw.generation ?? undefined,
+      cache: { cacheHit: raw.cacheHit },
+      assessedAt: raw.createdAt,
+      modelVersion: raw.engineVersion,
+    },
+  };
+}
+
+export interface AdminAssessmentDetail extends AdminAssessmentRow {
+  checklist: RawChecklistItem[];
+  gridFeasibility: GridFeasibility | null;
+  financialFeasibility: FinancialFeasibility | null;
+}
+
+function toAdminAssessmentDetail(raw: RawAdminAssessmentDetail): AdminAssessmentDetail {
+  return {
+    ...toAdminAssessmentRow(raw),
+    checklist: raw.checklist,
+    gridFeasibility: raw.gridFeasibility,
+    financialFeasibility: raw.financialFeasibility,
+  };
 }
 
 export async function listAllAssessments(
   params: AssessmentListParams = {}
 ): Promise<{ items: AdminAssessmentRow[]; total: number }> {
-  let items: AdminAssessmentRow[] = sitesStore
-    .filter((s) => s.latestAssessment)
-    .map((s) => ({
-      siteId: s.id,
-      siteName: s.name,
-      district: s.district,
-      state: s.state,
-      assessment: s.latestAssessment as Assessment,
-    }));
+  const raw = await apiFetch<RawAdminAssessment[]>("/app/admin/assessments", { query: { limit: 500, offset: 0 } });
+  let items = raw.map(toAdminAssessmentRow);
+
   if (params.q) {
     const q = params.q.toLowerCase();
     items = items.filter(
-      (row) =>
-        row.siteName.toLowerCase().includes(q) ||
-        row.siteId.toLowerCase().includes(q) ||
-        row.district.toLowerCase().includes(q)
+      (row) => row.siteName.toLowerCase().includes(q) || row.siteId.toLowerCase().includes(q) || row.district.toLowerCase().includes(q)
     );
   }
   if (params.verdict) items = items.filter((row) => row.assessment.verdict === params.verdict);
+  if (params.reviewStatus) items = items.filter((row) => row.reviewStatus === params.reviewStatus);
+
   const total = items.length;
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? total;
   const start = (page - 1) * pageSize;
-  return delay({ items: items.slice(start, start + pageSize), total });
+  return { items: items.slice(start, start + pageSize), total };
+}
+
+export async function getAdminAssessment(id: string): Promise<AdminAssessmentDetail> {
+  const raw = await apiFetch<RawAdminAssessmentDetail>(`/app/admin/assessments/${id}`);
+  return toAdminAssessmentDetail(raw);
+}
+
+export async function approveAssessment(
+  id: string,
+  input: { vendorId: string; deadlineDays?: number; payoutInr?: number }
+): Promise<AdminAssessmentDetail> {
+  const raw = await apiFetch<RawAdminAssessmentDetail>(`/app/admin/assessments/${id}/approve`, {
+    method: "POST",
+    body: { vendorId: input.vendorId, deadlineDays: input.deadlineDays, payoutInr: input.payoutInr },
+  });
+  return toAdminAssessmentDetail(raw);
+}
+
+export async function reassignAssessment(
+  id: string,
+  input: { vendorId: string; deadlineDays?: number; reason?: string }
+): Promise<AdminAssessmentDetail> {
+  const raw = await apiFetch<RawAdminAssessmentDetail>(`/app/admin/assessments/${id}/reassign`, {
+    method: "POST",
+    body: { vendorId: input.vendorId, deadlineDays: input.deadlineDays, reason: input.reason },
+  });
+  return toAdminAssessmentDetail(raw);
+}
+
+export async function rejectAssessment(id: string, reason: string): Promise<AdminAssessmentDetail> {
+  const raw = await apiFetch<RawAdminAssessmentDetail>(`/app/admin/assessments/${id}/reject`, {
+    method: "POST",
+    body: { reason },
+  });
+  return toAdminAssessmentDetail(raw);
+}
+
+export async function saveGridFeasibility(id: string, feasibility: GridFeasibility): Promise<AdminAssessmentDetail> {
+  const raw = await apiFetch<RawAdminAssessmentDetail>(`/app/admin/assessments/${id}/grid-feasibility`, {
+    method: "PATCH",
+    body: feasibility,
+  });
+  return toAdminAssessmentDetail(raw);
+}
+
+export async function saveFinancialFeasibility(
+  id: string,
+  feasibility: FinancialFeasibility
+): Promise<AdminAssessmentDetail> {
+  const raw = await apiFetch<RawAdminAssessmentDetail>(`/app/admin/assessments/${id}/financial-feasibility`, {
+    method: "PATCH",
+    body: feasibility,
+  });
+  return toAdminAssessmentDetail(raw);
 }
 
 export interface AuditLogListParams {
   actor?: string;
   action?: string;
   q?: string;
+  // Query key names match the backend's Query(alias=...) exactly — see
+  // routers/app_admin_platform.py::list_audit_log — since apiFetch's
+  // buildUrl() sends object keys verbatim as query param names.
+  actorRole?: string;
+  entityType?: string;
+  projectId?: string;
+  surveyId?: string;
+  customerId?: string;
+  vendorId?: string;
+  since?: string;
+  until?: string;
 }
 
 export async function listAuditLog(params: AuditLogListParams = {}): Promise<AuditLogEntry[]> {
-  let items = auditLogStore;
-  if (params.actor) items = items.filter((a) => a.actor === params.actor);
-  if (params.action) items = items.filter((a) => a.action === params.action);
-  if (params.q) {
-    const q = params.q.toLowerCase();
-    items = items.filter(
-      (a) =>
-        a.actor.toLowerCase().includes(q) ||
-        a.action.toLowerCase().includes(q) ||
-        a.target.toLowerCase().includes(q) ||
-        a.details.toLowerCase().includes(q)
-    );
-  }
-  return delay(items);
+  return apiFetch("/app/admin/audit-log", { query: { ...params } });
 }
 
 export async function getPlatformHealth(): Promise<PlatformHealthMetric> {
-  return delay(platformHealthStore);
+  return apiFetch("/app/admin/platform-health");
 }
 
 export async function rotateApiKey(service: string): Promise<{ service: string; rotatedAt: string }> {
-  void service;
-  return delay({ service, rotatedAt: new Date().toISOString() });
+  return apiFetch("/app/admin/api-keys/rotate", { method: "POST", body: { service } });
+}
+
+export async function listServiceApiKeys(): Promise<ServiceApiKey[]> {
+  return apiFetch("/app/admin/api-keys");
+}
+
+export async function listFeatureFlags(): Promise<FeatureFlag[]> {
+  return apiFetch("/app/admin/feature-flags");
+}
+
+export async function setFeatureFlag(key: string, enabled: boolean): Promise<FeatureFlag> {
+  return apiFetch(`/app/admin/feature-flags/${key}`, { method: "PATCH", body: { enabled } });
+}
+
+// -----------------------------------------------------------------------------
+// FIN-02 — the versioned, admin-editable financial-projection assumptions.
+// Distinct from FinancialEstimate's own config-pack coefficients (those stay
+// dev-tunable YAML) — these are the NEW assumptions engine/
+// financial_projection.py needs (escalation, export rate, self-consumption
+// default, maintenance, financing defaults), live-editable here.
+// -----------------------------------------------------------------------------
+
+export interface SeasonCalendarMonths {
+  summer: number[];
+  rainy: number[];
+  winter: number[];
+}
+
+export interface FinancialAssumptions {
+  version: number;
+  tariffEscalationPctPerYear: number;
+  exportTariffInrPerKwh: number;
+  defaultSelfConsumptionRatio: number;
+  annualMaintenanceCostInrPerKwp: number;
+  inverterReplacementYear: number | null;
+  inverterReplacementCostInrPerKwp: number | null;
+  financingDefaultDownPaymentPct: number;
+  financingDefaultInterestRatePct: number;
+  financingDefaultTenureYears: number;
+  // FIN-03 — seasonal consumption/generation model.
+  annualConsumptionGrowthPct: number;
+  rainySeasonFactorPct: number;
+  summerMonths: number;
+  rainyMonths: number;
+  winterMonths: number;
+  summerGenerationShare: number;
+  rainyGenerationShare: number;
+  winterGenerationShare: number;
+  seasonCalendarMonths: SeasonCalendarMonths;
+  updatedBy: string | null;
+  note: string | null;
+  updatedAt: string;
+}
+
+export type FinancialAssumptionsInput = Omit<
+  FinancialAssumptions,
+  "version" | "updatedBy" | "updatedAt"
+>;
+
+export async function getFinancialConfig(): Promise<FinancialAssumptions> {
+  return apiFetch("/app/admin/financial-config");
+}
+
+export async function setFinancialConfig(
+  input: FinancialAssumptionsInput
+): Promise<FinancialAssumptions> {
+  return apiFetch("/app/admin/financial-config", { method: "PATCH", body: input });
 }
 
 // -----------------------------------------------------------------------------
@@ -557,14 +858,47 @@ export async function rotateApiKey(service: string): Promise<{ service: string; 
 // -----------------------------------------------------------------------------
 
 export async function listChecks(): Promise<Site[]> {
-  const items = [...checksStore].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  return delay(items);
+  return apiFetch("/app/checks");
 }
 
 export async function getCheck(checkId: string): Promise<Site> {
-  const check = checksStore.find((c) => c.id === checkId);
-  if (!check) throw new ApiError(`Check ${checkId} not found`, 404);
-  return delay(check);
+  return apiFetch(`/app/checks/${checkId}`);
+}
+
+// FIN-02 — the year-by-year ROI projection built on top of this check's
+// already-persisted FinancialEstimate/generation figures (never
+// recomputed). `financing=false` omits the financed-purchase comparison;
+// the three override params let the customer explore a different down
+// payment/rate/tenure than the admin-configured defaults for this one
+// request, without persisting a new assumptions version.
+export interface FinancialProjectionParams {
+  financing?: boolean;
+  downPaymentPct?: number;
+  interestRatePct?: number;
+  tenureYears?: number;
+}
+
+export async function getCheckFinancialProjection(
+  checkId: string,
+  params: FinancialProjectionParams = {}
+): Promise<FinancialProjection> {
+  return apiFetch(`/app/checks/${checkId}/financial-projection`, {
+    query: {
+      financing: params.financing,
+      downPaymentPct: params.downPaymentPct,
+      interestRatePct: params.interestRatePct,
+      tenureYears: params.tenureYears,
+    },
+  });
+}
+
+export interface MapViewMetadata {
+  zoom: number;
+  mapTypeId: string;
+  clickedLat: number;
+  clickedLng: number;
+  /** StartCheckWizard's Crop vs Freehand building-selection tool. */
+  selectionMethod?: "crop" | "freehand";
 }
 
 export interface NewCheckInput {
@@ -572,105 +906,594 @@ export interface NewCheckInput {
   lat: number;
   lng: number;
   siteType?: SiteType;
+  /** CON-05 input. Optional — omitting them sizes the system by roof area
+   *  alone, which is what every check did before bills could be captured. */
+  monthlyBillLowInr?: number;
+  monthlyBillHighInr?: number;
+  /** FIN-03 — the PRIMARY consumption figures for seasonal estimation
+   *  when the customer knows their units (kWh), not just their bill
+   *  amount. Preferred over the ₹ pair above whenever both are given. */
+  highestConsumptionKwh?: number;
+  lowestConsumptionKwh?: number;
+  roofType?: RoofType;
+  roofMaterial?: RoofMaterial;
+  roofSlope?: RoofSlope;
+  roofConstructionYear?: number;
+  electricityBoard?: string;
+  consumerNumber?: string;
+  /** USN-01 — the electricity connection number, captured at intake.
+   *  Backend validates against the same 6-20 char format
+   *  providers/usn_ocr.py::capture_manual() uses for the post-analysis
+   *  manual-entry path on the result page. */
+  usn?: string;
+  connectionType?: ConnectionType;
+  sanctionedLoadKw?: number;
+  contractDemandKva?: number;
+  connectedLoadKw?: number;
+  monthlyConsumptionKwh?: MonthlyConsumptionEntry[];
+  batteryRequired?: boolean;
+  backupRequired?: boolean;
+  requiredBackupHours?: number;
+  criticalLoads?: string;
+  /** StartCheckWizard: a rooftop polygon the customer already confirmed
+   *  on the full-screen map, applied atomically at creation instead of
+   *  through a separate saveCheckBoundary() call afterwards. */
+  confirmedBoundary?: { lat: number; lng: number }[];
+  mapMetadata?: MapViewMetadata;
 }
 
 export async function createCheck(input: NewCheckInput): Promise<Site> {
-  const newCheck: Site = {
-    id: `CHK-${Date.now().toString(36).toUpperCase()}`,
-    name: input.address || "New location",
-    siteType: input.siteType ?? "ROOFTOP_RESIDENTIAL",
-    address: input.address || "Pinned location",
-    district: "",
-    state: "",
-    location: { lat: input.lat, lng: input.lng },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    latestAssessment: null,
-    tags: [],
-  };
-  checksStore.unshift(newCheck);
-  return delay(newCheck);
+  return apiFetch("/app/checks", { method: "POST", body: input });
 }
 
-const CHECK_VERDICT_POOL: Verdict[] = [
-  "SUITABLE",
-  "SUITABLE",
-  "SUITABLE_SUBJECT_TO_SURVEY",
-  "CONDITIONAL",
-  "INSUFFICIENT_DATA",
-  "NOT_SUITABLE",
-];
+// -----------------------------------------------------------------------------
+// StartCheckWizard's click-to-locate step.
+// -----------------------------------------------------------------------------
 
-const CHECK_PLAIN_CONSTRAINT: Record<Verdict, BindingConstraint | null> = {
-  SUITABLE: null,
-  SUITABLE_SUBJECT_TO_SURVEY: {
-    name: "Roof check needed",
-    reason: "Everything we can see points to a good fit, but we'd like someone to confirm the roof in person before locking in the details.",
-    kind: "physical",
-  },
-  CONDITIONAL: {
-    name: "Connection paperwork",
-    reason: "The size of system this location can support is a little larger than a standard home connection allows, so a simple upgrade request will be needed first.",
-    kind: "regulatory",
-  },
-  INSUFFICIENT_DATA: {
-    name: "Clearer imagery needed",
-    reason: "The images we have of this location aren't recent or sharp enough to size a system with confidence yet.",
-    kind: "physical",
-  },
-  NOT_SUITABLE: {
-    name: "Space and shading",
-    reason: "There isn't enough clear, unshaded space at this exact location to fit a workable solar system.",
-    kind: "physical",
-  },
-};
-
-const CHECK_PLAIN_REASONS: Record<Verdict, string[]> = {
-  SUITABLE: ["Enough clear space for a solar system.", "No blockers found nearby."],
-  SUITABLE_SUBJECT_TO_SURVEY: ["Looks good from imagery.", "A quick in-person check will confirm it."],
-  CONDITIONAL: ["The location can support solar.", "A connection upgrade step is needed first."],
-  INSUFFICIENT_DATA: ["The available imagery isn't clear enough yet.", "This is a data gap, not a rejection."],
-  NOT_SUITABLE: ["Not enough usable space at this exact spot.", "Shading or layout rules it out for now."],
-};
-
-function generateCheckAssessment(check: Site): Assessment {
-  const verdict = CHECK_VERDICT_POOL[Math.floor(Math.random() * CHECK_VERDICT_POOL.length)];
-  const confidence: ConfidenceTier = verdict === "INSUFFICIENT_DATA" ? "N/A" : verdict === "SUITABLE" ? "High" : "Medium";
-  const capacityKwp = verdict === "NOT_SUITABLE" || verdict === "INSUFFICIENT_DATA" ? 0 : Number((2.5 + Math.random() * 7).toFixed(1));
-  return {
-    id: `AS-${check.id}`,
-    siteId: check.id,
-    verdict,
-    capacityKwp,
-    confidence,
-    bindingConstraint: CHECK_PLAIN_CONSTRAINT[verdict],
-    reasons: CHECK_PLAIN_REASONS[verdict],
-    ceilingLedger: [],
-    panoramaUrl: null,
-    mlSuitabilityScore: verdict === "INSUFFICIENT_DATA" ? null : Number((0.6 + Math.random() * 0.35).toFixed(2)),
-    generation:
-      verdict === "NOT_SUITABLE" || verdict === "INSUFFICIENT_DATA"
-        ? undefined
-        : { p50AnnualKwh: Math.round(capacityKwp * 1450), p90AnnualKwh: Math.round(capacityKwp * 1280) },
-    cache: { cacheHit: false },
-    assessedAt: new Date().toISOString(),
-    modelVersion: "fitness-core-v2.4.0",
-  };
+/** The real, measured plane of whichever roof segment the pin landed on
+ *  — routers/app_checks.py::RoofPitchOut, backed by
+ *  providers/solar_api.py::roof_pitch_at_point(). Physical roof slope,
+ *  never the map camera's own tilt — null whenever no roof segment has
+ *  both a pitch and an azimuth to report, rather than a fabricated
+ *  value. */
+export interface RoofPitchResult {
+  segmentIndex: number;
+  pitchDeg: number;
+  azimuthDeg: number;
+  /** 16-point compass label, e.g. "SE". */
+  orientation: string;
+  planeHeightM: number | null;
+  areaM2: number | null;
+  groundAreaM2: number | null;
+  /** Total roof planes Building Insights reported for this building —
+   *  lets the UI say "plane 1 of 3" when the roof isn't a single slope. */
+  segmentCount: number;
+  matchedBy: "contains" | "tolerated_contains" | "nearest";
+  confidence: "high" | "medium" | "low";
 }
 
-export async function completeCheck(checkId: string): Promise<Site> {
-  const check = checksStore.find((c) => c.id === checkId);
-  if (!check) throw new ApiError(`Check ${checkId} not found`, 404);
-  check.latestAssessment = generateCheckAssessment(check);
-  check.updatedAt = new Date().toISOString();
-  return delay(check);
+export interface ResolveBuildingResult {
+  status: "ok" | "no_coverage" | "error";
+  boundary: { lat: number; lng: number }[] | null;
+  centroid: { lat: number; lng: number } | null;
+  areaM2: number | null;
+  /** "solar_api_mask" is a real traced outline; "solar_api" is Google's
+   *  bounding-box rectangle — the same distinction SiteOut.geometrySource
+   *  already carries for a created check's boundary. */
+  source: "solar_api_mask" | "solar_api" | null;
+  imageryQuality: string | null;
+  /** ISO date string — when the imagery this detection ran on was
+   *  captured. Null when Google didn't report one. */
+  imageryDate: string | null;
+  competingBuildingsNearby: number | null;
+  detail: string | null;
+  roofPitch: RoofPitchResult | null;
+}
+
+export async function resolveBuildingAt(lat: number, lng: number): Promise<ResolveBuildingResult> {
+  return apiFetch("/app/checks/resolve-building", { query: { lat, lng } });
+}
+
+// -----------------------------------------------------------------------------
+// Real backend-driven progress for the processing screen
+// (routers/assessments.py::ASSESSMENT_STAGES). Previously completeCheck
+// blocked on one request until the whole pipeline finished, with the
+// wait masked behind a fixed ~3s client-side animation regardless of how
+// long the real work actually took. Now it only starts a background job
+// and returns a job id; getCheckAssessmentStatus is polled to find out
+// when — and at what stage — it actually is.
+// -----------------------------------------------------------------------------
+
+export interface StartAssessmentJob {
+  jobId: string;
+}
+
+/** One of routers/assessments.py::ASSESSMENT_STAGES's keys. This app owns
+ *  the human-facing copy for each — see ProcessingClient.tsx's STAGE_COPY. */
+export type AssessmentStage =
+  | "resolving_location"
+  | "analyzing_roof_imagery"
+  | "detecting_obstacles"
+  | "computing_usable_area"
+  | "sizing_system"
+  | "placing_panels"
+  | "scoring_feasibility"
+  | "finalizing_result";
+
+export type AssessmentJobStatus =
+  | "pending"
+  | "progress"
+  | "ok"
+  | "not_found"
+  | "geometry_rejected"
+  | "error";
+
+export interface AssessmentJobStatusDto {
+  jobId: string;
+  status: AssessmentJobStatus;
+  stage: AssessmentStage | null;
+  error: string | null;
+}
+
+export async function completeCheck(checkId: string): Promise<StartAssessmentJob> {
+  return apiFetch(`/app/checks/${checkId}/complete`, { method: "POST" });
+}
+
+export async function getCheckAssessmentStatus(
+  checkId: string,
+  jobId: string,
+): Promise<AssessmentJobStatusDto> {
+  return apiFetch(`/app/checks/${checkId}/complete/${jobId}`);
 }
 
 export async function getCustomerProfile(): Promise<CustomerProfile> {
-  return delay(customerProfileStore);
+  return apiFetch("/app/customer/profile");
 }
 
 export async function updateCustomerProfile(input: Partial<CustomerProfile>): Promise<CustomerProfile> {
-  Object.assign(customerProfileStore, input);
-  return delay(customerProfileStore);
+  return apiFetch("/app/customer/profile", { method: "PATCH", body: input });
+}
+
+// -----------------------------------------------------------------------------
+// This app's own per-panel solar layout for a check's rooftop
+// (engine/panel_packing.py), for drawing over the satellite imagery.
+//
+// Deliberately its OWN endpoint rather than a field on the check: it is
+// presentation-only, and a failure must never take the result page's
+// verdict or capacity down with it.
+//
+// panelCount/totalKwp now describe the SAME system the check's capacityKwp
+// names — the layout is packed specifically to reach that figure inside
+// the resolved usable polygon, obstacle- and setback-aware. They can
+// differ by up to one panel's worth (a packed layout can't hit an
+// arbitrary kWp exactly), but should never disagree by more than that.
+// -----------------------------------------------------------------------------
+
+export interface SolarPanelPolygonDto {
+  corners: { lat: number; lng: number }[];
+  capacityWatts: number | null;
+  orientation: string;
+  segmentIndex: number | null;
+  azimuthDegrees: number | null;
+  pitchDegrees: number | null;
+}
+
+// engine/panel_validation.py::validate_layout()'s independent re-check —
+// panelsOutsideRoof/panelsIntersectingObstacles should always be 0; this
+// makes that a checked, reported number rather than an assumption.
+// Absent on assessments computed before this field existed.
+export interface SolarLayoutValidation {
+  panelCount: number;
+  rejectedCount: number;
+  panelsOutsideRoof: number;
+  panelsIntersectingObstacles: number;
+}
+
+export interface SolarLayout {
+  status: "ok" | "no_layout" | "no_data";
+  reason: string | null;
+  source: string;
+  panelCount: number;
+  totalKwp: number;
+  panels: SolarPanelPolygonDto[];
+  validation?: SolarLayoutValidation | null;
+}
+
+export async function getCheckSolarLayout(checkId: string): Promise<SolarLayout> {
+  return apiFetch(`/app/checks/${checkId}/solar-layout`);
+}
+
+// -----------------------------------------------------------------------------
+// The 3D rooftop viewer's data source — engine/panorama.py::
+// build_scene_geometry()'s roof + walls + this app's own packed panel array +
+// mounting-rack visuals + OBS-04's applied obstacles (real DSM/segment-plane/
+// panel-layout geometry, the same source of truth the .glb pipeline above
+// uses) as plain JSON for the client-side Three.js scene on the result page
+// (components/panorama/Scene3DViewer.tsx).
+// -----------------------------------------------------------------------------
+
+export interface SceneMeshDto {
+  /** [x, y, z] metres — x east, y north, z up, ground at z = 0. */
+  vertices: number[][];
+  /** [i, j, k] indices into `vertices`. */
+  faces: number[][];
+  /** Per-vertex RGB, 0..1, same order as `vertices` — the roof's
+   *  sunshine-tint heatmap, or the panel array's frame/glass colouring.
+   *  null for a mesh that was never vertex-coloured (walls, an
+   *  obstacle box, or a roof/panel array with no shading data to tint
+   *  from). */
+  colors: number[][] | null;
+}
+
+export interface SceneObstacleDto {
+  id: string;
+  /** domain/assessment.py::ObstacleType — water_tank/hvac_unit/chimney/
+   *  existing_solar_panel/vent/antenna/other. null for an obstacle
+   *  applied before this field existed. */
+  type: string | null;
+  mesh: SceneMeshDto;
+}
+
+export interface SceneGeometry {
+  status: "ok" | "not_generated" | "no_data";
+  reason: string | null;
+  originLat: number | null;
+  originLng: number | null;
+  heightM: number | null;
+  groundSource: "measured" | "fallback" | null;
+  roof: SceneMeshDto | null;
+  walls: SceneMeshDto | null;
+  /** This app's OWN packed panel array (Assessment.panel_layout) placed
+   *  in 3D — NOT Google's solarPanels[]. See routers/app_checks.py::
+   *  get_check_scene()'s docstring on why. */
+  panels: SceneMeshDto | null;
+  /** Visual-only support-leg/rack geometry under flat-mounted panels
+   *  (engine/panorama.py::_mounting_leg_mesh()) — never affects panel
+   *  count, position or tilt, purely presentation. null when every
+   *  panel sits flush enough to need none, or there's no panel array. */
+  mounting: SceneMeshDto | null;
+  panelCount: number;
+  obstacles: SceneObstacleDto[];
+  version: string | null;
+}
+
+export async function getCheckScene(checkId: string): Promise<SceneGeometry> {
+  return apiFetch(`/app/checks/${checkId}/scene`);
+}
+
+// -----------------------------------------------------------------------------
+// OBS-04 — obstacles detected on a roof and applied to its exclusions, for
+// drawing over the satellite imagery.
+//
+// `detected` distinguishes "this roof genuinely has none" from "nothing has
+// looked yet": obstacle detection needs an OPENAI_API_KEY, and without one
+// the pipeline reports insufficient_data. Rendering an empty roof as "no
+// obstacles" in that case would be a lie of omission.
+// -----------------------------------------------------------------------------
+
+// domain/assessment.py::ObstacleType — a fixed, real classification, not
+// a free-text guess.
+export type ObstacleType =
+  | "water_tank"
+  | "hvac_unit"
+  | "chimney"
+  | "existing_solar_panel"
+  | "vent"
+  | "antenna"
+  | "other";
+
+export interface RoofObstacle {
+  id: string;
+  polygon: { lat: number; lng: number }[];
+  // Both null for an obstacle applied before these fields existed —
+  // never guessed for an older row. `confidence` is also null for a
+  // customer-marked obstacle: someone pointing at their own roof is a
+  // statement, not a probabilistic detection.
+  type: ObstacleType | null;
+  confidence: number | null;
+  /** Provenance only — "customer_marked" when the homeowner placed it,
+   *  a detector/pipeline name otherwise. Deliberately NOT a visual
+   *  distinction: the result page renders both identically. It exists so
+   *  the marking screen knows which items that customer may remove. */
+  source: string | null;
+  /** The stable "#1", "#2" a model detection is shown under. Survives
+   *  confirmation; null for something the customer placed themselves. */
+  number: number | null;
+}
+
+export interface RoofObstacles {
+  detected: boolean;
+  reason: string | null;
+  /** Applied to the roof — excluded from the usable area, so panels avoid
+   *  them. */
+  obstacles: RoofObstacle[];
+  /** Detected by the models but NOT yet confirmed. They count toward
+   *  neither panel placement nor shading until the customer confirms. */
+  pending: RoofObstacle[];
+}
+
+export async function getCheckObstacles(checkId: string): Promise<RoofObstacles> {
+  return apiFetch(`/app/checks/${checkId}/obstacles`);
+}
+
+/** The customer marking something that's really on their roof. The tap
+ *  point becomes a small square server-side (a fixed, documented default
+ *  size — a tap is a point, not a traced outline) and is unioned into the
+ *  site's exclusions through the same OBS-04 path a detected obstacle
+ *  takes. Like a corrected boundary, the geometry is versioned at once
+ *  but the numbers only move once completeCheck() re-runs the
+ *  assessment. */
+export async function markCheckObstacle(
+  checkId: string,
+  input: { type: ObstacleType; lat: number; lng: number }
+): Promise<RoofObstacle> {
+  return apiFetch(`/app/checks/${checkId}/obstacles`, { method: "POST", body: input });
+}
+
+/** Scans the roof the customer just selected for obstacles (water tanks,
+ *  stair rooms, equipment…). The detector models run on the server and
+ *  what they find comes back in `pending`, numbered, for the customer to
+ *  Confirm / Edit / Ignore — nothing is applied to the roof (so nothing
+ *  counts toward panel placement or shading) until they confirm it. Safe
+ *  to call again: anything already applied, reviewed or removed is not
+ *  offered a second time. If detection is unavailable the response says
+ *  so (`detected: false` + `reason`) rather than failing. Takes ~10–15 s,
+ *  mostly fetching the satellite image. */
+export async function detectCheckObstacles(checkId: string): Promise<RoofObstacles> {
+  return apiFetch(`/app/checks/${checkId}/obstacles/detect`, { method: "POST" });
+}
+
+/** Corrections the customer made to a detection before confirming it
+ *  (the "Edit" button): a different type and/or a re-drawn outline. */
+export interface ObstacleEdits {
+  type?: ObstacleType;
+  polygon?: { lat: number; lng: number }[];
+}
+
+/** Confirms a detected obstacle: it is applied to the roof, so the panel
+ *  layout avoids it from now on. With `edits`, the customer's corrections
+ *  are applied first (an outline dragged off the roof is refused with a
+ *  422). As with any geometry change the numbers only move once
+ *  completeCheck() re-runs the assessment. */
+export async function confirmCheckObstacle(
+  checkId: string,
+  obstacleId: string,
+  edits?: ObstacleEdits
+): Promise<RoofObstacle> {
+  return apiFetch(`/app/checks/${checkId}/obstacles/${obstacleId}/confirm`, {
+    method: "POST",
+    ...(edits ? { body: edits } : {}),
+  });
+}
+
+/** Dismisses a detection the customer says isn't real. It is remembered
+ *  so a later scan doesn't offer the same thing again. */
+export async function ignoreCheckObstacle(checkId: string, obstacleId: string): Promise<void> {
+  await apiFetch(`/app/checks/${checkId}/obstacles/${obstacleId}/ignore`, { method: "POST" });
+}
+
+/** Removes an obstacle from the customer's own roof — one they placed
+ *  themselves, or a detection they can see is wrong. (Anything else is
+ *  reversed through the audited admin OBS-06 path; the server rejects
+ *  those with a 403.) */
+export async function unmarkCheckObstacle(checkId: string, obstacleId: string): Promise<void> {
+  await apiFetch(`/app/checks/${checkId}/obstacles/${obstacleId}`, { method: "DELETE" });
+}
+
+// -----------------------------------------------------------------------------
+// Enquiry — the customer's own act of turning a viewed feasibility result
+// into something an admin needs to look at. Deliberately separate from
+// completing the check itself: a customer can view a SUITABLE result
+// without ever calling raiseEnquiry().
+// -----------------------------------------------------------------------------
+
+// Customer-safe vendor card — no contact/legal fields (phone, email,
+// GST/PAN, address). "distance" is deliberately absent: no vendor has a
+// lat/lng in this schema, so "nearby" is a real district/state match
+// category, never a fabricated distanceKm.
+export interface NearbyVendor {
+  id: string;
+  name: string;
+  matchCategory: "same_district" | "same_state" | "other";
+  region: string;
+  verificationStatus: string;
+  availability: boolean;
+  // Dormant metric (nothing computes a real value for it) — kept for
+  // backward compatibility, no longer rendered as a customer rating.
+  // See averageRating/reviewCount below for the real thing.
+  accuracyScore: number;
+  certifications: string[];
+  // Real customer reviews — null average (not 0) when reviewCount is 0,
+  // so the UI can show "No reviews yet" instead of a fabricated score.
+  averageRating: number | null;
+  reviewCount: number;
+  // Live workload — how busy/experienced this vendor currently is.
+  activeJobs: number;
+  jobsCompleted: number;
+}
+
+export async function listNearbyVendors(checkId: string): Promise<NearbyVendor[]> {
+  return apiFetch(`/app/checks/${checkId}/vendors`);
+}
+
+export async function raiseEnquiry(checkId: string, input: { vendorId?: string } = {}): Promise<Site> {
+  return apiFetch(`/app/checks/${checkId}/enquiry`, {
+    method: "POST",
+    body: { vendorId: input.vendorId },
+  });
+}
+
+export interface VendorReview {
+  id: string;
+  vendorId: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  reviewerName: string;
+}
+
+export async function submitVendorReview(
+  checkId: string,
+  input: { rating: number; comment?: string }
+): Promise<VendorReview> {
+  return apiFetch(`/app/checks/${checkId}/review`, {
+    method: "POST",
+    body: { rating: input.rating, comment: input.comment },
+  });
+}
+
+export async function listVendorReviews(checkId: string, vendorId: string): Promise<VendorReview[]> {
+  return apiFetch(`/app/checks/${checkId}/vendors/${vendorId}/reviews`);
+}
+
+// -----------------------------------------------------------------------------
+// Installation projects — the post-quotation pipeline. Three audiences
+// over the same four tables: the customer (accept the quotation, watch
+// the stage, sign off at the end), the vendor crew doing the work, and
+// the admin approving QC and commissioning.
+// -----------------------------------------------------------------------------
+
+/** The missing trigger the whole pipeline used to lack: nothing happened
+ *  after an assessment was approved until the customer said yes. 409s if
+ *  the assessment isn't approved, or if a project already exists. */
+export async function acceptQuotation(checkId: string): Promise<CustomerInstallation> {
+  return apiFetch(`/app/checks/${checkId}/accept-quotation`, { method: "POST" });
+}
+
+/** 404 when no project exists yet — callers treat that as "no install
+ *  section to render", not as an error. */
+export async function getCheckInstallation(checkId: string): Promise<CustomerInstallation> {
+  return apiFetch(`/app/checks/${checkId}/installation`);
+}
+
+/** The customer's final handover sign-off. 409s until the vendor has
+ *  submitted the commissioning record. */
+export async function acceptInstallation(checkId: string): Promise<CommissioningRecord> {
+  return apiFetch(`/app/checks/${checkId}/installation/accept`, { method: "POST" });
+}
+
+// --- vendor -----------------------------------------------------------------
+
+export async function listVendorInstallations(
+  params: { status?: string } = {}
+): Promise<InstallationProject[]> {
+  return apiFetch("/app/vendor/installations", { query: { ...params } });
+}
+
+export async function getVendorInstallation(projectId: string): Promise<InstallationProject> {
+  return apiFetch(`/app/vendor/installations/${projectId}`);
+}
+
+export async function advanceVendorInstallationStatus(
+  projectId: string,
+  input: { status: string; panelModel?: string; inverterModel?: string }
+): Promise<InstallationProject> {
+  return apiFetch(`/app/vendor/installations/${projectId}/status`, { method: "PATCH", body: input });
+}
+
+export async function getVendorInstallationQc(projectId: string): Promise<InstallationQcChecklist> {
+  return apiFetch(`/app/vendor/installations/${projectId}/qc`);
+}
+
+export async function saveVendorInstallationQc(
+  projectId: string,
+  input: { checklist: InstallationQcItems; notes?: string | null }
+): Promise<InstallationQcChecklist> {
+  return apiFetch(`/app/vendor/installations/${projectId}/qc`, { method: "PATCH", body: input });
+}
+
+/** Stamps submittedAt — the precondition for the admin's QC approval. */
+export async function submitVendorInstallationQc(
+  projectId: string,
+  input: { checklist: InstallationQcItems; notes?: string | null }
+): Promise<InstallationQcChecklist> {
+  return apiFetch(`/app/vendor/installations/${projectId}/qc/submit`, { method: "POST", body: input });
+}
+
+export async function listVendorInstallationPhotos(
+  projectId: string,
+  params: { stage?: string } = {}
+): Promise<InstallationPhoto[]> {
+  return apiFetch(`/app/vendor/installations/${projectId}/photos`, { query: { ...params } });
+}
+
+export async function addVendorInstallationPhoto(
+  projectId: string,
+  input: { stage: string; dataUrl: string; lat?: number | null; lng?: number | null }
+): Promise<InstallationPhoto> {
+  return apiFetch(`/app/vendor/installations/${projectId}/photos`, { method: "POST", body: input });
+}
+
+export async function getVendorCommissioning(projectId: string): Promise<CommissioningRecord> {
+  return apiFetch(`/app/vendor/installations/${projectId}/commissioning`);
+}
+
+export async function submitVendorCommissioning(
+  projectId: string,
+  input: Partial<Omit<CommissioningRecord, "projectId" | "customerAccepted" | "vendorConfirmed" | "adminApproved">>
+): Promise<CommissioningRecord> {
+  return apiFetch(`/app/vendor/installations/${projectId}/commissioning`, {
+    method: "POST",
+    body: input,
+  });
+}
+
+// --- admin ------------------------------------------------------------------
+
+export async function listAdminInstallations(
+  params: { status?: string } = {}
+): Promise<InstallationProject[]> {
+  return apiFetch("/app/admin/installations", { query: { ...params } });
+}
+
+export async function getAdminInstallation(projectId: string): Promise<InstallationProject> {
+  return apiFetch(`/app/admin/installations/${projectId}`);
+}
+
+export async function setAdminInstallationStatus(
+  projectId: string,
+  input: { status: string; panelModel?: string; inverterModel?: string }
+): Promise<InstallationProject> {
+  return apiFetch(`/app/admin/installations/${projectId}/status`, { method: "PATCH", body: input });
+}
+
+export async function getAdminInstallationQc(projectId: string): Promise<InstallationQcChecklist> {
+  return apiFetch(`/app/admin/installations/${projectId}/qc`);
+}
+
+export async function saveAdminInstallationQc(
+  projectId: string,
+  input: { checklist: InstallationQcItems; notes?: string | null }
+): Promise<InstallationQcChecklist> {
+  return apiFetch(`/app/admin/installations/${projectId}/qc`, { method: "PATCH", body: input });
+}
+
+export async function approveInstallationQc(projectId: string): Promise<InstallationQcChecklist> {
+  return apiFetch(`/app/admin/installations/${projectId}/qc/approve`, { method: "POST" });
+}
+
+export async function listAdminInstallationPhotos(
+  projectId: string,
+  params: { stage?: string } = {}
+): Promise<InstallationPhoto[]> {
+  return apiFetch(`/app/admin/installations/${projectId}/photos`, { query: { ...params } });
+}
+
+export async function getAdminCommissioning(projectId: string): Promise<CommissioningRecord> {
+  return apiFetch(`/app/admin/installations/${projectId}/commissioning`);
+}
+
+export async function saveAdminCommissioning(
+  projectId: string,
+  input: Partial<Omit<CommissioningRecord, "projectId" | "customerAccepted" | "vendorConfirmed" | "adminApproved">>
+): Promise<CommissioningRecord> {
+  return apiFetch(`/app/admin/installations/${projectId}/commissioning`, {
+    method: "PATCH",
+    body: input,
+  });
+}
+
+/** The final gate — also what moves the project itself to "completed". */
+export async function approveCommissioning(projectId: string): Promise<CommissioningRecord> {
+  return apiFetch(`/app/admin/installations/${projectId}/commissioning/approve`, { method: "POST" });
 }

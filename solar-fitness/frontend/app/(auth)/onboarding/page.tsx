@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Building2, MapPinned, UploadCloud } from "lucide-react";
 import { Button, Card } from "@/components/ui/Primitives";
+import { BackButton } from "@/components/ui/BackButton";
 
 export const metadata: Metadata = {
   title: "Onboarding",
@@ -30,6 +31,9 @@ const STEPS = [
 export default function OnboardingPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-4 py-12">
+      <div className="mb-2">
+        <BackButton fallbackHref="/home" />
+      </div>
       <h1 className="text-2xl font-semibold text-ink">Welcome — let&apos;s set up your workspace</h1>
       <p className="mt-2 text-sm text-ink-soft">
         Three steps to get your first site fitness assessment. You can revisit each step later from Settings.
@@ -60,7 +64,7 @@ export default function OnboardingPage() {
         <Link href="/home">
           <Button variant="secondary">Skip for now</Button>
         </Link>
-        <Link href="/check/new">
+        <Link href="/check/start">
           <Button>Check your first location</Button>
         </Link>
       </div>

@@ -232,6 +232,74 @@ def test_login_rate_limited_returns_429(client, monkeypatch):
     assert response.status_code == 429
 
 
+# --------------------------------------------------------------------- #
+# change password
+# --------------------------------------------------------------------- #
+
+
+def test_change_password_happy_path_then_old_password_stops_working(client):
+    signup_body = _signup_body()
+    signup = client.post("/app/auth/signup", json=signup_body)
+    token = signup.json()["token"]
+
+    response = client.post(
+        "/app/auth/change-password",
+        json={"currentPassword": signup_body["password"], "newPassword": "NewPass1234!"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 204
+
+    old_login = client.post(
+        "/app/auth/login", json={"email": signup_body["email"], "password": signup_body["password"]}
+    )
+    assert old_login.status_code == 401
+
+    new_login = client.post(
+        "/app/auth/login", json={"email": signup_body["email"], "password": "NewPass1234!"}
+    )
+    assert new_login.status_code == 200
+
+
+def test_change_password_wrong_current_password_is_401(client):
+    signup_body = _signup_body()
+    signup = client.post("/app/auth/signup", json=signup_body)
+    token = signup.json()["token"]
+
+    response = client.post(
+        "/app/auth/change-password",
+        json={"currentPassword": "not-the-real-password", "newPassword": "NewPass1234!"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 401
+
+    # Original password must still work — the failed attempt changed nothing.
+    still_works = client.post(
+        "/app/auth/login", json={"email": signup_body["email"], "password": signup_body["password"]}
+    )
+    assert still_works.status_code == 200
+
+
+def test_change_password_short_new_password_is_422(client):
+    signup_body = _signup_body()
+    signup = client.post("/app/auth/signup", json=signup_body)
+    token = signup.json()["token"]
+
+    response = client.post(
+        "/app/auth/change-password",
+        json={"currentPassword": signup_body["password"], "newPassword": "short"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 422
+
+
+def test_change_password_without_token_is_401(client):
+    response = client.post(
+        "/app/auth/change-password",
+        json={"currentPassword": "whatever123", "newPassword": "NewPass1234!"},
+    )
+    assert response.status_code == 401
+
+
 def test_me_with_a_well_formed_but_fake_token_is_401_not_500(client):
     """Regression: a syntactically valid JWT whose "sub" isn't a real
     UUID must be treated as an invalid token (401), not crash get_by_id()
@@ -285,3 +353,48 @@ def test_require_role_allows_a_matching_role():
         assert exc.status_code == 403
     else:
         raise AssertionError("expected require_role to reject a non-admin caller")
+
+
+# --------------------------------------------------------------------- #
+# require_permission() / ROLE_PERMISSIONS
+# --------------------------------------------------------------------- #
+
+
+def test_require_permission_allows_a_granted_permission():
+    from solarfit.auth_users import AuthenticatedUser, require_permission
+
+    admin = AuthenticatedUser(id="u-1", email="a@example.com", role="admin", name="Admin")
+    check = require_permission("VENDOR_APPROVE")
+    assert check(user=admin) is admin
+
+
+def test_require_permission_rejects_a_role_without_the_permission():
+    from fastapi import HTTPException
+
+    from solarfit.auth_users import AuthenticatedUser, require_permission
+
+    vendor = AuthenticatedUser(id="u-2", email="v@example.com", role="vendor", name="V")
+    check = require_permission("VENDOR_APPROVE")
+
+    try:
+        check(user=vendor)
+    except HTTPException as exc:
+        assert exc.status_code == 403
+    else:
+        raise AssertionError("expected require_permission to reject a role lacking the permission")
+
+
+def test_require_permission_rejects_an_unknown_role():
+    from fastapi import HTTPException
+
+    from solarfit.auth_users import AuthenticatedUser, require_permission
+
+    ghost = AuthenticatedUser(id="u-3", email="g@example.com", role="ghost", name="G")
+    check = require_permission("PROJECT_VIEW")
+
+    try:
+        check(user=ghost)
+    except HTTPException as exc:
+        assert exc.status_code == 403
+    else:
+        raise AssertionError("expected require_permission to reject a role with no permission grant")

@@ -5,7 +5,7 @@ Owner: omkar (Scoring, USN & Assessment API) — closes the roadmap's
 Additive, nullable — no existing column touched.
 
 Revision ID: d4e8f2a917b3
-Revises: f8a3c1d9e6b2
+Revises: 01c7bb9793b5
 Create Date: 2026-08-31
 
 """
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "d4e8f2a917b3"
-down_revision: str | Sequence[str] | None = "f8a3c1d9e6b2"
+down_revision: str | Sequence[str] | None = "01c7bb9793b5"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

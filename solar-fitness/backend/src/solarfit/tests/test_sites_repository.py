@@ -5,6 +5,7 @@ the thing under test is largely the geography round-trip and the
 append-only history, neither of which a mock would exercise.
 """
 
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -89,6 +90,45 @@ def test_shading_defaults_to_absent_for_non_solar_api_geometry(db_session):
     assert repo.get(db_session, site.id).shading is None
 
 
+def test_usn_round_trips_when_supplied_at_creation(db_session):
+    """Regression: create() validated usn/usn_source only at the API
+    boundary (SITE-02) and never actually persisted either — a
+    validated USN was silently discarded on every write."""
+    site = _create(db_session, usn="1234567890", usn_source="manual")
+    assert site.usn is not None
+    assert site.usn.usn == "1234567890"
+    assert site.usn.usn_source == "manual"
+
+    fetched = repo.get(db_session, site.id)
+    assert fetched.usn.usn == "1234567890"
+    assert fetched.usn.usn_source == "manual"
+
+
+def test_usn_is_none_when_not_supplied(db_session):
+    site = _create(db_session)
+    assert site.usn is None
+
+
+def test_update_usn_persists_onto_an_existing_site(db_session):
+    site = _create(db_session)
+    assert site.usn is None
+
+    updated = repo.update_usn(db_session, site.id, usn="9876543210", usn_source="bill_ocr")
+    assert updated.usn.usn == "9876543210"
+    assert updated.usn.usn_source == "bill_ocr"
+
+    fetched = repo.get(db_session, site.id)
+    assert fetched.usn.usn == "9876543210"
+    assert fetched.usn.usn_source == "bill_ocr"
+
+
+def test_update_usn_unknown_site_raises(db_session):
+    with pytest.raises(LookupError):
+        repo.update_usn(
+            db_session, "00000000-0000-0000-0000-000000000000", usn="123", usn_source="manual"
+        )
+
+
 # --------------------------------------------------------------------- #
 # tenant scoping
 # --------------------------------------------------------------------- #
@@ -141,6 +181,59 @@ def test_boundary_change_appends_a_version_and_keeps_the_old_one(db_session):
     assert repo._to_geojson(history[1].boundary) != original
 
 
+def test_version_carries_the_imagery_it_was_traced_from(db_session):
+    """SITE-04: geometry_source, imagery_date, imagery_quality and
+    geometry_confidence must all persist per version, not just on the
+    current sites row — otherwise a site's history loses that context
+    the moment a second version is written."""
+    imagery_date = datetime(2026, 6, 1, tzinfo=UTC)
+    site = _create(
+        db_session,
+        boundary=_poly(),
+        geometry_source="solar_api",
+        imagery_date=imagery_date,
+        imagery_quality="HIGH",
+        geometry_confidence=0.82,
+    )
+    v1 = repo.versions(db_session, site.id)[0]
+    assert v1.geometry_source == "solar_api"
+    assert v1.imagery_date == imagery_date
+    assert v1.imagery_quality == "HIGH"
+    assert v1.geometry_confidence == pytest.approx(0.82)
+
+    # An exclusions-only change (OBS-04's own shape) doesn't re-trace the
+    # boundary from new imagery — the prior version's imagery context
+    # carries forward rather than going missing.
+    repo.new_geometry_version(
+        db_session,
+        site.id,
+        exclusions=_multipoly(_poly(dlon=0.0001, dlat=0.0001, size=0.0001)),
+        actor="system:obstacle_detection",
+        source="obstacle_detection",
+    )
+    v2 = repo.versions(db_session, site.id)[1]
+    assert v2.imagery_date == imagery_date
+    assert v2.imagery_quality == "HIGH"
+    assert v2.geometry_confidence == pytest.approx(0.82)
+
+    # An explicit override (a real re-trace) replaces it going forward.
+    new_imagery_date = datetime(2026, 8, 1, tzinfo=UTC)
+    repo.new_geometry_version(
+        db_session,
+        site.id,
+        boundary=_poly(dlon=0.001),
+        actor="admin-1",
+        source="manual_edit",
+        imagery_date=new_imagery_date,
+        imagery_quality="BASE",
+        geometry_confidence=0.5,
+    )
+    v3 = repo.versions(db_session, site.id)[2]
+    assert v3.imagery_date == new_imagery_date
+    assert v3.imagery_quality == "BASE"
+    assert v3.geometry_confidence == pytest.approx(0.5)
+
+
 def test_exclusions_only_change_keeps_the_boundary(db_session):
     """Person 3's OBS-04 changes exclusions, not the boundary. The Day-0
     stub signature could not express this — see the module docstring."""
@@ -158,6 +251,39 @@ def test_exclusions_only_change_keeps_the_boundary(db_session):
     assert updated.boundary == boundary_before
     assert updated.exclusions is not None
     assert repo.versions(db_session, site.id)[-1].source == "obstacle_detection"
+
+
+def test_applied_obstacle_ids_collects_across_every_version(db_session):
+    """OBS-04 idempotency: engine/obstacles.py's apply_or_flag() reads
+    this before unioning a new obstacle into exclusions, so it must see
+    every id ever applied across this site's whole history, not just the
+    latest version."""
+    site = _create(db_session, boundary=_poly(), geometry_source="solar_api")
+    assert repo.applied_obstacle_ids(db_session, site.id) == set()
+
+    repo.new_geometry_version(
+        db_session,
+        site.id,
+        exclusions=_multipoly(_poly(dlon=0.0001, dlat=0.0001, size=0.0001)),
+        actor="system:obstacle_detection",
+        source="obstacle_detection",
+        applied_obstacle_ids=["obstacle-a"],
+        applied_obstacle_polygons={"obstacle-a": _poly(dlon=0.0001, dlat=0.0001, size=0.0001)},
+    )
+    assert repo.applied_obstacle_ids(db_session, site.id) == {"obstacle-a"}
+
+    repo.new_geometry_version(
+        db_session,
+        site.id,
+        exclusions=_multipoly(
+            _poly(dlon=0.0001, dlat=0.0001, size=0.0001), _poly(dlon=0.0002, dlat=0.0002, size=0.0001)
+        ),
+        actor="system:obstacle_detection",
+        source="obstacle_detection",
+        applied_obstacle_ids=["obstacle-b"],
+        applied_obstacle_polygons={"obstacle-b": _poly(dlon=0.0002, dlat=0.0002, size=0.0001)},
+    )
+    assert repo.applied_obstacle_ids(db_session, site.id) == {"obstacle-a", "obstacle-b"}
 
 
 def test_version_records_actor_and_timestamp(db_session):

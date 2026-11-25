@@ -72,7 +72,7 @@ export function ConfirmDialog({
         <div className="flex items-start gap-3">
           <span
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-            style={{ background: tone === "danger" ? "var(--bad-bg)" : "var(--neutral-bg)", color: tone === "danger" ? "var(--bad)" : "var(--slate)" }}
+            style={{ background: tone === "danger" ? "var(--bad-bg)" : "var(--good-bg)", color: tone === "danger" ? "var(--bad)" : "var(--brand)" }}
             aria-hidden="true"
           >
             <AlertTriangle size={16} strokeWidth={1.75} />

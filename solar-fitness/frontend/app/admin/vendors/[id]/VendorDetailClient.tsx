@@ -1,19 +1,155 @@
 "use client";
 
 import { useState } from "react";
-import { useAdminVendor, useAdminVendorStatusAction, useVendorJobs, useVendorPayouts } from "@/lib/query/hooks";
+import {
+  useAdminVendor,
+  useAdminVendorJobs,
+  useAdminVendorPayouts,
+  useAdminVendorStatusAction,
+  useAdminVendorUsers,
+  useCreateAdminVendorUser,
+  useSetAdminVendorUserStatus,
+} from "@/lib/query/hooks";
 import { Card, CardSkeleton, ErrorState, Button } from "@/components/ui/Primitives";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
-import { formatDate } from "@/lib/utils";
-import { Ban, CheckCircle2 } from "lucide-react";
+import { formatDate, formatPercent } from "@/lib/utils";
+import { ApiError } from "@/lib/api/fetchClient";
+import type { NewVendorUserResult } from "@/lib/api/client";
+import { Ban, CheckCircle2, Copy, UserPlus } from "lucide-react";
+
+const inputClass =
+  "w-full rounded-[var(--radius-app)] border border-line bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-blue";
+
+function VendorUsersCard({ vendorId }: { vendorId: string }) {
+  const users = useAdminVendorUsers(vendorId);
+  const createUser = useCreateAdminVendorUser(vendorId);
+  const setStatus = useSetAdminVendorUserStatus(vendorId);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [created, setCreated] = useState<NewVendorUserResult | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    try {
+      const result = await createUser.mutateAsync({ name, email });
+      setCreated(result);
+      setCopied(false);
+      setName("");
+      setEmail("");
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+    }
+  };
+
+  return (
+    <Card className="p-4 space-y-3">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-faint">Vendor users</h2>
+
+      {users.isLoading && <p className="text-sm text-ink-soft">Loading…</p>}
+      {users.data && users.data.length === 0 && (
+        <p className="text-sm text-ink-soft">No additional logins for this vendor yet.</p>
+      )}
+      {users.data && users.data.length > 0 && (
+        <ul className="divide-y divide-line">
+          {users.data.map((u) => (
+            <li key={u.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <div>
+                <p className="text-ink">{u.name}</p>
+                <p className="text-xs text-ink-faint">{u.email}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="capitalize text-xs text-ink-soft">{u.status}</span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={setStatus.isPending}
+                  onClick={() =>
+                    setStatus.mutate({ userId: u.id, status: u.status === "active" ? "inactive" : "active" })
+                  }
+                >
+                  {u.status === "active" ? "Deactivate" : "Activate"}
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {created && (
+        <div className="space-y-2 rounded-[var(--radius-app)] border border-line bg-surface p-3">
+          <p className="text-sm text-ink-soft">
+            Share this login with {created.user.name} now — the temporary password won&apos;t be shown again.
+          </p>
+          <div>
+            <p className="text-xs text-ink-faint">Login email</p>
+            <p className="font-mono tabular text-sm text-ink">{created.loginEmail}</p>
+          </div>
+          <div>
+            <p className="text-xs text-ink-faint">Temporary password</p>
+            <div className="flex items-center gap-2">
+              <p className="font-mono tabular text-sm text-ink">{created.temporaryPassword}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard?.writeText(created.temporaryPassword);
+                  setCopied(true);
+                }}
+                className="inline-flex items-center gap-1 text-xs text-ink-soft hover:text-ink"
+              >
+                <Copy size={12} strokeWidth={1.75} /> {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-2 pt-2">
+        <div className="flex-1 min-w-[10rem]">
+          <label htmlFor="vendor-user-name" className="mb-1 block text-xs text-ink-faint">
+            Name
+          </label>
+          <input
+            id="vendor-user-name"
+            className={inputClass}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+        </div>
+        <div className="flex-1 min-w-[10rem]">
+          <label htmlFor="vendor-user-email" className="mb-1 block text-xs text-ink-faint">
+            Email
+          </label>
+          <input
+            id="vendor-user-email"
+            type="email"
+            className={inputClass}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <Button type="submit" size="sm" disabled={createUser.isPending}>
+          <UserPlus size={14} strokeWidth={1.75} /> Add user
+        </Button>
+      </form>
+      {formError && (
+        <p className="text-xs" style={{ color: "var(--bad)" }}>
+          {formError}
+        </p>
+      )}
+    </Card>
+  );
+}
 
 export function VendorDetailClient({ vendorId }: { vendorId: string }) {
   const vendor = useAdminVendor(vendorId);
   const statusAction = useAdminVendorStatusAction(vendorId);
-  // Demo submissions/payout data reused from the vendor-portal mock store — in
-  // production this would be scoped server-side by vendorId.
-  const jobs = useVendorJobs();
-  const payouts = useVendorPayouts();
+  const jobs = useAdminVendorJobs(vendorId);
+  const payouts = useAdminVendorPayouts(vendorId);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   if (vendor.isLoading) {
@@ -43,7 +179,7 @@ export function VendorDetailClient({ vendorId }: { vendorId: string }) {
         </Card>
         <Card className="p-4">
           <p className="text-xs text-ink-faint">SLA compliance</p>
-          <p className="mt-1 font-mono tabular text-2xl text-ink">{v.slaCompliancePct ? `${v.slaCompliancePct}%` : "—"}</p>
+          <p className="mt-1 font-mono tabular text-2xl text-ink">{v.slaCompliancePct ? formatPercent(v.slaCompliancePct) : "—"}</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs text-ink-faint">Jobs completed</p>
@@ -83,6 +219,66 @@ export function VendorDetailClient({ vendorId }: { vendorId: string }) {
           )}
         </div>
       </Card>
+
+      <VendorUsersCard vendorId={vendorId} />
+
+      {(v.legalName || v.gstNumber || v.panNumber || v.contactName || v.contactEmail || v.addressLine1 || (v.certifications && v.certifications.length > 0)) && (
+        <Card className="p-4 space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-faint">Business & contact details</h2>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            {v.legalName && (
+              <div>
+                <p className="text-xs text-ink-faint">Legal name</p>
+                <p className="text-ink">{v.legalName}</p>
+              </div>
+            )}
+            {v.gstNumber && (
+              <div>
+                <p className="text-xs text-ink-faint">GST number</p>
+                <p className="font-mono tabular text-ink">{v.gstNumber}</p>
+              </div>
+            )}
+            {v.panNumber && (
+              <div>
+                <p className="text-xs text-ink-faint">PAN number</p>
+                <p className="font-mono tabular text-ink">{v.panNumber}</p>
+              </div>
+            )}
+            {v.contactName && (
+              <div>
+                <p className="text-xs text-ink-faint">Contact person</p>
+                <p className="text-ink">{v.contactName}</p>
+              </div>
+            )}
+            {v.contactPhone && (
+              <div>
+                <p className="text-xs text-ink-faint">Contact phone</p>
+                <p className="font-mono tabular text-ink">{v.contactPhone}</p>
+              </div>
+            )}
+            {v.contactEmail && (
+              <div>
+                <p className="text-xs text-ink-faint">Contact email</p>
+                <p className="text-ink">{v.contactEmail}</p>
+              </div>
+            )}
+            {(v.addressLine1 || v.city || v.state || v.pincode) && (
+              <div className="col-span-2">
+                <p className="text-xs text-ink-faint">Address</p>
+                <p className="text-ink">
+                  {[v.addressLine1, v.addressLine2, v.city, v.state, v.pincode].filter(Boolean).join(", ")}
+                </p>
+              </div>
+            )}
+            {v.certifications && v.certifications.length > 0 && (
+              <div className="col-span-2">
+                <p className="text-xs text-ink-faint">Certifications</p>
+                <p className="text-ink">{v.certifications.join(", ")}</p>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       <Card className="p-4">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-faint">Recent submissions</h2>

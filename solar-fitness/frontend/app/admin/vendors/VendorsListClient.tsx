@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useAdminVendors } from "@/lib/query/hooks";
-import { TableSkeleton, ErrorState, EmptyState } from "@/components/ui/Primitives";
+import { TableSkeleton, ErrorState, EmptyState, Button } from "@/components/ui/Primitives";
 import { VendorTable } from "@/components/admin/VendorTable";
-import { Users } from "lucide-react";
+import { Plus, Users } from "lucide-react";
 
 const STATUSES = ["verified", "pending", "rejected", "suspended"];
 
@@ -44,6 +45,11 @@ export function VendorsListClient() {
             </option>
           ))}
         </select>
+        <Link href="/admin/vendors/new">
+          <Button size="sm">
+            <Plus size={14} strokeWidth={1.75} /> Add vendor
+          </Button>
+        </Link>
       </div>
 
       {vendors.isLoading && <TableSkeleton />}

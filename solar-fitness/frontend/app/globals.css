@@ -1,26 +1,37 @@
 @import "tailwindcss";
 
-/* ---------- Design tokens (light default) ---------- */
+/* ---------- Design tokens (light default) ----------
+   Clean-energy green identity: --brand is the universal primary
+   (buttons, active nav, primary links) across customer/admin/vendor.
+   --good is deliberately the same hue as --brand (previously two
+   near-identical greens) — one green, dual semantic use. --amber keeps
+   its existing ROLE (sun/energy icon tints, kWp/generation figures) but
+   is retuned warmer/more golden per the "solar yellow highlight" brief.
+   --teal/--slate keep their hex values but are demoted from each
+   portal's primary/active-nav color to a secondary/contextual accent. */
 :root {
-  --paper: #f5f4ee;
-  --surface: #eae8de;
-  --surface-2: #e0ddcf;
-  --line: #c7c1af;
-  --ink: #1e2b30;
-  --ink-soft: #54626a;
-  --ink-faint: #8a8f86;
+  --paper: #f6f8f4;
+  --surface: #ecf1e9;
+  --surface-2: #e1e9dd;
+  --line: #d3dccf;
+  --ink: #1c2420;
+  --ink-soft: #4e5a52;
+  --ink-faint: #838f84;
+
+  --brand: #1e7a5f;
+  --brand-soft: #2f9670;
 
   --blue: #2c5c6b;
   --blue-soft: #5c8695;
-  --amber: #a9691f;
-  --amber-soft: #c98a3f;
+  --amber: #c9962e;
+  --amber-soft: #e0b24a;
   --teal: #3f7d6b;
   --teal-soft: #5c9985;
   --slate: #545a72;
   --slate-soft: #767ba0;
 
-  --good: #3f6b3f;
-  --good-bg: #e3ecdf;
+  --good: #1e7a5f;
+  --good-bg: #e3f0e9;
   --warn: #8a5a17;
   --warn-bg: #f1e3c8;
   --bad: #8c3b32;
@@ -28,31 +39,34 @@
   --neutral-verdict: #5b5f5a;
   --neutral-bg: #e6e4da;
 
-  --radius: 5px;
-  --shadow-float: 0 6px 20px -6px rgb(30 43 48 / 0.28), 0 2px 6px -2px rgb(30 43 48 / 0.18);
+  --radius: 14px;
+  --shadow-float: 0 8px 24px -8px rgb(28 36 32 / 0.12), 0 2px 8px -3px rgb(28 36 32 / 0.08);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper: #141b1d;
-    --surface: #1b2427;
-    --surface-2: #212c2f;
-    --line: #33403f;
-    --ink: #e9e6dc;
-    --ink-soft: #a9b0ab;
-    --ink-faint: #6f7a76;
+    --paper: #121815;
+    --surface: #182420;
+    --surface-2: #1e2b26;
+    --line: #2e3d36;
+    --ink: #e8ece5;
+    --ink-soft: #a8b3aa;
+    --ink-faint: #6e7a72;
+
+    --brand: #4fbe94;
+    --brand-soft: #3f8f6c;
 
     --blue: #7fadbb;
     --blue-soft: #5c8695;
-    --amber: #d99a4e;
-    --amber-soft: #c98a3f;
+    --amber: #e8c066;
+    --amber-soft: #d9a62e;
     --teal: #7fc1ac;
     --teal-soft: #5c9985;
     --slate: #9ba1c4;
     --slate-soft: #767ba0;
 
-    --good: #7fb37f;
-    --good-bg: #1e2c1e;
+    --good: #4fbe94;
+    --good-bg: #1a2d22;
     --warn: #d0a350;
     --warn-bg: #33290f;
     --bad: #d68b7f;
@@ -60,30 +74,33 @@
     --neutral-verdict: #a8ada4;
     --neutral-bg: #232821;
 
-    --shadow-float: 0 6px 20px -6px rgb(0 0 0 / 0.6), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+    --shadow-float: 0 8px 24px -8px rgb(0 0 0 / 0.45), 0 2px 8px -3px rgb(0 0 0 / 0.3);
   }
 }
 
 :root[data-theme="dark"] {
-  --paper: #141b1d;
-  --surface: #1b2427;
-  --surface-2: #212c2f;
-  --line: #33403f;
-  --ink: #e9e6dc;
-  --ink-soft: #a9b0ab;
-  --ink-faint: #6f7a76;
+  --paper: #121815;
+  --surface: #182420;
+  --surface-2: #1e2b26;
+  --line: #2e3d36;
+  --ink: #e8ece5;
+  --ink-soft: #a8b3aa;
+  --ink-faint: #6e7a72;
+
+  --brand: #4fbe94;
+  --brand-soft: #3f8f6c;
 
   --blue: #7fadbb;
   --blue-soft: #5c8695;
-  --amber: #d99a4e;
-  --amber-soft: #c98a3f;
+  --amber: #e8c066;
+  --amber-soft: #d9a62e;
   --teal: #7fc1ac;
   --teal-soft: #5c9985;
   --slate: #9ba1c4;
   --slate-soft: #767ba0;
 
-  --good: #7fb37f;
-  --good-bg: #1e2c1e;
+  --good: #4fbe94;
+  --good-bg: #1a2d22;
   --warn: #d0a350;
   --warn-bg: #33290f;
   --bad: #d68b7f;
@@ -91,7 +108,7 @@
   --neutral-verdict: #a8ada4;
   --neutral-bg: #232821;
 
-  --shadow-float: 0 6px 20px -6px rgb(0 0 0 / 0.6), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+  --shadow-float: 0 8px 24px -8px rgb(0 0 0 / 0.45), 0 2px 8px -3px rgb(0 0 0 / 0.3);
 }
 
 @theme inline {
@@ -102,6 +119,9 @@
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
   --color-ink-faint: var(--ink-faint);
+
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
 
   --color-blue: var(--blue);
   --color-blue-soft: var(--blue-soft);
@@ -124,7 +144,7 @@
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
 
-  --radius-app: 5px;
+  --radius-app: 14px;
   --shadow-float: var(--shadow-float);
 }
 
@@ -136,10 +156,49 @@ html {
   color-scheme: light dark;
 }
 
+/* Phones: every Tailwind size is rem-based, so trimming the root size to
+   14px scales text, padding and controls down ~12% together — without
+   this the customer app reads as "zoomed in" on a 390px screen. Desktop
+   and tablet (>640px) keep the default 16px. */
+@media (max-width: 640px) {
+  html {
+    font-size: 14px;
+  }
+}
+
 body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-sans);
+}
+
+/* Mobile smoothness: a focused <16px input/select/textarea makes iOS
+   Safari zoom the whole viewport in on focus and back out on blur — every
+   tap into a form field visibly jumps. Most controls here render at
+   text-sm (14px); floor them to 16px only below the tablet breakpoint so
+   desktop sizing is untouched. Needs !important — a single Tailwind
+   utility class has the same specificity as this element selector. */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Kills the ~300ms tap-response delay (the browser waiting to see if a
+   second tap will double-tap-zoom) on anything actually meant to be
+   tapped, and the grey highlight box iOS/Android paint on tap — together
+   these are most of what makes touch interactions read as "laggy" even
+   when nothing is technically slow. */
+a,
+button,
+[role="button"],
+input,
+select,
+textarea {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .font-mono,
@@ -149,7 +208,7 @@ body {
 }
 
 ::selection {
-  background: var(--amber-soft);
+  background: var(--brand-soft);
   color: #fff;
 }
 
@@ -160,4 +219,287 @@ body {
 .scrollbar-thin::-webkit-scrollbar-thumb {
   background: var(--line);
   border-radius: 4px;
+}
+
+@keyframes dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scaleY(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+@keyframes step-check-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes step-current-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--blue-soft, rgba(92, 134, 149, 0.45));
+  }
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+@keyframes step-label-in {
+  from {
+    opacity: 0;
+    transform: translateX(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ---------- Processing-page stage visuals ---------- */
+
+@keyframes stage-scene-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes radar-ping {
+  0% {
+    transform: scale(0.3);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes pin-drop {
+  0% {
+    transform: translateY(-14px);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(2px);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes scan-sweep {
+  0% {
+    transform: translateY(-2%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(102%);
+    opacity: 0;
+  }
+}
+
+@keyframes obstacle-flag {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  15%,
+  85% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes draw-outline {
+  from {
+    stroke-dashoffset: var(--outline-length, 240);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes area-fill-sweep {
+  from {
+    opacity: 0;
+    transform: scaleY(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes gauge-sweep {
+  from {
+    stroke-dashoffset: var(--gauge-full, 126);
+  }
+  to {
+    stroke-dashoffset: var(--gauge-target, 40);
+  }
+}
+
+@keyframes counter-tick {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes panel-drop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.7);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(0.5px) scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes panel-glint {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes needle-sweep {
+  from {
+    transform: rotate(var(--needle-from, -90deg));
+  }
+  to {
+    transform: rotate(var(--needle-to, 40deg));
+  }
+}
+
+@keyframes badge-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) rotate(-8deg);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.1) rotate(2deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes line-write {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes report-check-burst {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes burst-ring {
+  from {
+    opacity: 0.6;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-scene * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* ---------- Landing page visuals ----------
+   Previously a separate, hardcoded-hex "AI SaaS template" palette
+   (glow/glow-intense/pulse-cta/shimmer/gradient-border, all on literal
+   #22c55e greens) fighting the rest of the app's --brand/--paper token
+   system and its restrained, single-purpose animation style (see the
+   stage-* keyframes above — each plays once, on a real state change,
+   never infinitely). That mismatch, plus a dozen infinitely-looping
+   background animations layered on top of each other in the hero/CTA,
+   was the "busy/disturbing" landing experience being fixed here.
+   Replaced with token-based, mostly-static treatments: one entrance
+   animation per element, nothing that loops forever once the page has
+   settled. */
+
+.gradient-text {
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-soft) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.reveal {
+  animation: reveal-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none;
+  }
 }

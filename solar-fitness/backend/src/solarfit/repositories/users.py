@@ -36,7 +36,12 @@ __all__ = [
     "get_by_email",
     "get_by_id",
     "list_by_owner_org",
+    "list_by_role",
+    "list_by_vendor_id",
+    "set_status",
     "touch_last_login",
+    "update_password",
+    "update_profile",
 ]
 
 
@@ -59,6 +64,11 @@ class UserRow(Base):
     billing_contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     vendor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+    # Consumer "checks" self-service profile (lib/fixtures/customer.ts's
+    # CustomerProfile) — additive, no other role uses these.
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    notify_on_complete: Mapped[bool] = mapped_column(nullable=False, default=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -108,8 +118,80 @@ def list_by_owner_org(session: Session, owner_org: str) -> list[UserRow]:
     return list(session.scalars(stmt))
 
 
+def list_by_vendor_id(session: Session, vendor_id: str | uuid.UUID) -> list[UserRow]:
+    """Every login belonging to one vendor — the vendor-sub-users
+    equivalent of list_by_owner_org() above. Backs
+    routers/app_admin_vendors.py's GET /{vendor_id}/users."""
+    stmt = (
+        select(UserRow)
+        .where(UserRow.vendor_id == uuid.UUID(str(vendor_id)))
+        .order_by(UserRow.created_at)
+    )
+    return list(session.scalars(stmt))
+
+
+def list_by_role(session: Session, role: str) -> list[UserRow]:
+    """Every login with one role — backs "notify all admins" (there is
+    no per-admin notification-preference concept, unlike vendors'
+    notification_preferences)."""
+    stmt = select(UserRow).where(UserRow.role == role).order_by(UserRow.created_at)
+    return list(session.scalars(stmt))
+
+
 def touch_last_login(session: Session, user_id: str | uuid.UUID) -> None:
     row = session.get(UserRow, uuid.UUID(str(user_id)))
     if row is not None:
         row.last_login_at = datetime.now(UTC)
         session.flush()
+
+
+def update_profile(
+    session: Session,
+    user_id: str | uuid.UUID,
+    *,
+    name: str | None = None,
+    phone: str | None = None,
+    notify_on_complete: bool | None = None,
+) -> UserRow | None:
+    """Consumer "checks" self-service profile update. Deliberately no
+    email field here — email is also the login identity (unique,
+    case-sensitive-as-stored) and a live email-change flow (collision
+    check, re-verification) is out of this pass's scope; a payload that
+    includes one is silently ignored at the router layer, not accepted
+    and not erroring."""
+    row = get_by_id(session, user_id)
+    if row is None:
+        return None
+    if name is not None:
+        row.name = name
+    if phone is not None:
+        row.phone = phone
+    if notify_on_complete is not None:
+        row.notify_on_complete = notify_on_complete
+    session.flush()
+    return row
+
+
+def set_status(session: Session, user_id: str | uuid.UUID, *, status: str) -> UserRow | None:
+    """Activate/deactivate a login — the vendor-sub-user equivalent of
+    vendors_repo.set_verification_status(). Same single-field-write shape
+    as update_password() below; the router's job to audit-log it."""
+    row = get_by_id(session, user_id)
+    if row is None:
+        return None
+    row.status = status
+    session.flush()
+    return row
+
+
+def update_password(session: Session, user_id: str | uuid.UUID, *, password_hash: str) -> UserRow | None:
+    """Settings page's "Change password". Caller (routers/app_auth.py)
+    has already verified the current password before calling this —
+    this function just writes the new hash, same single-field-update
+    shape as update_profile() above."""
+    row = get_by_id(session, user_id)
+    if row is None:
+        return None
+    row.password_hash = password_hash
+    session.flush()
+    return row

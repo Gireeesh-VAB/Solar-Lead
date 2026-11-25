@@ -14,7 +14,7 @@ denormalization tradeoff sites.py itself makes for owner_org on
 vendor_jobs-style tables elsewhere in this schema.
 
 Revision ID: 9f2a7c1e5d84
-Revises: b6c1a4f083de
+Revises: d4e8f2a917b3
 Create Date: 2026-08-31
 
 """
@@ -25,7 +25,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "9f2a7c1e5d84"
-down_revision: str | Sequence[str] | None = "b6c1a4f083de"
+down_revision: str | Sequence[str] | None = "d4e8f2a917b3"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

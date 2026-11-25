@@ -8,10 +8,10 @@ external storage plus the raw OCR text, both cleared by the purge job
 (packs/config_pack.py) has elapsed.
 
 The confirmed `usn` value itself is NOT stored here and is not subject
-to this retention window — once repositories/sites.py::update_usn()
-exists, it lives with the Site indefinitely (CON-05's subsidy-tier
-lookup needs it for the life of the site). This table is the OCR
-*evidence* trail; providers/usn_ocr.py's UsnCapture is the *value*.
+to this retention window — via repositories/sites.py::update_usn(), it
+lives with the Site indefinitely (CON-05's subsidy-tier lookup needs it
+for the life of the site). This table is the OCR *evidence* trail;
+providers/usn_ocr.py's UsnCapture is the *value*.
 
 Never queried by engine/ml_score.py or any vision-training path
 (USN-06's "hard-excluded from ML/vision training" clause) — enforced by
@@ -26,7 +26,7 @@ exists.
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from sqlalchemy import DateTime, String, select
+from sqlalchemy import DateTime, String, func, select
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from solarfit.db import Base
@@ -86,6 +86,17 @@ def mark_confirmed(session: Session, upload_id: str) -> UsnOcrUpload:
     upload.extraction_status = "confirmed"
     session.flush()
     return upload
+
+
+def count_uploaded_since(session: Session, since: datetime) -> int:
+    """Real proxy for Vision API usage on the admin platform-health
+    quota display — every bill/payment-proof upload triggers one OCR
+    call. No per-provider call metering exists anywhere in this
+    codebase, so this is the closest honest count. COUNT(*) in SQL
+    rather than fetching every matching row just to len() them —
+    measurably faster on that endpoint."""
+    stmt = select(func.count()).select_from(UsnOcrUpload).where(UsnOcrUpload.uploaded_at >= since)
+    return session.scalar(stmt) or 0
 
 
 def find_expired(session: Session) -> list[UsnOcrUpload]:
